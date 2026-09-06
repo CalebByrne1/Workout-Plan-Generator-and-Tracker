@@ -1,0 +1,2267 @@
+<title>Iron Ledger</title>
+
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<style>
+/* ==========================================================================
+   Iron Ledger — industrial amber on cool graphite.
+   Every colour is a token declared on :root first, then re-declared for the
+   two dark cases, so nothing is left undefined in any theme state.
+   ========================================================================== */
+
+:root{
+  /* surfaces */
+  --ground:#EDEFEE;
+  --surface:#FFFFFF;
+  --surface-2:#E4E8E7;
+  /* text */
+  --ink:#14191A;
+  --ink-2:#4C5759;
+  --ink-3:#7C8A8B;
+  /* rules */
+  --line:#C9D1D0;
+  --line-soft:#DCE1E0;
+  /* accent — rack-pin amber */
+  --accent:#A85F00;
+  --accent-hi:#C87400;
+  --accent-ink:#FFFFFF;
+  --accent-soft:#F3E1C4;
+  /* semantic, kept separate from the accent */
+  --good:#1C7359;
+  --danger:#A03A18;
+
+  --shadow:0 1px 2px rgba(16,26,26,.10), 0 12px 28px -12px rgba(16,26,26,.28);
+  --r:10px;
+
+  --font-d:"Saira Condensed","Arial Narrow",Haettenschweiler,sans-serif;
+  --font-b:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-m:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+
+/* System dark, unless the viewer explicitly asked for light. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1313;
+    --surface:#171C1D;
+    --surface-2:#212829;
+    --ink:#E8EDEB;
+    --ink-2:#A2AFAD;
+    --ink-3:#6E7C7C;
+    --line:#2B3334;
+    --line-soft:#222A2B;
+    --accent:#F0A73C;
+    --accent-hi:#FFBB57;
+    --accent-ink:#1A1205;
+    --accent-soft:#382812;
+    --good:#4FC3A1;
+    --danger:#E1795A;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
+  }
+}
+
+/* Explicit dark choice wins over a light OS. */
+:root[data-theme="dark"]{
+  --ground:#0F1313;
+  --surface:#171C1D;
+  --surface-2:#212829;
+  --ink:#E8EDEB;
+  --ink-2:#A2AFAD;
+  --ink-3:#6E7C7C;
+  --line:#2B3334;
+  --line-soft:#222A2B;
+  --accent:#F0A73C;
+  --accent-hi:#FFBB57;
+  --accent-ink:#1A1205;
+  --accent-soft:#382812;
+  --good:#4FC3A1;
+  --danger:#E1795A;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
+}
+
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--font-b);
+  font-size:15px;
+  line-height:1.45;
+  -webkit-tap-highlight-color:transparent;
+  overscroll-behavior-y:none;
+}
+
+button,input,textarea,select{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer;color:inherit}
+img{max-width:100%}
+h1,h2,h3{margin:0;font-family:var(--font-d);font-weight:600;text-wrap:balance}
+p{margin:0}
+:focus-visible{outline:2px solid var(--accent-hi);outline-offset:2px;border-radius:4px}
+
+/* Small uppercase caption, used above every form field. */
+.lab{
+  display:block;margin-bottom:6px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+
+textarea,
+input[type="text"],
+input[type="number"]{
+  width:100%;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r);
+  padding:11px 12px;
+  color:var(--ink);
+  font-size:15px;   /* 16px or below zooms iOS on focus only under 16 — this is safe at 15 with the viewport lock */
+}
+textarea{resize:vertical;min-height:80px;line-height:1.5}
+input[type="number"]{font-family:var(--font-m);font-variant-numeric:tabular-nums;text-align:center}
+
+.app{
+  max-width:560px;margin:0 auto;
+  min-height:100vh;min-height:100dvh;
+  display:flex;flex-direction:column;
+  background:var(--ground);
+}
+
+
+/* ==========================================================================
+   Top bar + rotation rail
+   ========================================================================== */
+
+.topbar{
+  position:sticky;top:0;z-index:30;
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  padding:10px 14px 0;
+  padding-top:max(10px,env(safe-area-inset-top));
+}
+.tb-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+.brand{display:flex;align-items:baseline;gap:9px;min-width:0}
+.brand h1{font-size:21px;letter-spacing:.055em;text-transform:uppercase;line-height:1}
+.brand .cycle{
+  font-family:var(--font-m);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);white-space:nowrap;
+}
+
+.tb-actions{display:flex;gap:6px;flex:none}
+.tb-btn{
+  min-height:34px;padding:7px 11px;
+  border:1px solid var(--line);border-radius:var(--r);
+  font-family:var(--font-d);font-size:13px;font-weight:600;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);
+}
+.tb-btn[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+
+/* The split itself is the navigation. Amber = where you are,
+   teal = the day you logged most recently. */
+.rail{display:grid;grid-template-columns:repeat(4,1fr);margin-top:9px}
+.rail button{
+  padding:9px 2px 10px;text-align:center;
+  border-top:3px solid var(--line-soft);
+  font-family:var(--font-d);font-size:13px;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;line-height:1.15;
+  color:var(--ink-3);
+}
+.rail button .n{
+  display:block;margin-bottom:1px;
+  font-family:var(--font-m);font-size:9.5px;font-weight:500;
+  letter-spacing:.1em;opacity:.75;
+}
+.rail button[data-logged="1"]{color:var(--ink-2);border-top-color:var(--good)}
+.rail button[aria-current="true"]{color:var(--ink);border-top-color:var(--accent)}
+
+
+/* ==========================================================================
+   Session header
+   ========================================================================== */
+
+main{flex:1;padding-bottom:8px}
+
+.session-head{
+  padding:16px 14px 12px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+}
+.session-head h2{font-size:29px;letter-spacing:.02em;line-height:1;text-transform:uppercase}
+.session-head .sub{margin-top:5px;font-size:12.5px;color:var(--ink-2)}
+
+.prog{flex:none;text-align:right}
+.prog .big{
+  font-family:var(--font-m);font-size:21px;font-weight:600;
+  line-height:1;font-variant-numeric:tabular-nums;
+}
+.prog .cap{
+  margin-top:3px;
+  font-family:var(--font-m);font-size:9.5px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+
+
+/* ==========================================================================
+   Exercise ledger — hairline rows, not a deck of cards
+   ========================================================================== */
+
+.ledger{border-top:1px solid var(--line);background:var(--surface)}
+
+.ex{display:flex;border-bottom:1px solid var(--line-soft)}
+
+/* Left stripe fills as sets are logged, then flips to the completion colour. */
+.ex-stripe{flex:none;width:4px;background:var(--line-soft);position:relative}
+.ex-stripe i{
+  position:absolute;left:0;top:0;display:block;
+  width:100%;height:var(--p,0%);
+  background:var(--accent);transition:height .18s ease;
+}
+.ex[data-complete="1"] .ex-stripe i{background:var(--good)}
+
+.ex-body{flex:1;min-width:0;padding:13px 14px 14px}
+.ex-head{display:flex;align-items:flex-start;gap:10px}
+.ex-head h3{flex:1;min-width:0;font-size:18.5px;letter-spacing:.015em;line-height:1.12}
+.ex[data-complete="1"] .ex-head h3{color:var(--ink-2)}
+
+.edit{
+  flex:none;min-height:30px;padding:5px 8px;
+  border:1px solid var(--line);border-radius:7px;
+  font-family:var(--font-m);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+
+.ex-meta{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:7px}
+.chip{
+  padding:3px 7px;border-radius:5px;
+  background:var(--surface-2);color:var(--ink-2);
+  font-family:var(--font-m);font-size:11.5px;font-weight:500;
+  font-variant-numeric:tabular-nums;
+}
+.chip.load{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.last{
+  font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.ex-note{
+  margin-top:8px;padding-left:9px;
+  border-left:2px solid var(--line);
+  font-size:12.5px;color:var(--ink-2);
+}
+
+.sets{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px;margin-top:11px}
+.set{
+  height:46px;
+  border:1px solid var(--line);border-radius:8px;background:var(--ground);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  font-family:var(--font-m);font-variant-numeric:tabular-nums;
+  transition:background .12s,border-color .12s,transform .08s;
+}
+.set .s{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.set .r{font-size:14px;font-weight:600;color:var(--ink-2)}
+.set[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
+.set[aria-pressed="true"] .s,
+.set[aria-pressed="true"] .r{color:var(--accent-ink)}
+.set:active{transform:scale(.97)}
+
+.addrow{padding:14px}
+.add-btn{
+  width:100%;min-height:46px;
+  border:1px dashed var(--line);border-radius:var(--r);color:var(--ink-2);
+  font-family:var(--font-d);font-size:15px;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+
+.notes{padding:4px 14px 18px}
+
+
+/* ==========================================================================
+   Sticky action bar
+   ========================================================================== */
+
+.actionbar{
+  position:sticky;bottom:0;z-index:30;
+  display:flex;align-items:stretch;gap:9px;
+  background:var(--surface);border-top:1px solid var(--line);
+  padding:10px 14px;
+  padding-bottom:max(10px,env(safe-area-inset-bottom));
+}
+
+.timer{
+  flex:none;min-width:92px;padding:0 10px;
+  border:1px solid var(--line);border-radius:var(--r);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+}
+.timer .t{
+  font-family:var(--font-m);font-size:19px;font-weight:600;
+  line-height:1;font-variant-numeric:tabular-nums;
+}
+.timer .l{
+  font-family:var(--font-m);font-size:8.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.timer[data-run="1"]{border-color:var(--accent);background:var(--accent-soft)}
+.timer[data-run="1"] .t{color:var(--accent)}
+
+.finish{
+  flex:1;min-height:52px;padding:0 8px;
+  border-radius:var(--r);background:var(--accent);color:var(--accent-ink);
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  font-family:var(--font-d);font-size:18px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;
+}
+.finish:active{background:var(--accent-hi)}
+.finish[data-armed="1"]{background:var(--good);color:var(--ground);font-size:15px}
+
+
+/* ==========================================================================
+   Bottom sheet
+   ========================================================================== */
+
+.scrim{
+  position:fixed;inset:0;z-index:40;
+  background:rgba(8,14,14,.55);
+  opacity:0;transition:opacity .2s;
+}
+.scrim.open{opacity:1}
+
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  max-width:560px;margin:0 auto;max-height:88dvh;
+  display:flex;flex-direction:column;
+  background:var(--surface);
+  border-top-left-radius:16px;border-top-right-radius:16px;
+  box-shadow:var(--shadow);
+  transform:translateY(100%);
+  transition:transform .24s cubic-bezier(.2,.8,.3,1);
+}
+.sheet.open{transform:translateY(0)}
+
+.sheet-head{
+  position:relative;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:16px 16px 12px;border-bottom:1px solid var(--line);
+}
+.sheet-head::before{                      /* grab handle */
+  content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);
+  width:36px;height:4px;border-radius:2px;background:var(--line);
+}
+.sheet-head h3{flex:1;min-width:0;font-size:19px;letter-spacing:.05em;text-transform:uppercase}
+
+.sheet-body{
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;gap:16px;
+  padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));
+}
+
+.field{display:flex;flex-direction:column}
+
+.stepper{display:flex;align-items:stretch;gap:8px}
+.stepper button{
+  flex:none;width:52px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--ground);
+  font-family:var(--font-m);font-size:19px;font-weight:500;color:var(--ink-2);
+}
+.stepper button:active{background:var(--surface-2)}
+.stepper input{flex:1;min-width:0;padding:12px 6px;font-size:19px;font-weight:600}
+
+.quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.quick button{
+  flex:1;min-width:60px;min-height:38px;
+  border:1px solid var(--line);border-radius:8px;
+  font-family:var(--font-m);font-size:13px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+
+.rowbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rowbtns button{
+  min-height:46px;
+  border:1px solid var(--line);border-radius:var(--r);color:var(--ink-2);
+  font-family:var(--font-d);font-size:14px;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;
+}
+.rowbtns button.danger{color:var(--danger);border-color:var(--danger)}
+
+.swapname{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  width:100%;padding:12px;text-align:left;
+  border:1px solid var(--line);border-radius:var(--r);
+}
+.swapname strong{font-family:var(--font-d);font-size:18px;font-weight:600;letter-spacing:.02em}
+.swapname span{
+  flex:none;font-family:var(--font-m);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+
+
+/* ==========================================================================
+   Exercise library picker
+   ========================================================================== */
+
+.lib-group{
+  margin:14px 0 6px;padding-top:12px;
+  border-top:1px solid var(--line-soft);
+  font-family:var(--font-m);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.lib-group:first-of-type{margin-top:0;padding-top:0;border-top:0}
+
+.lib-item{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  width:100%;min-height:48px;padding:12px 2px;text-align:left;
+  border-bottom:1px solid var(--line-soft);
+}
+.lib-item strong{font-family:var(--font-d);font-size:17px;font-weight:500;letter-spacing:.01em;line-height:1.15}
+.lib-item .d{
+  flex:none;font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+
+
+/* ==========================================================================
+   Training log
+   ========================================================================== */
+
+.hist{display:flex;flex-direction:column;gap:12px;padding:16px 14px 20px}
+.empty{padding:36px 20px;text-align:center;font-size:14px;color:var(--ink-3)}
+
+.sess{
+  background:var(--surface);
+  border:1px solid var(--line-soft);border-radius:var(--r);
+  overflow:hidden;
+}
+.sess-top{display:flex;align-items:center;gap:10px;width:100%;padding:12px 13px;text-align:left}
+.sess-tag{
+  flex:none;padding:4px 7px;border-radius:5px;
+  background:var(--surface-2);color:var(--ink-2);
+  font-family:var(--font-d);font-size:12px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.sess-when{flex:1;min-width:0}
+.sess-when b{
+  display:block;text-transform:uppercase;
+  font-family:var(--font-d);font-size:16px;font-weight:600;letter-spacing:.03em;
+}
+.sess-when small{
+  font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.sess-vol{flex:none;text-align:right;font-family:var(--font-m);font-variant-numeric:tabular-nums}
+.sess-vol b{display:block;font-size:15px;font-weight:600;line-height:1.1}
+.sess-vol small{font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
+
+.sess-detail{border-top:1px solid var(--line-soft);padding:4px 13px 12px}
+.sess-line{
+  display:flex;justify-content:space-between;gap:10px;
+  padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px;
+}
+.sess-line:last-of-type{border-bottom:0}
+.sess-line span{
+  flex:none;font-family:var(--font-m);font-size:12px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.sess-note{
+  margin-top:10px;padding-left:9px;
+  border-left:2px solid var(--accent);
+  font-size:13px;color:var(--ink-2);
+}
+.sess-del{
+  margin-top:12px;min-height:32px;
+  font-family:var(--font-m);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--danger);
+}
+
+
+/* ==========================================================================
+   Settings
+   ========================================================================== */
+
+.settings{
+  margin-top:8px;padding-top:16px;
+  border-top:1px solid var(--line);
+  display:flex;flex-direction:column;gap:12px;
+}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.setrow .k{font-size:14px}
+.setrow .k small{display:block;font-size:11.5px;color:var(--ink-3)}
+.setrow .edit.danger{color:var(--danger);border-color:var(--danger)}
+
+.seg{flex:none;display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{
+  min-height:38px;padding:8px 12px;
+  font-family:var(--font-m);font-size:12px;color:var(--ink-3);
+}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
+
+
+/* ==========================================================================
+   Toast
+   ========================================================================== */
+
+.toast{
+  position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));z-index:60;
+  transform:translate(-50%,20px);
+  max-width:calc(100% - 28px);padding:11px 16px;
+  background:var(--ink);color:var(--ground);
+  border-radius:var(--r);box-shadow:var(--shadow);
+  font-size:13.5px;text-align:center;
+  opacity:0;pointer-events:none;
+  transition:opacity .2s,transform .2s;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+
+/* ==========================================================================
+   Set logger — one set, one or more weights
+   ========================================================================== */
+
+.sheet-sub{
+  margin-top:-4px;
+  font-family:var(--font-m);font-size:11.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+
+.hint{margin-top:8px;font-size:12px;color:var(--ink-3);line-height:1.4}
+
+/* Each weight in the set gets its own block. The top set is plain; drops
+   are indented behind an amber rail so the hierarchy is visible at a glance. */
+.segblock{
+  border:1px solid var(--line);border-radius:var(--r);
+  padding:12px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.segblock.is-drop{
+  border-left:3px solid var(--accent);
+  background:var(--ground);
+}
+
+.segblock-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:22px}
+.seglabel{
+  font-family:var(--font-m);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.segdel{
+  font-family:var(--font-m);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--danger);min-height:28px;padding:0 4px;
+}
+
+.seggrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seggrid .lab{margin-bottom:5px}
+
+/* Narrower stepper for the two-up grid. */
+.stepper.mini button{width:40px;font-size:17px}
+.stepper.mini input{padding:10px 2px;font-size:17px}
+
+/* Rep chips derived from the exercise's own target. */
+.quick.reps{margin-top:0}
+.quick.reps button[aria-pressed="true"]{
+  background:var(--accent);border-color:var(--accent);color:var(--accent-ink);
+}
+
+.settotal{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  padding:12px 13px;border-radius:var(--r);
+  background:var(--surface-2);
+}
+.settotal span{
+  font-family:var(--font-m);font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.settotal b{
+  font-family:var(--font-m);font-size:14px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+
+.rowbtns.one{grid-template-columns:1fr}
+
+/* Drop sets spelled out inside a logged session. */
+.sess-drops{
+  padding:0 0 8px 0;
+  font-family:var(--font-m);font-size:11.5px;line-height:1.6;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="tb-row">
+      <div class="brand">
+        <h1>Iron Ledger</h1>
+        <span class="cycle" id="cycleLabel">Cycle 1</span>
+      </div>
+      <div class="tb-actions">
+        <button class="tb-btn" id="tabTrain" aria-pressed="true">Train</button>
+        <button class="tb-btn" id="tabLog" aria-pressed="false">Log</button>
+      </div>
+    </div>
+    <nav class="rail" id="rail" aria-label="Four day rotation"></nav>
+  </header>
+
+  <main id="view"></main>
+
+  <footer class="actionbar" id="actionbar">
+    <button class="timer" id="timer" data-run="0">
+      <span class="t" id="timerT">3:00</span>
+      <span class="l" id="timerL">Rest</span>
+    </button>
+    <button class="finish" id="finish">Finish session</button>
+  </footer>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-head">
+    <h3 id="sheetTitle">Edit</h3>
+    <button class="edit" id="sheetClose">Done</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ==========================================================================
+   data.js — the program itself.
+
+   This is the file to edit when you want to change what the app starts with.
+   Nothing here is behaviour; it is all content.
+
+   Note: changing these only affects a FRESH start. Once the app has saved a
+   plan to localStorage it uses that, so edits here won't show up until you
+   hit Reset in the Log tab (or clear site data).
+   ========================================================================== */
+
+window.IL = window.IL || {};
+
+(function(IL){
+"use strict";
+
+/* --------------------------------------------------------------------------
+   Exercise library — everything at your gym, grouped by what it trains.
+
+   [ group, name, type, default sets, default reps ]
+
+   type drives two defaults:
+     compound  heaviest movements, 3:00 rest
+     support   secondary movements, 1:30 rest
+     small     arms / calves / abs,  1:30 rest
+   -------------------------------------------------------------------------- */
+var LIB = [
+  ["Chest","Incline Smith Press","compound",4,"6-8"],
+  ["Chest","Flat Smith Press","compound",4,"6-8"],
+  ["Chest","Incline DB Press","compound",4,"8-10"],
+  ["Chest","Flat DB Press","compound",4,"8-12"],
+  ["Chest","Seated Chest Press Machine","compound",3,"8-10"],
+  ["Chest","Chest Fly Machine","support",3,"12-15"],
+  ["Chest","Dips","compound",3,"8-10"],
+
+  ["Back","Barbell Bent-Over Row","compound",4,"6-8"],
+  ["Back","Pull-Ups","compound",4,"6-10"],
+  ["Back","Chest-Supported DB Row","support",3,"8-10"],
+  ["Back","Cable Lat Pulldown","support",3,"8-10"],
+  ["Back","Lat Pulldown Machine","support",3,"10-12"],
+  ["Back","Seated Cable Low Row","support",3,"8-10"],
+  ["Back","Chest-Supported Row Machine","support",3,"10-12"],
+
+  ["Shoulders","Seated Smith Shoulder Press","compound",3,"6-8"],
+  ["Shoulders","Seated DB Shoulder Press","compound",3,"8-10"],
+  ["Shoulders","Shoulder Press Machine","support",3,"10-12"],
+  ["Shoulders","Cable Lateral Raise","small",3,"12-15"],
+  ["Shoulders","DB Shrugs","small",3,"12-15"],
+
+  ["Arms","DB Bicep Curl","small",3,"10-12"],
+  ["Arms","DB Hammer Curl","small",3,"10-12"],
+  ["Arms","Seated Preacher Curl","small",3,"10-12"],
+  ["Arms","Seated Preacher Hammer Curl","small",3,"10-12"],
+  ["Arms","Incline Seated DB Curl","small",3,"12-15"],
+  ["Arms","Cable Bicep Curl","small",3,"12-15"],
+  ["Arms","Cable Tricep Pushdown","small",3,"10-12"],
+  ["Arms","Tricep Pushdown Machine","small",3,"12-15"],
+  ["Arms","Overhead DB Tricep Extension","small",3,"12-15"],
+  ["Arms","DB Wrist Curl","small",3,"15-20"],
+
+  ["Legs","V-Squat Machine","compound",4,"6-8"],
+  ["Legs","Leg Press","compound",4,"10-12"],
+  ["Legs","Barbell RDL","compound",4,"6-8"],
+  ["Legs","Bulgarian Split Squat","compound",3,"8-10"],
+  ["Legs","Leg Extension","support",3,"12-15"],
+  ["Legs","Seated Leg Curl","support",3,"10-12"],
+  ["Legs","Cable Kickback","small",3,"12-15"],
+  ["Legs","Calf Raise","small",4,"12-15"],
+  ["Legs","Abductor Machine","small",3,"12-15"],
+  ["Legs","Adductor Machine","small",3,"12-15"],
+
+  ["Core","Cable Crunch","small",3,"12-15"],
+  ["Core","Captain's Chair Leg Raise","small",3,"12-15"],
+  ["Core","Hanging Leg Raise","small",3,"10-15"]
+];
+
+/* Name -> details, so lookups don't scan the array. */
+var LIB_BY_NAME = {};
+LIB.forEach(function(row){
+  LIB_BY_NAME[row[1]] = { group:row[0], type:row[2], sets:row[3], reps:row[4] };
+});
+
+/* Loaded by bodyweight — these show BW instead of a blank weight. */
+var BODYWEIGHT = {
+  "Pull-Ups":1,
+  "Dips":1,
+  "Hanging Leg Raise":1,
+  "Captain's Chair Leg Raise":1
+};
+
+/* --------------------------------------------------------------------------
+   The rotation: Upper A, Lower A, Upper B, Lower B.
+
+   A days are heavy — 6-8 on the compounds.
+   B days trade the bar for dumbbells and machines and push the reps up.
+   Supporting work sits at 8-12, arms/calves/abs at 10-15.
+
+   plan entries are [ exercise name, sets, target reps ].
+   -------------------------------------------------------------------------- */
+var TEMPLATES = [
+  {
+    id:"UA", name:"Upper A", tag:"Heavy press & pull",
+    plan:[
+      ["Incline Smith Press",4,"6-8"],
+      ["Barbell Bent-Over Row",4,"6-8"],
+      ["Seated Smith Shoulder Press",3,"6-8"],
+      ["Cable Lat Pulldown",3,"8-10"],
+      ["Cable Lateral Raise",3,"12-15"],
+      ["DB Bicep Curl",3,"10-12"],
+      ["Cable Tricep Pushdown",3,"10-12"],
+      ["Cable Crunch",3,"12-15"]
+    ]
+  },
+  {
+    id:"LA", name:"Lower A", tag:"Heavy squat & hinge",
+    plan:[
+      ["V-Squat Machine",4,"6-8"],
+      ["Barbell RDL",4,"6-8"],
+      ["Bulgarian Split Squat",3,"8-10"],
+      ["Seated Leg Curl",3,"10-12"],
+      ["Calf Raise",4,"12-15"],
+      ["Abductor Machine",3,"12-15"]
+    ]
+  },
+  {
+    id:"UB", name:"Upper B", tag:"Dumbbell & machine volume",
+    plan:[
+      ["Flat DB Press",4,"8-12"],
+      ["Pull-Ups",4,"6-10"],
+      ["Seated DB Shoulder Press",3,"8-10"],
+      ["Chest-Supported DB Row",3,"8-10"],
+      ["Chest Fly Machine",3,"12-15"],
+      ["Seated Preacher Hammer Curl",3,"10-12"],
+      ["Overhead DB Tricep Extension",3,"12-15"],
+      ["DB Shrugs",3,"12-15"],
+      ["Hanging Leg Raise",3,"10-15"]
+    ]
+  },
+  {
+    id:"LB", name:"Lower B", tag:"Volume & single leg",
+    plan:[
+      ["Leg Press",4,"10-12"],
+      ["Seated Leg Curl",3,"12-15"],
+      ["Leg Extension",3,"12-15"],
+      ["Cable Kickback",3,"12-15"],
+      ["Adductor Machine",3,"15-20"],
+      ["Calf Raise",4,"15-20"],
+      ["Captain's Chair Leg Raise",3,"12-15"]
+    ]
+  }
+];
+
+/* Defaults applied to an exercise typed in by hand, i.e. not in the library. */
+var CUSTOM_DEFAULTS = { sets:3, reps:"10-12", type:"support" };
+
+IL.data = {
+  LIB: LIB,
+  LIB_BY_NAME: LIB_BY_NAME,
+  BODYWEIGHT: BODYWEIGHT,
+  TEMPLATES: TEMPLATES,
+  CUSTOM_DEFAULTS: CUSTOM_DEFAULTS
+};
+
+})(window.IL);
+
+
+/* ==========================================================================
+   store.js — state, persistence, and the domain questions asked of it.
+
+   The whole app is one plain object saved to localStorage on every change.
+   Shape:
+
+     {
+       schema:  storage version, so old saves can be migrated
+       day:     0-3, index into days
+       cycle:   how many times the rotation has come round
+       days:    [ { id, name, tag, notes, ex: [ exercise ] } x4 ]
+       history: [ session ]
+       prefs:   { unit, step, autoRest, restCompound, restOther }
+     }
+
+     exercise = { uid, name, sets, reps, weight, note, log }
+
+   A SET IS NOT A CHECKBOX. log[k] is either null (not done yet) or an array
+   of segments — [{ w, r }, ...] — because one set can be several weights.
+   Grinding 5 at 185, stripping down and getting 3 more at 155 is still one
+   set, and it's stored as [{w:185,r:5},{w:155,r:3}].
+
+     session = { at, dayId, dayName, notes, unit, volume, entries }
+     entry   = { name, sets, target, completed, topWeight, volume,
+                 logged: [ { set, segs } ] }
+   ========================================================================== */
+
+window.IL = window.IL || {};
+
+(function(IL){
+"use strict";
+
+var data = IL.data;
+
+var KEY = "ironLedger.v1";
+var SCHEMA = 2;
+var MAX_SETS = 10;
+
+var uidCounter = 0;
+function uid(){
+  uidCounter++;
+  return "e" + Date.now().toString(36) + uidCounter.toString(36);
+}
+
+/* --------------------------------------------------------------------------
+   Reading a rep target
+   -------------------------------------------------------------------------- */
+
+/* Top of a "6-8" style target. Quick-logging a set assumes you hit this. */
+function repTop(reps){
+  var found = String(reps).match(/\d+/g);
+  return found ? parseInt(found[found.length - 1], 10) : 8;
+}
+
+/* Every whole number in the target, for the one-tap rep chips. */
+function repChoices(reps){
+  var found = String(reps).match(/\d+/g);
+  if(!found) return [];
+  var low = parseInt(found[0], 10);
+  var high = parseInt(found[found.length - 1], 10);
+  if(high < low) high = low;
+  if(high - low > 7) return [low, high];        /* silly-wide target, just ends */
+  var out = [];
+  for(var n = low; n <= high; n++) out.push(n);
+  return out;
+}
+
+/* --------------------------------------------------------------------------
+   Segments
+   -------------------------------------------------------------------------- */
+
+function totalReps(segs){
+  if(!segs) return 0;
+  return segs.reduce(function(n, s){ return n + (s.r || 0); }, 0);
+}
+
+function segmentVolume(segs){
+  if(!segs) return 0;
+  return segs.reduce(function(n, s){ return n + (s.w || 0) * (s.r || 0); }, 0);
+}
+
+/* Heaviest weight in a set — what the set is "at", ignoring the drops. */
+function topWeight(segs){
+  if(!segs || !segs.length) return 0;
+  return segs.reduce(function(m, s){ return Math.max(m, s.w || 0); }, 0);
+}
+
+function isLogged(e, k){ return !!(e.log && e.log[k] && e.log[k].length); }
+
+/* --------------------------------------------------------------------------
+   Seeding, loading, migrating
+   -------------------------------------------------------------------------- */
+
+function seed(){
+  return {
+    schema: SCHEMA,
+    day: 0,
+    cycle: 1,
+    days: data.TEMPLATES.map(function(t){
+      return {
+        id: t.id,
+        name: t.name,
+        tag: t.tag,
+        notes: "",
+        ex: t.plan.map(function(p){
+          return { uid:uid(), name:p[0], sets:p[1], reps:p[2], weight:0, note:"", log:[] };
+        })
+      };
+    }),
+    history: [],
+    prefs: { unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90 }
+  };
+}
+
+/* schema 1 stored done:[bool]. Rebuild each ticked set as a single segment at
+   whatever the working weight and rep target were, so nothing is lost. */
+function migrateToV2(saved){
+  saved.days.forEach(function(d){
+    d.ex.forEach(function(e){
+      if(e.log) return;
+      var done = e.done || [];
+      e.log = [];
+      for(var k = 0; k < e.sets; k++){
+        e.log[k] = done[k] ? [{ w:(e.weight || 0), r:repTop(e.reps) }] : null;
+      }
+      delete e.done;
+    });
+  });
+
+  (saved.history || []).forEach(function(h){
+    h.entries.forEach(function(en){
+      if(en.logged) return;
+      var segs = [];
+      for(var k = 0; k < (en.completed || 0); k++){
+        segs.push({ set:k + 1, segs:[{ w:(en.weight || 0), r:repTop(en.reps) }] });
+      }
+      en.logged = segs;
+      en.target = en.reps;
+      en.topWeight = en.weight || 0;
+      en.volume = segs.reduce(function(n, s){ return n + segmentVolume(s.segs); }, 0);
+      delete en.weight;
+      delete en.reps;
+    });
+    h.volume = h.entries.reduce(function(n, en){ return n + (en.volume || 0); }, 0);
+  });
+
+  saved.schema = 2;
+  return saved;
+}
+
+function load(){
+  try{
+    var raw = localStorage.getItem(KEY);
+    if(raw){
+      var saved = JSON.parse(raw);
+      if(saved && saved.days && saved.days.length === 4){
+        /* Fill in anything an older save predates rather than discarding it. */
+        saved.prefs = Object.assign(seed().prefs, saved.prefs || {});
+        saved.history = saved.history || [];
+        saved.cycle = saved.cycle || 1;
+        saved.day = saved.day || 0;
+        saved.days.forEach(function(d){ d.notes = d.notes || ""; });
+        if(!saved.schema || saved.schema < 2) migrateToV2(saved);
+        saved.days.forEach(function(d){
+          d.ex.forEach(function(e){ if(!Array.isArray(e.log)) e.log = []; });
+        });
+        return saved;
+      }
+    }
+  }catch(err){
+    /* Unreadable or blocked storage — fall through to the stock plan. */
+  }
+  return seed();
+}
+
+var state = load();
+
+/* onSaveError is set by app.js so a failed write can surface in the UI. */
+var onSaveError = null;
+
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }catch(err){
+    if(onSaveError) onSaveError();
+  }
+}
+
+function reset(){
+  state = seed();
+  save();
+  return state;
+}
+
+/* --------------------------------------------------------------------------
+   Questions asked about the state
+   -------------------------------------------------------------------------- */
+
+function currentDay(){ return state.days[state.day]; }
+
+function typeOf(name){
+  var found = data.LIB_BY_NAME[name];
+  return found ? found.type : data.CUSTOM_DEFAULTS.type;
+}
+
+function isBodyweight(name){ return !!data.BODYWEIGHT[name]; }
+
+function restFor(name){
+  return typeOf(name) === "compound" ? state.prefs.restCompound : state.prefs.restOther;
+}
+
+function doneCount(e){
+  var n = 0;
+  for(var k = 0; k < e.sets; k++){ if(isLogged(e, k)) n++; }
+  return n;
+}
+
+function dayProgress(day){
+  var total = 0, done = 0;
+  day.ex.forEach(function(e){ total += e.sets; done += doneCount(e); });
+  return { done:done, total:total };
+}
+
+function exerciseVolume(e){
+  var v = 0;
+  for(var k = 0; k < e.sets; k++){ v += segmentVolume(e.log[k]); }
+  return v;
+}
+
+/* Most recent logged performance per movement, for the "last ..." line.
+   Walks history newest-first and keeps the first hit for each name. */
+function lastPerformed(){
+  var map = {};
+  for(var i = state.history.length - 1; i >= 0; i--){
+    var h = state.history[i];
+    for(var j = 0; j < h.entries.length; j++){
+      var en = h.entries[j];
+      if(!map[en.name] && en.completed > 0){
+        map[en.name] = {
+          topWeight: en.topWeight || 0,
+          logged: en.logged || [],
+          unit: h.unit || "lb"
+        };
+      }
+    }
+  }
+  return map;
+}
+
+/* --------------------------------------------------------------------------
+   Mutations
+   -------------------------------------------------------------------------- */
+
+function newExercise(name){
+  var def = data.LIB_BY_NAME[name] || data.CUSTOM_DEFAULTS;
+  return { uid:uid(), name:name, sets:def.sets, reps:def.reps, weight:0, note:"", log:[] };
+}
+
+function clampSets(n){
+  return Math.min(MAX_SETS, Math.max(1, parseInt(n, 10) || 1));
+}
+
+function setSets(e, n){
+  e.sets = clampSets(n);
+  e.log.length = e.sets;   /* drop logs for sets that no longer exist */
+  return e.sets;
+}
+
+function addWeight(e, delta){
+  /* Round to 2dp so 2.5 steps don't drift into float noise. */
+  e.weight = Math.max(0, Math.round(((+e.weight || 0) + delta) * 100) / 100);
+  return e.weight;
+}
+
+/* One tap: assume the working weight and the top of the rep target. */
+function quickLog(e, k){
+  e.log[k] = [{ w:(e.weight || 0), r:repTop(e.reps) }];
+  return e.log[k];
+}
+
+function clearSet(e, k){ e.log[k] = null; }
+
+/* A drop starts one step lighter and at roughly half the reps — both are
+   just a sensible place for the steppers to begin. */
+function addSegment(e, k){
+  var segs = e.log[k];
+  if(!segs) segs = quickLog(e, k);
+  var prev = segs[segs.length - 1];
+  segs.push({
+    w: Math.max(0, Math.round((prev.w - state.prefs.step) * 100) / 100),
+    r: Math.max(1, Math.round(prev.r / 2))
+  });
+  return segs;
+}
+
+function removeSegment(e, k, index){
+  var segs = e.log[k];
+  if(!segs || segs.length <= 1) return false;
+  segs.splice(index, 1);
+  return true;
+}
+
+function setSegmentWeight(e, k, index, value){
+  var seg = e.log[k] && e.log[k][index];
+  if(!seg) return 0;
+  seg.w = Math.max(0, Math.round((value || 0) * 100) / 100);
+  return seg.w;
+}
+
+function setSegmentReps(e, k, index, value){
+  var seg = e.log[k] && e.log[k][index];
+  if(!seg) return 0;
+  seg.r = Math.min(999, Math.max(0, parseInt(value, 10) || 0));
+  return seg.r;
+}
+
+function moveExercise(day, from, to){
+  if(to < 0 || to >= day.ex.length) return false;
+  var moved = day.ex.splice(from, 1)[0];
+  day.ex.splice(to, 0, moved);
+  return true;
+}
+
+/* Log the session, clear the sets, advance the rotation.
+   Returns the finished day so the caller can report on it. */
+function finishSession(){
+  var day = currentDay();
+  var volume = 0;
+
+  var entries = day.ex.map(function(e){
+    var logged = [];
+    var heaviest = 0;
+    var exVolume = 0;
+
+    for(var k = 0; k < e.sets; k++){
+      if(!isLogged(e, k)) continue;
+      var segs = e.log[k].map(function(s){ return { w:s.w, r:s.r }; });
+      logged.push({ set:k + 1, segs:segs });
+      heaviest = Math.max(heaviest, topWeight(segs));
+      exVolume += segmentVolume(segs);
+    }
+
+    volume += exVolume;
+    return {
+      name: e.name,
+      sets: e.sets,
+      target: e.reps,
+      completed: logged.length,
+      topWeight: heaviest,
+      volume: Math.round(exVolume),
+      logged: logged
+    };
+  });
+
+  state.history.push({
+    at: Date.now(),
+    dayId: day.id,
+    dayName: day.name,
+    notes: day.notes,
+    unit: state.prefs.unit,
+    volume: Math.round(volume),
+    entries: entries
+  });
+
+  day.ex.forEach(function(e){ e.log = []; });
+  day.notes = "";
+
+  if(state.day === state.days.length - 1) state.cycle++;
+  state.day = (state.day + 1) % state.days.length;
+
+  save();
+  return day;
+}
+
+IL.store = {
+  MAX_SETS: MAX_SETS,
+
+  get state(){ return state; },
+  set onSaveError(fn){ onSaveError = fn; },
+
+  save: save,
+  reset: reset,
+  seed: seed,
+
+  repTop: repTop,
+  repChoices: repChoices,
+  totalReps: totalReps,
+  segmentVolume: segmentVolume,
+  topWeight: topWeight,
+  isLogged: isLogged,
+
+  currentDay: currentDay,
+  typeOf: typeOf,
+  isBodyweight: isBodyweight,
+  restFor: restFor,
+  doneCount: doneCount,
+  dayProgress: dayProgress,
+  exerciseVolume: exerciseVolume,
+  lastPerformed: lastPerformed,
+
+  newExercise: newExercise,
+  clampSets: clampSets,
+  setSets: setSets,
+  addWeight: addWeight,
+  quickLog: quickLog,
+  clearSet: clearSet,
+  addSegment: addSegment,
+  removeSegment: removeSegment,
+  setSegmentWeight: setSegmentWeight,
+  setSegmentReps: setSegmentReps,
+  moveExercise: moveExercise,
+  finishSession: finishSession
+};
+
+})(window.IL);
+
+
+/* ==========================================================================
+   ui.js — everything that produces markup.
+
+   Rendering is split two ways on purpose:
+     renderTrain()      rebuilds the whole day; used for structural changes
+                        (add, remove, reorder, set count, switching days)
+     patchExercise(i)   swaps one row and updates the counter; used for the
+                        hot path of logging sets, so typing in the notes box
+                        or scrolling is never interrupted.
+   ========================================================================== */
+
+window.IL = window.IL || {};
+
+(function(IL){
+"use strict";
+
+var data = IL.data;
+var store = IL.store;
+
+function $(id){ return document.getElementById(id); }
+
+var viewEl, sheetEl, scrimEl, toastEl;
+
+/* -------------------------------------------------------------------------- */
+
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;" }[c];
+  });
+}
+
+function unit(){ return store.state.prefs.unit; }
+
+function formatWeight(w, name){
+  if(w) return String(w);
+  return (name && store.isBodyweight(name)) ? "BW" : "—";
+}
+
+function formatLoad(e){
+  if(!e.weight) return store.isBodyweight(e.name) ? "BW" : "— " + unit();
+  return e.weight + " " + unit();
+}
+
+function formatClock(secs){
+  return Math.floor(secs / 60) + ":" + ("0" + (secs % 60)).slice(-2);
+}
+
+function formatDate(ts){
+  var d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month:"short", day:"numeric" }) + " · " +
+         d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+}
+
+/* "8, 8, 5+3" — a set with drops shows its segments joined by a plus. */
+function repsSummary(logged){
+  if(!logged || !logged.length) return "";
+  return logged.map(function(item){
+    return item.segs.map(function(s){ return s.r; }).join("+");
+  }).join(", ");
+}
+
+/* "185×5 → 155×3" — the full story of one set. */
+function segsDetail(segs, name){
+  return segs.map(function(s){
+    return formatWeight(s.w, name) + "×" + s.r;
+  }).join(" → ");
+}
+
+/* -------------------------------------------------------------------------- */
+
+var toastTimer;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2800);
+}
+
+/* --------------------------------------------------------------------------
+   Rotation rail
+   -------------------------------------------------------------------------- */
+
+function renderRail(activeView){
+  var s = store.state;
+  var lastLoggedId = s.history.length ? s.history[s.history.length - 1].dayId : null;
+
+  $("rail").innerHTML = s.days.map(function(d, i){
+    return '<button data-day="' + i + '"' +
+             ' aria-current="' + (i === s.day && activeView === "train") + '"' +
+             ' data-logged="' + (d.id === lastLoggedId ? "1" : "0") + '">' +
+             '<span class="n">' + (i + 1) + '</span>' + esc(d.name) +
+           '</button>';
+  }).join("");
+
+  $("cycleLabel").textContent = "Cycle " + s.cycle;
+}
+
+/* --------------------------------------------------------------------------
+   Training day
+   -------------------------------------------------------------------------- */
+
+/* Unlogged: "Set 2" over the rep target.
+   Logged:   the weight over the reps you actually got, with a ▾ when the set
+             had drops in it. */
+function setButton(e, row, k){
+  var segs = e.log[k];
+  var logged = store.isLogged(e, k);
+  var top, big, label;
+
+  if(logged){
+    top = formatWeight(store.topWeight(segs), e.name) + (segs.length > 1 ? " ▾" : "");
+    big = store.totalReps(segs);
+    label = "Set " + (k + 1) + ", " + segsDetail(segs, e.name) + ". Edit.";
+  }else{
+    top = "Set " + (k + 1);
+    big = e.reps;
+    label = "Log set " + (k + 1) + " of " + e.name;
+  }
+
+  return '<button class="set" data-set="' + row + ',' + k + '"' +
+           ' aria-pressed="' + (logged ? "true" : "false") + '"' +
+           ' aria-label="' + esc(label) + '">' +
+           '<span class="s">' + esc(top) + '</span>' +
+           '<span class="r">' + esc(big) + '</span>' +
+         '</button>';
+}
+
+function exerciseRow(e, i, last){
+  var completed = store.doneCount(e);
+  var pct = e.sets ? Math.round(completed / e.sets * 100) : 0;
+
+  var sets = "";
+  for(var k = 0; k < e.sets; k++) sets += setButton(e, i, k);
+
+  var lastLine = (last && last.logged.length)
+    ? '<span class="last">last ' + formatWeight(last.topWeight, e.name) + " " + esc(last.unit) +
+      ' · ' + esc(repsSummary(last.logged)) + '</span>'
+    : '';
+
+  return '<article class="ex" data-row="' + i + '"' +
+           ' data-complete="' + (e.sets > 0 && completed === e.sets ? "1" : "0") + '">' +
+    '<div class="ex-stripe"><i style="--p:' + pct + '%"></i></div>' +
+    '<div class="ex-body">' +
+      '<div class="ex-head">' +
+        '<h3>' + esc(e.name) + '</h3>' +
+        '<button class="edit" data-edit="' + i + '">Edit</button>' +
+      '</div>' +
+      '<div class="ex-meta">' +
+        '<span class="chip">' + e.sets + ' × ' + esc(e.reps) + '</span>' +
+        '<span class="chip load">' + esc(formatLoad(e)) + '</span>' +
+        lastLine +
+      '</div>' +
+      (e.note ? '<p class="ex-note">' + esc(e.note) + '</p>' : '') +
+      '<div class="sets">' + sets + '</div>' +
+    '</div>' +
+  '</article>';
+}
+
+function renderTrain(){
+  var day = store.currentDay();
+  var last = store.lastPerformed();
+  var progress = store.dayProgress(day);
+
+  var rows = day.ex.map(function(e, i){ return exerciseRow(e, i, last[e.name]); }).join("");
+
+  viewEl.innerHTML =
+    '<div class="session-head">' +
+      '<div>' +
+        '<h2>' + esc(day.name) + '</h2>' +
+        '<p class="sub">' + esc(day.tag) + '</p>' +
+      '</div>' +
+      '<div class="prog">' +
+        '<div class="big" id="progCount">' + progress.done + '/' + progress.total + '</div>' +
+        '<div class="cap">Sets in</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="ledger" id="ledger">' + rows + '</div>' +
+    '<div class="addrow"><button class="add-btn" id="addEx">+ Add exercise</button></div>' +
+    '<div class="notes">' +
+      '<label class="lab" for="dayNotes">Session notes</label>' +
+      '<textarea id="dayNotes" placeholder="Incline felt strong, add 5 next time. Left shoulder tight.">' +
+        esc(day.notes) +
+      '</textarea>' +
+    '</div>';
+
+  $("actionbar").hidden = false;
+  setFinishLabel();
+  renderRail("train");
+}
+
+/* Replace a single row in place — no full rebuild, no lost focus. */
+function patchExercise(i){
+  var day = store.currentDay();
+  var el = document.querySelector('.ex[data-row="' + i + '"]');
+  if(!el){ renderTrain(); return; }
+
+  var last = store.lastPerformed()[day.ex[i].name];
+  el.outerHTML = exerciseRow(day.ex[i], i, last);
+
+  var progress = store.dayProgress(day);
+  $("progCount").textContent = progress.done + "/" + progress.total;
+}
+
+function setFinishLabel(armed){
+  var btn = $("finish");
+  btn.dataset.armed = armed ? "1" : "0";
+  btn.textContent = armed
+    ? "No sets logged — finish anyway?"
+    : "Finish " + store.currentDay().name;
+}
+
+/* --------------------------------------------------------------------------
+   Training log
+   -------------------------------------------------------------------------- */
+
+function sessionCard(h, index, isOpen){
+  var u = h.unit || "lb";
+
+  var lines = h.entries.map(function(en){
+    var summary = repsSummary(en.logged);
+    var head =
+      '<div class="sess-line">' +
+        '<div>' + esc(en.name) + '</div>' +
+        '<span>' + (en.topWeight ? en.topWeight + " " + esc(u) : "BW") +
+          (summary ? ' · ' + esc(summary) : ' · not done') +
+        '</span>' +
+      '</div>';
+
+    /* Spell out any set that had drops in it — the summary can't show
+       which weight went with which reps. */
+    var drops = (en.logged || []).filter(function(item){ return item.segs.length > 1; });
+    if(drops.length){
+      head += '<div class="sess-drops">' + drops.map(function(item){
+        return 'Set ' + item.set + ': ' + esc(segsDetail(item.segs, en.name));
+      }).join("<br>") + '</div>';
+    }
+    return head;
+  }).join("");
+
+  return '<div class="sess">' +
+    '<button class="sess-top" data-open="' + index + '" aria-expanded="' + isOpen + '">' +
+      '<span class="sess-tag">' + esc(h.dayId) + '</span>' +
+      '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) + '</small></span>' +
+      '<span class="sess-vol"><b>' + h.volume.toLocaleString() + '</b><small>' + esc(u) + ' volume</small></span>' +
+    '</button>' +
+    (isOpen ?
+      '<div class="sess-detail">' + lines +
+        (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
+        '<button class="sess-del" data-del="' + index + '">Delete this session</button>' +
+      '</div>' : '') +
+  '</div>';
+}
+
+function settingsPanel(){
+  var p = store.state.prefs;
+  return '<div class="settings">' +
+    '<div class="setrow">' +
+      '<div class="k">Units<small>Applies to every load</small></div>' +
+      '<div class="seg">' +
+        '<button data-unit="lb" aria-pressed="' + (p.unit === "lb") + '">lb</button>' +
+        '<button data-unit="kg" aria-pressed="' + (p.unit === "kg") + '">kg</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="setrow">' +
+      '<div class="k">Weight step<small>Size of the plus and minus buttons</small></div>' +
+      '<div class="seg">' + [2.5, 5, 10].map(function(v){
+        return '<button data-step="' + v + '" aria-pressed="' + (p.step === v) + '">' + v + '</button>';
+      }).join("") + '</div>' +
+    '</div>' +
+    '<div class="setrow">' +
+      '<div class="k">Auto rest timer<small>Starts when you log a set</small></div>' +
+      '<div class="seg">' +
+        '<button data-auto="1" aria-pressed="' + (p.autoRest === true) + '">On</button>' +
+        '<button data-auto="0" aria-pressed="' + (p.autoRest === false) + '">Off</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="setrow">' +
+      '<div class="k">Start over<small>Erases the plan, history and settings</small></div>' +
+      '<button class="edit danger" id="resetAll">Reset</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderLog(openIndex){
+  var history = store.state.history;
+  var body;
+
+  if(!history.length){
+    body = '<p class="empty">No sessions logged yet. Finish a workout and it lands here with every rep you did.</p>';
+  }else{
+    var cards = [];
+    for(var i = history.length - 1; i >= 0; i--){
+      cards.push(sessionCard(history[i], i, openIndex === i));
+    }
+    body = cards.join("");
+  }
+
+  viewEl.innerHTML =
+    '<div class="session-head">' +
+      '<div>' +
+        '<h2>Training log</h2>' +
+        '<p class="sub">' + history.length + ' session' + (history.length === 1 ? "" : "s") + ' recorded</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="hist">' + body + settingsPanel() + '</div>';
+
+  $("actionbar").hidden = true;
+  renderRail("log");
+}
+
+/* --------------------------------------------------------------------------
+   Bottom sheet
+   -------------------------------------------------------------------------- */
+
+function openSheet(title, html, mode){
+  $("sheetTitle").textContent = title;
+  $("sheetBody").innerHTML = html;
+  sheetEl.dataset.mode = mode;
+  sheetEl.hidden = false;
+  scrimEl.hidden = false;
+  requestAnimationFrame(function(){
+    sheetEl.classList.add("open");
+    scrimEl.classList.add("open");
+  });
+}
+
+function closeSheet(){
+  sheetEl.classList.remove("open");
+  scrimEl.classList.remove("open");
+  setTimeout(function(){
+    sheetEl.hidden = true;
+    scrimEl.hidden = true;
+  }, 220);
+}
+
+function sheetMode(){ return sheetEl.dataset.mode; }
+
+/* --------------------------------------------------------------------------
+   Set logger — one set, one or more weights
+   -------------------------------------------------------------------------- */
+
+function stepper(kind, index, value, step, min){
+  return '<div class="stepper mini">' +
+    '<button data-seg="' + kind + ',' + index + ',' + (-step) + '" aria-label="Less">−</button>' +
+    '<input type="number" inputmode="' + (kind === "w" ? "decimal" : "numeric") + '"' +
+      ' step="any" min="' + min + '" data-segval="' + kind + ',' + index + '"' +
+      ' value="' + value + '">' +
+    '<button data-seg="' + kind + ',' + index + ',' + step + '" aria-label="More">+</button>' +
+  '</div>';
+}
+
+function segmentBlock(seg, index, isDrop, repChips){
+  return '<div class="segblock' + (isDrop ? " is-drop" : "") + '">' +
+    '<div class="segblock-head">' +
+      '<span class="seglabel">' + (isDrop ? "Drop " + index : "Top set") + '</span>' +
+      (isDrop ? '<button class="segdel" data-segdel="' + index + '">Remove</button>' : '') +
+    '</div>' +
+    '<div class="seggrid">' +
+      '<div class="field">' +
+        '<span class="lab">Weight (' + esc(unit()) + ')</span>' +
+        stepper("w", index, seg.w, store.state.prefs.step, 0) +
+      '</div>' +
+      '<div class="field">' +
+        '<span class="lab">Reps</span>' +
+        stepper("r", index, seg.r, 1, 0) +
+      '</div>' +
+    '</div>' +
+    (repChips || "") +
+  '</div>';
+}
+
+function setTotalHTML(segs){
+  return '<span>' + segs.length + (segs.length === 1 ? " weight" : " weights") + '</span>' +
+    '<b>' + store.totalReps(segs) + ' reps · ' +
+      Math.round(store.segmentVolume(segs)).toLocaleString() + ' ' + esc(unit()) + '</b>';
+}
+
+/* Update just the running total, so typing in a field isn't interrupted. */
+function refreshSetTotal(row, k){
+  var el = $("setTotal");
+  if(!el) return;
+  var segs = store.currentDay().ex[row].log[k];
+  if(segs) el.innerHTML = setTotalHTML(segs);
+}
+
+function setSheet(row, k){
+  var e = store.currentDay().ex[row];
+  var segs = e.log[k] || store.quickLog(e, k);
+
+  var chips = store.repChoices(e.reps);
+  var chipHTML = chips.length
+    ? '<div class="quick reps">' + chips.map(function(n){
+        return '<button data-repquick="' + n + '"' +
+               (segs[0].r === n ? ' aria-pressed="true"' : '') + '>' + n + '</button>';
+      }).join("") + '</div>'
+    : "";
+
+  var blocks = segs.map(function(seg, i){
+    return segmentBlock(seg, i, i > 0, i === 0 ? chipHTML : "");
+  }).join("");
+
+  openSheet("Set " + (k + 1),
+    '<p class="sheet-sub">' + esc(e.name) + ' · target ' + esc(e.reps) + '</p>' +
+    blocks +
+    '<button class="add-btn" id="addDrop">+ Add a drop</button>' +
+    '<div class="settotal" id="setTotal">' + setTotalHTML(segs) + '</div>' +
+    '<div class="rowbtns one">' +
+      '<button class="danger" id="clearSet">Clear this set</button>' +
+    '</div>',
+  "set");
+}
+
+/* --------------------------------------------------------------------------
+   Exercise editor
+   -------------------------------------------------------------------------- */
+
+function exerciseSheet(i){
+  var e = store.currentDay().ex[i];
+  var step = store.state.prefs.step;
+
+  openSheet("Edit exercise",
+    '<button class="swapname" id="swapBtn">' +
+      '<strong>' + esc(e.name) + '</strong><span>Swap ›</span>' +
+    '</button>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="fW">Working weight (' + esc(unit()) + ')</label>' +
+      '<div class="stepper">' +
+        '<button data-w="' + (-step) + '" aria-label="Decrease weight">−</button>' +
+        '<input id="fW" type="number" inputmode="decimal" step="any" value="' + (e.weight || "") +
+          '" placeholder="' + (store.isBodyweight(e.name) ? "BW" : "0") + '">' +
+        '<button data-w="' + step + '" aria-label="Increase weight">+</button>' +
+      '</div>' +
+      '<p class="hint">The starting point for each set. Change a single set from the set itself.</p>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="fS">Sets</label>' +
+      '<div class="stepper">' +
+        '<button data-s="-1" aria-label="One fewer set">−</button>' +
+        '<input id="fS" type="number" inputmode="numeric" min="1" max="' + store.MAX_SETS + '" value="' + e.sets + '">' +
+        '<button data-s="1" aria-label="One more set">+</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="fR">Target reps</label>' +
+      '<input id="fR" type="text" value="' + esc(e.reps) + '" placeholder="6-8">' +
+      '<div class="quick">' + ["6-8","8-10","10-12","12-15"].map(function(r){
+        return '<button data-r="' + r + '">' + r + '</button>';
+      }).join("") + '</div>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="fN">Exercise notes</label>' +
+      '<textarea id="fN" placeholder="Seat on 4, pins at 7. Pause at the bottom.">' + esc(e.note) + '</textarea>' +
+    '</div>' +
+
+    '<div class="rowbtns">' +
+      '<button data-move="-1">Move up</button>' +
+      '<button data-move="1">Move down</button>' +
+      '<button class="danger" data-remove="1">Remove</button>' +
+    '</div>',
+  "edit");
+}
+
+/* --------------------------------------------------------------------------
+   Exercise library picker
+   -------------------------------------------------------------------------- */
+
+function librarySheet(mode){
+  var groups = [];
+  data.LIB.forEach(function(r){ if(groups.indexOf(r[0]) < 0) groups.push(r[0]); });
+
+  var html =
+    '<div class="field">' +
+      '<input id="libSearch" type="text" placeholder="Search, or type a name of your own" autocomplete="off">' +
+    '</div>' +
+    '<div id="libCustom"></div>' +
+    '<div id="libList">' +
+      groups.map(function(g){
+        return '<div class="lib-group">' + esc(g) + '</div>' +
+          data.LIB.filter(function(r){ return r[0] === g; }).map(function(r){
+            return '<button class="lib-item" data-pick="' + esc(r[1]) + '"' +
+                     ' data-search="' + esc(r[1].toLowerCase()) + '">' +
+                     '<strong>' + esc(r[1]) + '</strong>' +
+                     '<span class="d">' + r[3] + '×' + r[4] + '</span>' +
+                   '</button>';
+          }).join("");
+      }).join("") +
+    '</div>';
+
+  openSheet(mode === "swap" ? "Swap exercise" : "Add exercise", html, mode);
+  $("libSearch").addEventListener("input", filterLibrary);
+}
+
+/* Filter the picker, hide group headings that end up empty, and offer the
+   typed text as a custom exercise when nothing matches. */
+function filterLibrary(){
+  var raw = this.value.trim();
+  var q = raw.toLowerCase();
+  var shown = 0;
+
+  var items = document.querySelectorAll("#libList .lib-item");
+  for(var i = 0; i < items.length; i++){
+    var hit = !q || items[i].dataset.search.indexOf(q) >= 0;
+    items[i].hidden = !hit;
+    if(hit) shown++;
+  }
+
+  var heads = document.querySelectorAll("#libList .lib-group");
+  for(var j = 0; j < heads.length; j++){
+    var n = heads[j].nextElementSibling;
+    var any = false;
+    while(n && n.classList.contains("lib-item")){
+      if(!n.hidden){ any = true; break; }
+      n = n.nextElementSibling;
+    }
+    heads[j].hidden = !any;
+  }
+
+  var d = data.CUSTOM_DEFAULTS;
+  $("libCustom").innerHTML = (raw && shown === 0)
+    ? '<button class="lib-item" data-pick="' + esc(raw) + '">' +
+        '<strong>Add “' + esc(raw) + '”</strong>' +
+        '<span class="d">' + d.sets + '×' + d.reps + '</span>' +
+      '</button>'
+    : "";
+}
+
+/* -------------------------------------------------------------------------- */
+
+function init(){
+  viewEl  = $("view");
+  sheetEl = $("sheet");
+  scrimEl = $("scrim");
+  toastEl = $("toast");
+}
+
+IL.ui = {
+  init: init,
+  esc: esc,
+  formatClock: formatClock,
+  repsSummary: repsSummary,
+  segsDetail: segsDetail,
+  toast: toast,
+
+  renderRail: renderRail,
+  renderTrain: renderTrain,
+  patchExercise: patchExercise,
+  setFinishLabel: setFinishLabel,
+  renderLog: renderLog,
+
+  openSheet: openSheet,
+  closeSheet: closeSheet,
+  sheetMode: sheetMode,
+  setSheet: setSheet,
+  refreshSetTotal: refreshSetTotal,
+  exerciseSheet: exerciseSheet,
+  librarySheet: librarySheet
+};
+
+})(window.IL);
+
+
+/* ==========================================================================
+   app.js — event wiring, the rest timer, and boot.
+
+   All clicks are handled by delegation on four containers (rail, view,
+   sheet body, action bar) so re-rendering never leaves dead listeners behind.
+
+   Logging a set has two speeds:
+     tap an empty set   logs it at the working weight and the top of the rep
+                        target, and starts the rest timer. One tap, done.
+     tap a logged set   opens the set logger, where the reps can be corrected
+                        and drops added.
+   ========================================================================== */
+
+window.IL = window.IL || {};
+
+(function(IL){
+"use strict";
+
+var store = IL.store;
+var ui = IL.ui;
+
+function $(id){ return document.getElementById(id); }
+
+/* View state that isn't worth persisting. */
+var view = "train";          /* "train" | "log"                            */
+var openSession = -1;        /* index of the expanded log entry, -1 none    */
+var editing = -1;            /* exercise index open in the editor sheet     */
+var editingSet = null;       /* { row, k } open in the set logger, or null  */
+
+/* --------------------------------------------------------------------------
+   Rest timer
+   -------------------------------------------------------------------------- */
+
+var rest = { left:0, id:null };
+
+function startRest(seconds){
+  rest.left = seconds;
+  if(rest.id) clearInterval(rest.id);
+  rest.id = setInterval(tickRest, 1000);
+  paintTimer();
+}
+
+function stopRest(){
+  if(rest.id) clearInterval(rest.id);
+  rest.id = null;
+  rest.left = 0;
+  paintTimer();
+}
+
+function tickRest(){
+  rest.left--;
+  if(rest.left <= 0){
+    stopRest();
+    ui.toast("Rest is up — next set.");
+    if(navigator.vibrate) navigator.vibrate([90, 60, 90]);
+    return;
+  }
+  paintTimer();
+}
+
+function paintTimer(){
+  var running = rest.id !== null;
+  var seconds = running ? rest.left : store.state.prefs.restCompound;
+  $("timerT").textContent = ui.formatClock(seconds);
+  $("timerL").textContent = running ? "Tap to stop" : "Rest";
+  $("timer").dataset.run = running ? "1" : "0";
+}
+
+/* --------------------------------------------------------------------------
+   Views
+   -------------------------------------------------------------------------- */
+
+function render(){
+  if(view === "train") ui.renderTrain();
+  else ui.renderLog(openSession);
+  syncTabs();
+}
+
+function syncTabs(){
+  $("tabTrain").setAttribute("aria-pressed", view === "train");
+  $("tabLog").setAttribute("aria-pressed", view === "log");
+}
+
+function showTrain(){
+  view = "train";
+  render();
+}
+
+function showLog(){
+  view = "log";
+  openSession = -1;
+  render();
+}
+
+/* --------------------------------------------------------------------------
+   Top bar and rotation rail
+   -------------------------------------------------------------------------- */
+
+$("tabTrain").addEventListener("click", showTrain);
+$("tabLog").addEventListener("click", showLog);
+
+$("rail").addEventListener("click", function(ev){
+  var btn = ev.target.closest("button[data-day]");
+  if(!btn) return;
+  store.state.day = parseInt(btn.dataset.day, 10);
+  store.save();
+  showTrain();
+  window.scrollTo({ top:0, behavior:"smooth" });
+});
+
+/* --------------------------------------------------------------------------
+   Main view
+   -------------------------------------------------------------------------- */
+
+$("view").addEventListener("click", function(ev){
+  var t = ev.target;
+  var hit;
+
+  hit = t.closest("[data-set]");
+  if(hit){
+    var parts = hit.dataset.set.split(",");
+    var row = parseInt(parts[0], 10);
+    var k = parseInt(parts[1], 10);
+    var e = store.currentDay().ex[row];
+
+    if(store.isLogged(e, k)){
+      /* Already logged — go correct the reps or add a drop. */
+      editingSet = { row:row, k:k };
+      ui.setSheet(row, k);
+      return;
+    }
+
+    store.quickLog(e, k);
+    if(store.state.prefs.autoRest) startRest(store.restFor(e.name));
+    store.save();
+    ui.patchExercise(row);
+    return;
+  }
+
+  hit = t.closest("[data-edit]");
+  if(hit){
+    editing = parseInt(hit.dataset.edit, 10);
+    ui.exerciseSheet(editing);
+    return;
+  }
+
+  if(t.closest("#addEx")){
+    editing = -1;
+    ui.librarySheet("add");
+    return;
+  }
+
+  /* --- log view --- */
+
+  hit = t.closest("[data-open]");
+  if(hit){
+    var i = parseInt(hit.dataset.open, 10);
+    openSession = (openSession === i) ? -1 : i;
+    ui.renderLog(openSession);
+    return;
+  }
+
+  hit = t.closest("[data-del]");
+  if(hit){
+    store.state.history.splice(parseInt(hit.dataset.del, 10), 1);
+    openSession = -1;
+    store.save();
+    ui.renderLog(openSession);
+    ui.toast("Session deleted.");
+    return;
+  }
+
+  hit = t.closest("[data-unit]");
+  if(hit){
+    store.state.prefs.unit = hit.dataset.unit;
+    store.save();
+    ui.renderLog(openSession);
+    return;
+  }
+
+  hit = t.closest("[data-step]");
+  if(hit){
+    store.state.prefs.step = parseFloat(hit.dataset.step);
+    store.save();
+    ui.renderLog(openSession);
+    return;
+  }
+
+  hit = t.closest("[data-auto]");
+  if(hit){
+    store.state.prefs.autoRest = hit.dataset.auto === "1";
+    store.save();
+    ui.renderLog(openSession);
+    return;
+  }
+
+  if(t.closest("#resetAll")){
+    if(confirm("Reset everything? Your plan, history and settings will be erased.")){
+      store.reset();
+      openSession = -1;
+      stopRest();
+      showTrain();
+      ui.toast("Back to the starting plan.");
+    }
+  }
+});
+
+$("view").addEventListener("input", function(ev){
+  if(ev.target.id === "dayNotes"){
+    store.currentDay().notes = ev.target.value;
+    store.save();
+  }
+});
+
+/* --------------------------------------------------------------------------
+   Bottom sheet
+   -------------------------------------------------------------------------- */
+
+$("sheetClose").addEventListener("click", ui.closeSheet);
+$("scrim").addEventListener("click", ui.closeSheet);
+
+document.addEventListener("keydown", function(ev){
+  if(ev.key === "Escape" && !$("sheet").hidden) ui.closeSheet();
+});
+
+/* --- the set logger --------------------------------------------------- */
+
+function setSheetClick(t){
+  var e = store.currentDay().ex[editingSet.row];
+  var k = editingSet.k;
+  var hit;
+
+  /* Stepper: data-seg is "w|r, segment index, delta". */
+  hit = t.closest("[data-seg]");
+  if(hit){
+    var parts = hit.dataset.seg.split(",");
+    var index = parseInt(parts[1], 10);
+    var delta = parseFloat(parts[2]);
+    var seg = e.log[k][index];
+
+    if(parts[0] === "w") store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
+    else store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
+
+    store.save();
+    ui.patchExercise(editingSet.row);
+    ui.setSheet(editingSet.row, k);
+    return true;
+  }
+
+  hit = t.closest("[data-repquick]");
+  if(hit){
+    store.setSegmentReps(e, k, 0, hit.dataset.repquick);
+    store.save();
+    ui.patchExercise(editingSet.row);
+    ui.setSheet(editingSet.row, k);
+    return true;
+  }
+
+  hit = t.closest("[data-segdel]");
+  if(hit){
+    store.removeSegment(e, k, parseInt(hit.dataset.segdel, 10));
+    store.save();
+    ui.patchExercise(editingSet.row);
+    ui.setSheet(editingSet.row, k);
+    return true;
+  }
+
+  if(t.closest("#addDrop")){
+    store.addSegment(e, k);
+    store.save();
+    ui.patchExercise(editingSet.row);
+    ui.setSheet(editingSet.row, k);
+    return true;
+  }
+
+  if(t.closest("#clearSet")){
+    store.clearSet(e, k);
+    store.save();
+    ui.patchExercise(editingSet.row);
+    editingSet = null;
+    ui.closeSheet();
+    ui.toast("Set cleared.");
+    return true;
+  }
+
+  return false;
+}
+
+/* --- the exercise editor and the library picker ----------------------- */
+
+$("sheetBody").addEventListener("click", function(ev){
+  var t = ev.target;
+  var day = store.currentDay();
+  var hit;
+
+  if(ui.sheetMode() === "set" && editingSet){
+    if(setSheetClick(t)) return;
+  }
+
+  /* Picked something out of the library — either a swap or an addition. */
+  hit = t.closest("[data-pick]");
+  if(hit){
+    var name = hit.dataset.pick;
+    if(ui.sheetMode() === "swap" && editing >= 0){
+      var target = day.ex[editing];
+      var fresh = store.newExercise(name);
+      target.name = fresh.name;
+      target.sets = fresh.sets;
+      target.reps = fresh.reps;
+      target.weight = 0;
+      target.log = [];
+      store.save();
+      ui.renderTrain();
+      ui.exerciseSheet(editing);
+    }else{
+      day.ex.push(store.newExercise(name));
+      store.save();
+      ui.renderTrain();
+      ui.closeSheet();
+      ui.toast(name + " added to " + day.name + ".");
+    }
+    return;
+  }
+
+  if(t.closest("#swapBtn")){
+    ui.librarySheet("swap");
+    return;
+  }
+
+  if(editing < 0 || ui.sheetMode() !== "edit") return;
+  var e = day.ex[editing];
+
+  hit = t.closest("[data-w]");
+  if(hit){
+    $("fW").value = store.addWeight(e, parseFloat(hit.dataset.w)) || "";
+    store.save();
+    ui.patchExercise(editing);
+    return;
+  }
+
+  hit = t.closest("[data-s]");
+  if(hit){
+    $("fS").value = store.setSets(e, e.sets + parseInt(hit.dataset.s, 10));
+    store.save();
+    ui.renderTrain();          /* set count changes the row's shape */
+    return;
+  }
+
+  hit = t.closest("[data-r]");
+  if(hit){
+    e.reps = hit.dataset.r;
+    $("fR").value = e.reps;
+    store.save();
+    ui.patchExercise(editing);
+    return;
+  }
+
+  hit = t.closest("[data-move]");
+  if(hit){
+    var to = editing + parseInt(hit.dataset.move, 10);
+    if(!store.moveExercise(day, editing, to)){
+      ui.toast("Already at the " + (to < 0 ? "top" : "bottom") + ".");
+      return;
+    }
+    editing = to;
+    store.save();
+    ui.renderTrain();
+    ui.toast("Moved to position " + (to + 1) + ".");
+    return;
+  }
+
+  if(t.closest("[data-remove]")){
+    var gone = day.ex.splice(editing, 1)[0];
+    editing = -1;
+    store.save();
+    ui.renderTrain();
+    ui.closeSheet();
+    ui.toast(gone.name + " removed.");
+  }
+});
+
+/* Typed input. The sheet is never re-rendered here, or the field being
+   typed into would lose focus mid-number. */
+$("sheetBody").addEventListener("input", function(ev){
+  var t = ev.target;
+  var mode = ui.sheetMode();
+
+  if(mode === "set" && editingSet && t.dataset.segval){
+    var parts = t.dataset.segval.split(",");
+    var index = parseInt(parts[1], 10);
+    var e = store.currentDay().ex[editingSet.row];
+
+    if(parts[0] === "w") store.setSegmentWeight(e, editingSet.k, index, parseFloat(t.value) || 0);
+    else store.setSegmentReps(e, editingSet.k, index, t.value);
+
+    store.save();
+    ui.patchExercise(editingSet.row);
+    ui.refreshSetTotal(editingSet.row, editingSet.k);
+    return;
+  }
+
+  if(mode !== "edit" || editing < 0) return;
+  var ex = store.currentDay().ex[editing];
+
+  if(t.id === "fW")      ex.weight = Math.max(0, parseFloat(t.value) || 0);
+  else if(t.id === "fR") ex.reps = t.value;
+  else if(t.id === "fN") ex.note = t.value;
+  else return;
+
+  store.save();
+  ui.patchExercise(editing);
+});
+
+$("sheetBody").addEventListener("change", function(ev){
+  if(ui.sheetMode() !== "edit" || editing < 0) return;
+  var e = store.currentDay().ex[editing];
+
+  if(ev.target.id === "fS"){
+    ev.target.value = store.setSets(e, ev.target.value);
+    store.save();
+    ui.renderTrain();
+  }else if(ev.target.id === "fR" && !ev.target.value.trim()){
+    /* Don't let the target be left blank. */
+    e.reps = "8-10";
+    ev.target.value = e.reps;
+    store.save();
+    ui.patchExercise(editing);
+  }
+});
+
+/* --------------------------------------------------------------------------
+   Action bar
+   -------------------------------------------------------------------------- */
+
+$("timer").addEventListener("click", function(){
+  if(rest.id) stopRest();
+  else startRest(store.state.prefs.restCompound);
+});
+
+$("finish").addEventListener("click", function(){
+  var day = store.currentDay();
+
+  /* Finishing an empty session is almost always a mispress — ask once. */
+  if(store.dayProgress(day).done === 0 && this.dataset.armed !== "1"){
+    ui.setFinishLabel(true);
+    setTimeout(function(){
+      if($("finish").dataset.armed === "1") ui.setFinishLabel(false);
+    }, 4000);
+    return;
+  }
+
+  var finished = store.finishSession();
+  editingSet = null;
+  editing = -1;
+  stopRest();
+  render();
+  window.scrollTo({ top:0, behavior:"smooth" });
+  ui.toast(finished.name + " logged · " + store.currentDay().name + " is up next.");
+});
+
+/* --------------------------------------------------------------------------
+   Boot
+   -------------------------------------------------------------------------- */
+
+ui.init();
+store.onSaveError = function(){
+  ui.toast("Couldn't save — device storage is full or blocked.");
+};
+paintTimer();
+render();
+
+/* Offline support. Only meaningful over http(s); skipped when the file is
+   opened straight off the disk. */
+if("serviceWorker" in navigator && location.protocol.indexOf("http") === 0){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){
+      /* Offline is a bonus, not a requirement — a failure here is silent. */
+    });
+  });
+}
+
+})(window.IL);
+
+</script>

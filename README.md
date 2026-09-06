@@ -1,0 +1,153 @@
+# Iron Ledger
+
+A single-page workout tracker for a four-day upper/lower split. No backend, no
+login, no accounts — everything lives in the browser's `localStorage` on the
+device you're using.
+
+## Logging a set
+
+A set is not a checkbox. `log[k]` is either `null` or an array of **segments**
+— `[{ w, r }, ...]` — because one set can involve more than one weight.
+
+Grinding out 5 at 185, stripping the bar down and getting 3 more at 155 is
+still *one set*, and it's stored as `[{w:185,r:5},{w:155,r:3}]`. It counts as
+one set toward the day, reports 8 total reps, and its volume is exact.
+
+In the app:
+
+- **Tap an empty set** → logged at the working weight and the top of the rep
+  target, and the rest timer starts. One tap; this is the common case.
+- **Tap a logged set** → the set logger opens. Correct the reps, change the
+  weight for that set alone, or **+ Add a drop** for another weight inside the
+  same set. Sets with drops show a ▾ on the button.
+- **Clear this set** in the logger unlogs it.
+
+Editing the working weight in the exercise editor changes the starting point
+for *future* sets only. Sets you already logged keep the weight you actually
+used.
+
+## Files
+
+```
+index.html            markup only
+style.css             all styling; the colour tokens are at the top
+js/data.js            THE PROGRAM — exercise library and the four day templates
+js/store.js           state shape, localStorage, and the domain logic
+js/ui.js              everything that produces markup
+js/app.js             event wiring, rest timer, boot
+manifest.webmanifest  makes it installable as a home-screen app
+sw.js                 offline cache, so a dead gym signal doesn't matter
+icon.svg              app icon
+build.mjs             optional: bundles everything into one file (see below)
+```
+
+The scripts are plain `<script>` tags rather than ES modules, so the app also
+runs when you double-click `index.html`. Modules would require a web server.
+Each file hangs itself off a shared `window.IL` namespace and they must load in
+the order `index.html` lists them.
+
+## Running it locally
+
+Double-click `index.html`. That's it.
+
+The service worker is skipped on `file://`, so offline mode won't engage — that
+only matters once it's hosted.
+
+## Changing the program
+
+Edit `js/data.js`. The exercise library is `[group, name, type, sets, reps]`,
+and `TEMPLATES` is the four days.
+
+**These only affect a fresh start.** Once the app has saved a plan, it uses the
+saved one. To pick up your edits, hit **Reset** at the bottom of the Log tab —
+which also wipes your history, so do it before you have anything worth keeping.
+Day-to-day changes are meant to happen in the app itself (Edit → swap, add,
+remove, reorder), not in this file.
+
+## Putting it on your phone
+
+### GitHub Pages — yes, this is the right call
+
+The app is pure static files, which is exactly what Pages serves. It's free,
+it's HTTPS (required for the offline service worker), and the URL is stable.
+
+```bash
+git init
+git add .
+git commit -m "Iron Ledger"
+git branch -M main
+git remote add origin https://github.com/<you>/<repo>.git
+git push -u origin main
+```
+
+Then on GitHub: **Settings → Pages → Source: Deploy from a branch →
+`main` / `/ (root)` → Save.** A minute later it's live at
+`https://<you>.github.io/<repo>/`.
+
+One thing to know: **a public repo means a public URL.** The code is public
+either way; your training data never leaves your phone, so there's nothing
+sensitive in the repo. If you'd rather the URL not be guessable, a private repo
+with Pages needs a paid plan — Netlify Drop or Cloudflare Pages will host a
+private-ish static site free instead. Drag the folder onto
+[app.netlify.com/drop](https://app.netlify.com/drop) and you get a URL in about
+ten seconds with no git at all.
+
+### Install it to the home screen
+
+Once it's on an HTTPS URL, open it on your phone:
+
+- **iPhone (Safari):** Share → Add to Home Screen
+- **Android (Chrome):** ⋮ → Add to Home screen / Install app
+
+It then launches fullscreen with no browser chrome, and works with no signal.
+
+Two caveats worth knowing up front:
+
+1. **iOS home-screen apps get their own storage bucket.** Data you entered in
+   Safari won't appear in the installed app. Install it *first*, then start
+   logging.
+2. **iOS uses a screenshot for the home-screen icon** unless there's a PNG
+   `apple-touch-icon`. `icon.svg` covers Android and desktop; if you want a
+   proper icon on iOS, export a 180×180 PNG named `apple-touch-icon.png` into
+   the root and add `<link rel="apple-touch-icon" href="apple-touch-icon.png">`
+   to `index.html`.
+
+### After you deploy an update
+
+`sw.js` caches the app aggressively so it works offline. When you change any
+file, bump the version at the top of `sw.js`:
+
+```js
+var CACHE = "iron-ledger-v2";   // was v1
+```
+
+Otherwise phones will keep serving the old copy. Your saved workouts are in
+`localStorage` and are untouched by this.
+
+## Backing up your data
+
+There's no cloud copy — clearing site data or losing the phone loses the log.
+To grab a backup, open the browser console on the site and run:
+
+```js
+copy(localStorage.getItem("ironLedger.v1"))
+```
+
+To restore it somewhere else:
+
+```js
+localStorage.setItem("ironLedger.v1", `<paste it here>`); location.reload()
+```
+
+## The one-file build (optional)
+
+```bash
+node build.mjs
+```
+
+Writes `dist/iron-ledger.html` — the whole app inlined into a single file that
+needs nothing but a browser — and `dist/artifact.html`, the same thing as a
+fragment for publishing as a Claude Artifact.
+
+You don't need this to develop or to host on Pages. It's only for handing
+someone a single file.

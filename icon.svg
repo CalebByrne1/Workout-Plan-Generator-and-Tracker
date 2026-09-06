@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Iron Ledger">
+  <rect width="512" height="512" rx="112" fill="#14191A"/>
+  <!-- barbell: outer plates, inner plates, bar -->
+  <rect x="74"  y="176" width="34" height="160" rx="12" fill="#F0A73C"/>
+  <rect x="404" y="176" width="34" height="160" rx="12" fill="#F0A73C"/>
+  <rect x="122" y="146" width="42" height="220" rx="14" fill="#F0A73C"/>
+  <rect x="348" y="146" width="42" height="220" rx="14" fill="#F0A73C"/>
+  <rect x="164" y="236" width="184" height="40" rx="14" fill="#E8EDEB"/>
+</svg>
