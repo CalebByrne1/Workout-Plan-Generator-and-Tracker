@@ -26,6 +26,47 @@ Editing the working weight in the exercise editor changes the starting point
 for *future* sets only. Sets you already logged keep the weight you actually
 used.
 
+Number fields start **empty**, not at `0`, with the zero shown as a
+placeholder. Tap and type; there is nothing to delete first.
+
+## Dates and days off
+
+Every finished session is stamped with the day you finished it, and the Log
+shows that date on the card. Open a card and there's a **Date** field —
+change it if you logged the workout the morning after, or if you're catching
+up on one you did earlier. The time of day is kept; only the date moves.
+
+**+ Mark a missed or rest day** at the top of the Log records a day you
+didn't train:
+
+- **Missed** — one you owe.
+- **Rest day** — one that was the plan.
+
+Neither advances the rotation. The workout you skipped is still the next one
+up, which is what you'd actually do at the gym. A day with a logged session
+on it never counts as a day off, even if you marked it before training after
+all.
+
+## Progress
+
+The third tab turns the log into four things worth looking at.
+
+- **Strength trend** — an estimated one-rep max (Epley, from your best set
+  that day) for whichever movement you pick. For pull-ups and dips your
+  bodyweight at the time is added in, because a chin-up at 150lb and the same
+  rep at 190lb are not the same lift. Anything you've never logged with a
+  load charts your best set's *reps* instead, where that IS the progress.
+- **× body** — the same trend divided by what you weighed that week. It only
+  rises when you get stronger faster than you get heavier, which is the
+  question a changing bodyweight makes impossible to answer from load alone.
+  Log a weigh-in or two and the toggle appears.
+- **Bodyweight** — one reading per day, entered from **Log weight**.
+- **Volume per session** and a **consistency grid** of the last ten weeks:
+  amber for a day you trained (darker with more volume), a grey ring for a
+  rest day, a red one for a missed day.
+
+Tap or drag across any chart to read off a specific day.
+
 ## Files
 
 ```
@@ -33,6 +74,7 @@ index.html            markup only
 style.css             all styling; the colour tokens are at the top
 js/data.js            THE PROGRAM — exercise library and the four day templates
 js/store.js           state shape, localStorage, and the domain logic
+js/chart.js           the SVG charts on the Progress tab; no library
 js/ui.js              everything that produces markup
 js/app.js             event wiring, rest timer, boot
 manifest.webmanifest  makes it installable as a home-screen app
@@ -118,25 +160,37 @@ Two caveats worth knowing up front:
 file, bump the version at the top of `sw.js`:
 
 ```js
-var CACHE = "iron-ledger-v2";   // was v1
+var CACHE = "iron-ledger-v4";   // was v3
 ```
 
 Otherwise phones will keep serving the old copy. Your saved workouts are in
 `localStorage` and are untouched by this.
 
-## Backing up your data
+## Getting your data off the phone
 
-There's no cloud copy — clearing site data or losing the phone loses the log.
-To grab a backup, open the browser console on the site and run:
+There's still no cloud copy — clearing site data or losing the phone loses
+the log — so **Your data** at the bottom of the Log tab exists to get a copy
+out. Nothing is uploaded anywhere; the files are built on the device and
+handed to you.
+
+| | |
+|---|---|
+| **Spreadsheet (CSV)** | One row per weight you lifted, so a drop set stays two rows. Opens in Excel, Numbers or Sheets. Weigh-ins and days off are in the same file. |
+| **Full backup** | The entire save as JSON. This is the one that restores. |
+| **Send it to myself…** | Opens the phone's share sheet with both files attached — mail them to yourself, drop them in Files, whatever. Only appears where the browser supports it, which in practice means your phone. |
+| **Copy CSV** | Straight to the clipboard, for pasting into a spreadsheet on a desktop. |
+| **Restore a backup** | Pick a backup file. It asks first, then replaces everything. |
+
+Doing the "send it to myself" once a month is enough to never lose more than
+a month.
+
+Restoring runs the same migrations as loading, so a backup from an older
+version of the app still works.
+
+The old console incantation still works if you want it:
 
 ```js
 copy(localStorage.getItem("ironLedger.v1"))
-```
-
-To restore it somewhere else:
-
-```js
-localStorage.setItem("ironLedger.v1", `<paste it here>`); location.reload()
 ```
 
 ## The one-file build (optional)

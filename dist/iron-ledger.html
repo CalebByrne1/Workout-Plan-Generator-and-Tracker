@@ -97,6 +97,11 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 
+/* An author `display` beats the browser's own [hidden] rule, so anything
+   given a display here — .actionbar, .sheet — would ignore `el.hidden`
+   without this. It's the one !important in the file and it earns it. */
+[hidden]{display:none !important}
+
 body{
   margin:0;
   background:var(--ground);
@@ -601,6 +606,211 @@ main{flex:1;padding-bottom:8px}
   font-variant-numeric:tabular-nums;
 }
 
+
+/* ==========================================================================
+   Three tabs on a phone
+
+   Train / Log / Progress plus the wordmark won't fit across 360px, so the
+   cycle badge steps aside there — the day's subtitle carries it instead.
+   ========================================================================== */
+
+@media (max-width:430px){
+  .brand h1{font-size:18px}
+  .brand .cycle{display:none}
+  .tb-btn{padding:7px 8px;font-size:12px;letter-spacing:.055em}
+}
+
+
+/* ==========================================================================
+   Dates and selects — same furniture as the text fields
+   ========================================================================== */
+
+input[type="date"],
+select{
+  width:100%;min-height:46px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r);
+  padding:11px 12px;
+  color:var(--ink);
+  font-size:15px;
+}
+input[type="date"]{
+  -webkit-appearance:none;appearance:none;
+  font-family:var(--font-m);font-variant-numeric:tabular-nums;
+}
+
+.seg.wide{width:100%}
+.seg.wide button{flex:1}
+
+.rowbtns button.primary{
+  background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
+}
+
+
+/* ==========================================================================
+   Days off in the log
+   ========================================================================== */
+
+.sess.is-skip .sess-when b{color:var(--ink-2)}
+.sess.is-skip .sess-vol b{font-family:var(--font-d);font-size:14px;color:var(--ink-3)}
+.sess.is-skip .sess-tag{background:var(--surface-2);color:var(--ink-3)}
+.sess[data-skip="missed"] .sess-tag{
+  background:transparent;color:var(--danger);
+  box-shadow:inset 0 0 0 1px var(--danger);
+}
+
+.sess-date{padding:10px 0 12px}
+.sess-date .lab{margin-bottom:5px}
+
+
+/* ==========================================================================
+   Getting the data out
+   ========================================================================== */
+
+.set-title{font-size:15px;letter-spacing:.06em;text-transform:uppercase}
+.datarow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.datarow .add-btn{font-size:13.5px}
+.settings .hint{margin-top:0}
+
+
+/* ==========================================================================
+   Progress
+   ========================================================================== */
+
+.prog-wrap{display:flex;flex-direction:column;gap:12px;padding:16px 14px 24px}
+
+/* Hairline-separated tiles rather than four floating cards: the 1px grid gap
+   over a line-coloured backing is the rule between them. */
+.stats{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:1px;
+  background:var(--line);
+  border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+}
+.stat{background:var(--surface);padding:11px 12px}
+.stat .k{
+  display:block;
+  font-family:var(--font-m);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.stat b{
+  display:block;margin-top:2px;
+  font-family:var(--font-d);font-size:23px;font-weight:600;
+  letter-spacing:.02em;line-height:1.15;
+}
+.stat small{display:block;font-size:11px;line-height:1.35;color:var(--ink-3)}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);
+  padding:13px 13px 15px;
+}
+.card h3{font-size:16px;letter-spacing:.05em;text-transform:uppercase}
+.card-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-bottom:10px;
+}
+.card > h3{margin-bottom:10px}
+.card select{margin-bottom:4px}
+.card .hint{margin-top:10px}
+
+
+/* ==========================================================================
+   Charts
+
+   Every colour here is a token, so the SVG follows the theme without any
+   JavaScript knowing which theme is on.
+   ========================================================================== */
+
+.chart-host{margin-top:4px}
+.chart{display:block;width:100%;touch-action:pan-y}
+
+.chart-read{display:flex;align-items:baseline;gap:9px;min-height:28px;flex-wrap:wrap}
+.chart-read b{
+  font-family:var(--font-d);font-size:23px;font-weight:600;letter-spacing:.02em;
+  line-height:1.1;
+}
+.chart-read span{
+  font-family:var(--font-m);font-size:10px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+/* The one hero figure on the view — the number the whole tab is about. */
+.chart-host.hero .chart-read b{font-size:clamp(30px,9vw,44px)}
+
+.chart-empty{
+  padding:28px 6px;font-size:13px;line-height:1.5;color:var(--ink-3);
+}
+
+.c-grid{stroke:var(--line-soft);stroke-width:1}
+.c-tick{
+  fill:var(--ink-3);
+  font-family:var(--font-m);font-size:10px;font-variant-numeric:tabular-nums;
+}
+.c-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.c-area{fill:var(--accent);fill-opacity:.10;stroke:none}
+.c-dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.c-bar{fill:var(--accent);fill-opacity:.8}
+.c-bar[data-hi="1"]{fill-opacity:1}
+.c-cross line{stroke:var(--ink-3);stroke-width:1}
+.c-cross circle{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+
+
+/* ==========================================================================
+   Consistency grid — a column per week, a row per weekday
+   ========================================================================== */
+
+.cal{display:flex;gap:5px;align-items:stretch}
+.cal-head{
+  display:grid;grid-template-rows:repeat(7,1fr);gap:4px;flex:none;
+}
+.cal-h{
+  display:flex;align-items:center;
+  font-family:var(--font-m);font-size:9px;color:var(--ink-3);
+}
+.cal-grid{
+  flex:1;min-width:0;
+  display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
+  grid-template-rows:repeat(7,1fr);gap:4px;
+}
+
+.cal-c{
+  display:block;aspect-ratio:1;border-radius:3px;
+  background:var(--line-soft);border:1px solid transparent;
+}
+.cal-c[data-state="trained"]{background:var(--accent)}
+.cal-c[data-state="trained"][data-level="1"]{opacity:.4}
+.cal-c[data-state="trained"][data-level="2"]{opacity:.7}
+.cal-c[data-state="trained"][data-level="3"]{opacity:1}
+/* Both "you didn't train" states are rings rather than fills, so neither can
+   be mistaken for a trained day at a glance, and they match each other in
+   weight — grey for one you meant to take, red for one you didn't. */
+.cal-c[data-state="rest"]{background:var(--surface-2);border-color:var(--ink-3);border-width:1.5px}
+.cal-c[data-state="missed"]{background:transparent;border-color:var(--danger);border-width:1.5px}
+
+.cal-key{
+  display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;
+  font-size:11.5px;color:var(--ink-2);
+}
+.cal-key span{display:flex;align-items:center;gap:6px}
+.cal-key .cal-c{width:11px;height:11px;aspect-ratio:auto;flex:none}
+
+
+/* ==========================================================================
+   Weigh-in sheet
+   ========================================================================== */
+
+.bwlist{display:flex;flex-direction:column}
+.bwrow{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--line-soft);
+}
+.bwrow:last-child{border-bottom:0}
+.bwrow span{flex:1;min-width:0;font-size:13px;color:var(--ink-2)}
+.bwrow b{
+  font-family:var(--font-m);font-size:13.5px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+
 </style>
 </head>
 <body>
@@ -615,6 +825,7 @@ main{flex:1;padding-bottom:8px}
       <div class="tb-actions">
         <button class="tb-btn" id="tabTrain" aria-pressed="true">Train</button>
         <button class="tb-btn" id="tabLog" aria-pressed="false">Log</button>
+        <button class="tb-btn" id="tabProgress" aria-pressed="false">Progress</button>
       </div>
     </div>
     <nav class="rail" id="rail" aria-label="Four day rotation"></nav>
@@ -821,7 +1032,8 @@ IL.data = {
        day:     0-3, index into days
        cycle:   how many times the rotation has come round
        days:    [ { id, name, tag, notes, ex: [ exercise ] } x4 ]
-       history: [ session ]
+       history: [ session | skip ]        always sorted oldest → newest
+       body:    [ { at, w } ]             bodyweight log, one entry per day
        prefs:   { unit, step, autoRest, restCompound, restOther }
      }
 
@@ -832,9 +1044,16 @@ IL.data = {
    Grinding 5 at 185, stripping down and getting 3 more at 155 is still one
    set, and it's stored as [{w:185,r:5},{w:155,r:3}].
 
-     session = { at, dayId, dayName, notes, unit, volume, entries }
+     session = { id, at, kind:"session", dayId, dayName, notes, unit,
+                 volume, entries }
      entry   = { name, sets, target, completed, topWeight, volume,
                  logged: [ { set, segs } ] }
+     skip    = { id, at, kind:"skip", skipType:"missed"|"rest", dayId,
+                 dayName, notes, unit, volume:0, entries:[] }
+
+   HISTORY IS KEYED BY id, NOT BY POSITION. `at` is editable and skips can be
+   backdated, so the array is re-sorted after any date change — an index held
+   across that would point at the wrong day.
    ========================================================================== */
 
 window.IL = window.IL || {};
@@ -845,13 +1064,59 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 2;
+var SCHEMA = 3;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
-function uid(){
+function uid(prefix){
   uidCounter++;
-  return "e" + Date.now().toString(36) + uidCounter.toString(36);
+  return (prefix || "e") + Date.now().toString(36) + uidCounter.toString(36);
+}
+
+/* --------------------------------------------------------------------------
+   Dates
+
+   Everything is stored as a timestamp, but the app reasons in local days: a
+   session belongs to the calendar day you trained, not to a UTC instant.
+   dayKey() is that day's identity and is what the date <input> speaks.
+   -------------------------------------------------------------------------- */
+
+function dayKey(ts){
+  var d = new Date(ts);
+  return d.getFullYear() + "-" +
+         ("0" + (d.getMonth() + 1)).slice(-2) + "-" +
+         ("0" + d.getDate()).slice(-2);
+}
+
+/* "2026-09-08" → a timestamp at that local midnight. Parsing the string with
+   new Date() would read it as UTC and land on the day before for anyone west
+   of Greenwich, so the parts are handed to the constructor directly. */
+function fromDayKey(key, keepTimeFrom){
+  var bits = String(key).split("-");
+  var d = new Date(
+    parseInt(bits[0], 10),
+    parseInt(bits[1], 10) - 1,
+    parseInt(bits[2], 10)
+  );
+  if(keepTimeFrom){
+    var old = new Date(keepTimeFrom);
+    d.setHours(old.getHours(), old.getMinutes(), 0, 0);
+  }else{
+    d.setHours(12, 0, 0, 0);      /* midday: immune to DST edges */
+  }
+  return d.getTime();
+}
+
+function startOfDay(ts){
+  var d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+var DAY_MS = 86400000;
+
+function daysBetween(a, b){
+  return Math.round((startOfDay(b) - startOfDay(a)) / DAY_MS);
 }
 
 /* --------------------------------------------------------------------------
@@ -920,6 +1185,7 @@ function seed(){
       };
     }),
     history: [],
+    body: [],
     prefs: { unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90 }
   };
 }
@@ -960,24 +1226,49 @@ function migrateToV2(saved){
   return saved;
 }
 
+/* schema 2 had no ids, no skipped days and no bodyweight log. Everything it
+   did have was a real session, so that's what it becomes. */
+function migrateToV3(saved){
+  saved.body = saved.body || [];
+  (saved.history || []).forEach(function(h){
+    if(!h.id) h.id = uid("h");
+    if(!h.kind) h.kind = "session";
+  });
+  saved.schema = 3;
+  return saved;
+}
+
+/* Bring any accepted save up to the current shape. Shared by load() and by
+   restoring a backup file, so a backup can never sneak past a migration. */
+function normalize(saved){
+  saved.prefs = Object.assign(seed().prefs, saved.prefs || {});
+  saved.history = saved.history || [];
+  saved.body = saved.body || [];
+  saved.cycle = saved.cycle || 1;
+  saved.day = saved.day || 0;
+  saved.days.forEach(function(d){ d.notes = d.notes || ""; });
+
+  if(!saved.schema || saved.schema < 2) migrateToV2(saved);
+  if(saved.schema < 3) migrateToV3(saved);
+
+  saved.days.forEach(function(d){
+    d.ex.forEach(function(e){ if(!Array.isArray(e.log)) e.log = []; });
+  });
+  saved.history.sort(function(a, b){ return a.at - b.at; });
+  saved.body.sort(function(a, b){ return a.at - b.at; });
+  return saved;
+}
+
+function looksLikeSave(o){
+  return !!(o && o.days && o.days.length === 4 && Array.isArray(o.days[0].ex));
+}
+
 function load(){
   try{
     var raw = localStorage.getItem(KEY);
     if(raw){
       var saved = JSON.parse(raw);
-      if(saved && saved.days && saved.days.length === 4){
-        /* Fill in anything an older save predates rather than discarding it. */
-        saved.prefs = Object.assign(seed().prefs, saved.prefs || {});
-        saved.history = saved.history || [];
-        saved.cycle = saved.cycle || 1;
-        saved.day = saved.day || 0;
-        saved.days.forEach(function(d){ d.notes = d.notes || ""; });
-        if(!saved.schema || saved.schema < 2) migrateToV2(saved);
-        saved.days.forEach(function(d){
-          d.ex.forEach(function(e){ if(!Array.isArray(e.log)) e.log = []; });
-        });
-        return saved;
-      }
+      if(looksLikeSave(saved)) return normalize(saved);
     }
   }catch(err){
     /* Unreadable or blocked storage — fall through to the stock plan. */
@@ -1057,6 +1348,309 @@ function lastPerformed(){
     }
   }
   return map;
+}
+
+/* --------------------------------------------------------------------------
+   History — sessions and skipped days
+   -------------------------------------------------------------------------- */
+
+function isSkip(h){ return h.kind === "skip"; }
+
+function sessionsOnly(){
+  return state.history.filter(function(h){ return !isSkip(h); });
+}
+
+/* Which calendar days have a logged workout on them. */
+function trainedDays(){
+  var set = {};
+  sessionsOnly().forEach(function(h){ set[dayKey(h.at)] = true; });
+  return set;
+}
+
+/* A day you trained is not a day off, whatever else was recorded against it —
+   mark a miss and then train after all, and the miss stops counting. The
+   calendar and the counts both defer to this so they can't disagree. */
+function skipsOnly(){
+  var trained = trainedDays();
+  return state.history.filter(function(h){
+    return isSkip(h) && !trained[dayKey(h.at)];
+  });
+}
+
+function sortHistory(){
+  state.history.sort(function(a, b){ return a.at - b.at; });
+}
+
+function findEntry(id){
+  for(var i = 0; i < state.history.length; i++){
+    if(state.history[i].id === id) return state.history[i];
+  }
+  return null;
+}
+
+function removeEntry(id){
+  for(var i = 0; i < state.history.length; i++){
+    if(state.history[i].id === id){
+      state.history.splice(i, 1);
+      save();
+      return true;
+    }
+  }
+  return false;
+}
+
+/* Move a logged day to a different date, keeping the time of day it was
+   finished at — the date is the part you'd want to correct, not the clock. */
+function setEntryDate(id, key){
+  var h = findEntry(id);
+  if(!h) return false;
+  h.at = fromDayKey(key, h.at);
+  sortHistory();
+  save();
+  return true;
+}
+
+/* A day you didn't train. "missed" is one you owe; "rest" is one you planned.
+   Neither advances the rotation — the workout you skipped is still the next
+   one up, which is what you'd actually do at the gym. */
+function addSkip(key, skipType, dayIndex, note){
+  var day = state.days[dayIndex] || currentDay();
+  var entry = {
+    id: uid("h"),
+    at: fromDayKey(key),
+    kind: "skip",
+    skipType: skipType === "rest" ? "rest" : "missed",
+    dayId: day.id,
+    dayName: day.name,
+    notes: note || "",
+    unit: state.prefs.unit,
+    volume: 0,
+    entries: []
+  };
+  state.history.push(entry);
+  sortHistory();
+  save();
+  return entry;
+}
+
+/* --------------------------------------------------------------------------
+   Bodyweight
+
+   One entry per calendar day — weighing yourself twice on a Tuesday means
+   the second reading replaces the first rather than making two points.
+   -------------------------------------------------------------------------- */
+
+function addBodyweight(w, key){
+  var weight = Math.max(0, Math.round((parseFloat(w) || 0) * 10) / 10);
+  if(!weight) return null;
+
+  var at = fromDayKey(key || dayKey(Date.now()));
+  var k = dayKey(at);
+  var existing = null;
+
+  state.body.forEach(function(b){ if(dayKey(b.at) === k) existing = b; });
+
+  if(existing){
+    existing.w = weight;
+  }else{
+    existing = { at:at, w:weight };
+    state.body.push(existing);
+  }
+
+  state.body.sort(function(a, b){ return a.at - b.at; });
+  save();
+  return existing;
+}
+
+function removeBodyweight(at){
+  state.body = state.body.filter(function(b){ return b.at !== at; });
+  save();
+}
+
+function latestBodyweight(){
+  return state.body.length ? state.body[state.body.length - 1] : null;
+}
+
+/* What you weighed around a given date. Walks back to the last reading on or
+   before it; if the log only starts later, the earliest reading stands in,
+   because a rough number beats dropping the point entirely. */
+function bodyweightAt(ts){
+  if(!state.body.length) return 0;
+  var best = 0;
+  for(var i = 0; i < state.body.length; i++){
+    if(state.body[i].at <= ts) best = state.body[i].w;
+    else break;
+  }
+  return best || state.body[0].w;
+}
+
+/* --------------------------------------------------------------------------
+   Progress — turning the log into something plottable
+   -------------------------------------------------------------------------- */
+
+/* Epley. It's an estimate and it drifts above about ten reps, but it's the
+   standard one and this only ever feeds a trend line, where consistency
+   matters more than absolute truth. */
+function e1rm(w, r){
+  if(!w || !r) return 0;
+  return w * (1 + r / 30);
+}
+
+/* Every movement you've actually logged, most-trained first — the order the
+   exercise picker offers them in. */
+function loggedExercises(){
+  var counts = {};
+  sessionsOnly().forEach(function(h){
+    h.entries.forEach(function(en){
+      if(en.completed > 0) counts[en.name] = (counts[en.name] || 0) + 1;
+    });
+  });
+  return Object.keys(counts).sort(function(a, b){
+    return counts[b] - counts[a] || a.localeCompare(b);
+  });
+}
+
+/* The strength trend for one movement.
+
+   metric "load" is an estimated 1RM, and for pull-ups and dips your
+   bodyweight at the time is added in — a chin-up at 150lb and the same rep
+   at 190lb are not the same lift. metric "reps" is the fallback for anything
+   never logged with a load (and no bodyweight on file to supply one), where
+   more reps IS the progress. */
+function exerciseSeries(name){
+  var raw = [];
+  var anyLoad = false;
+
+  sessionsOnly().forEach(function(h){
+    h.entries.forEach(function(en){
+      if(en.name !== name || !en.completed) return;
+
+      var bw = bodyweightAt(h.at);
+      var carried = data.BODYWEIGHT[name] ? bw : 0;
+      var best = 0;
+      var reps = 0;
+
+      (en.logged || []).forEach(function(item){
+        item.segs.forEach(function(s){
+          best = Math.max(best, e1rm((s.w || 0) + carried, s.r));
+        });
+        reps = Math.max(reps, totalReps(item.segs));
+      });
+
+      if(best > 0) anyLoad = true;
+      raw.push({ at:h.at, load:best, reps:reps, bw:bw });
+    });
+  });
+
+  var metric = anyLoad ? "load" : "reps";
+  var points = [];
+
+  raw.forEach(function(p){
+    var v = metric === "load" ? p.load : p.reps;
+    if(!v) return;                      /* a session with nothing usable */
+    points.push({ x:p.at, y:Math.round(v * 10) / 10, bw:p.bw });
+  });
+
+  return { name:name, metric:metric, points:points };
+}
+
+/* The same series divided by what you weighed that week — "am I getting
+   stronger for my size", which is the question a changing bodyweight makes
+   hard to answer from load alone. Points with no bodyweight on file can't
+   be expressed this way and are left out. */
+function relativeSeries(series){
+  return {
+    name: series.name,
+    metric: series.metric,
+    points: series.points.filter(function(p){ return p.bw > 0; }).map(function(p){
+      return { x:p.x, y:Math.round(p.y / p.bw * 100) / 100, bw:p.bw };
+    })
+  };
+}
+
+function volumeSeries(){
+  return sessionsOnly().map(function(h){
+    return { x:h.at, y:h.volume || 0 };
+  });
+}
+
+function bodySeries(){
+  return state.body.map(function(b){ return { x:b.at, y:b.w }; });
+}
+
+/* One row per calendar day for the consistency grid, oldest first, always
+   starting on a Sunday so the columns line up as weeks. */
+function calendar(weeks){
+  var byDay = {};
+  state.history.forEach(function(h){
+    var k = dayKey(h.at);
+    /* A session outranks a skip on the same date — if you logged a workout,
+       that day counts as trained whatever else got recorded. */
+    if(!byDay[k] || isSkip(byDay[k])) byDay[k] = h;
+  });
+
+  var end = startOfDay(Date.now());
+  var cursor = new Date(end);
+  cursor.setDate(cursor.getDate() - (weeks * 7 - 1));
+  cursor.setDate(cursor.getDate() - cursor.getDay());     /* back to Sunday */
+
+  var volumes = sessionsOnly().map(function(h){ return h.volume || 0; })
+                              .filter(function(v){ return v > 0; })
+                              .sort(function(a, b){ return a - b; });
+  var mid = volumes.length ? volumes[Math.floor(volumes.length / 2)] : 0;
+
+  var cells = [];
+  var day = cursor.getTime();
+
+  while(startOfDay(day) <= end){
+    var k = dayKey(day);
+    var hit = byDay[k];
+    var level = 0;
+
+    if(hit && !isSkip(hit)){
+      level = !mid ? 2 : (hit.volume >= mid * 1.25 ? 3 : hit.volume >= mid * 0.6 ? 2 : 1);
+    }
+
+    cells.push({
+      at: day,
+      key: k,
+      state: hit ? (isSkip(hit) ? hit.skipType : "trained") : "none",
+      level: level,
+      entry: hit || null
+    });
+
+    day += DAY_MS;
+    day = startOfDay(day) + DAY_MS / 2;   /* re-anchor at midday past DST */
+  }
+
+  return cells;
+}
+
+/* The headline numbers above the charts. */
+function summary(){
+  var sessions = sessionsOnly();
+  var first = state.history.length ? state.history[0].at : null;
+  var since = first ? Math.max(1, Math.ceil((daysBetween(first, Date.now()) + 1) / 7)) : 0;
+
+  var monthAgo = Date.now() - 30 * DAY_MS;
+  var recent = sessions.filter(function(h){ return h.at >= monthAgo; });
+  var missed = skipsOnly().filter(function(h){
+    return h.skipType === "missed" && h.at >= monthAgo;
+  });
+
+  var bw = latestBodyweight();
+  var firstBw = state.body.length ? state.body[0] : null;
+
+  return {
+    sessions: sessions.length,
+    weeks: since,
+    since: first,
+    last30: recent.length,
+    missed30: missed.length,
+    volume: sessions.reduce(function(n, h){ return n + (h.volume || 0); }, 0),
+    bodyweight: bw ? bw.w : 0,
+    bodyweightDelta: (bw && firstBw && bw !== firstBw) ? Math.round((bw.w - firstBw.w) * 10) / 10 : 0
+  };
 }
 
 /* --------------------------------------------------------------------------
@@ -1165,7 +1759,9 @@ function finishSession(){
   });
 
   state.history.push({
+    id: uid("h"),
     at: Date.now(),
+    kind: "session",
     dayId: day.id,
     dayName: day.name,
     notes: day.notes,
@@ -1173,6 +1769,7 @@ function finishSession(){
     volume: Math.round(volume),
     entries: entries
   });
+  sortHistory();   /* a backdated skip may already sit after "now" */
 
   day.ex.forEach(function(e){ e.log = []; });
   day.notes = "";
@@ -1184,6 +1781,90 @@ function finishSession(){
   return day;
 }
 
+/* --------------------------------------------------------------------------
+   Getting the data out (and back in)
+
+   Nothing here talks to the network. These produce text; app.js decides
+   whether that text becomes a download or goes into the share sheet.
+   -------------------------------------------------------------------------- */
+
+function csvCell(v){
+  var s = (v === null || v === undefined) ? "" : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+/* One row per weight lifted — a set with a drop in it is two rows sharing a
+   set number, so nothing is averaged away before it reaches a spreadsheet.
+   Skipped days get a row of their own so the gaps are explicit. */
+function toCSV(){
+  var rows = [[
+    "date","time","day","type","exercise","set","segment",
+    "weight","reps","unit","volume","bodyweight","notes"
+  ]];
+
+  state.history.forEach(function(h){
+    var d = new Date(h.at);
+    var date = dayKey(h.at);
+    var time = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+    var bw = bodyweightAt(h.at) || "";
+    var noteUsed = false;
+
+    function note(){
+      if(noteUsed) return "";
+      noteUsed = true;
+      return h.notes || "";
+    }
+
+    if(isSkip(h)){
+      rows.push([date, time, h.dayName, h.skipType, "", "", "", "", "", "", 0, bw, note()]);
+      return;
+    }
+
+    h.entries.forEach(function(en){
+      if(!en.logged || !en.logged.length){
+        rows.push([date, time, h.dayName, "not done", en.name, "", "", "", "",
+                   h.unit || "lb", 0, bw, note()]);
+        return;
+      }
+      en.logged.forEach(function(item){
+        item.segs.forEach(function(s, i){
+          rows.push([
+            date, time, h.dayName, "set", en.name, item.set, i + 1,
+            s.w || 0, s.r || 0, h.unit || "lb",
+            Math.round((s.w || 0) * (s.r || 0)), bw, note()
+          ]);
+        });
+      });
+    });
+  });
+
+  /* Weigh-ins ride along in the same file, so one export is the whole story. */
+  state.body.forEach(function(b){
+    rows.push([dayKey(b.at), "", "", "weigh-in", "", "", "", b.w, "",
+               state.prefs.unit, "", b.w, ""]);
+  });
+
+  return rows.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n");
+}
+
+function toBackup(){
+  return JSON.stringify(state, null, 2);
+}
+
+/* Replace everything with a backup file. Throws if the text isn't one, so
+   the caller can tell you rather than silently wiping the log. */
+function restore(text){
+  var incoming = JSON.parse(text);
+  if(!looksLikeSave(incoming)) throw new Error("Not an Iron Ledger backup.");
+  state = normalize(incoming);
+  save();
+  return state;
+}
+
+function exportName(ext){
+  return "iron-ledger-" + dayKey(Date.now()) + "." + ext;
+}
+
 IL.store = {
   MAX_SETS: MAX_SETS,
 
@@ -1193,6 +1874,10 @@ IL.store = {
   save: save,
   reset: reset,
   seed: seed,
+
+  dayKey: dayKey,
+  fromDayKey: fromDayKey,
+  daysBetween: daysBetween,
 
   repTop: repTop,
   repChoices: repChoices,
@@ -1221,8 +1906,308 @@ IL.store = {
   setSegmentWeight: setSegmentWeight,
   setSegmentReps: setSegmentReps,
   moveExercise: moveExercise,
-  finishSession: finishSession
+  finishSession: finishSession,
+
+  isSkip: isSkip,
+  sessionsOnly: sessionsOnly,
+  skipsOnly: skipsOnly,
+  findEntry: findEntry,
+  removeEntry: removeEntry,
+  setEntryDate: setEntryDate,
+  addSkip: addSkip,
+
+  addBodyweight: addBodyweight,
+  removeBodyweight: removeBodyweight,
+  latestBodyweight: latestBodyweight,
+  bodyweightAt: bodyweightAt,
+
+  e1rm: e1rm,
+  loggedExercises: loggedExercises,
+  exerciseSeries: exerciseSeries,
+  relativeSeries: relativeSeries,
+  volumeSeries: volumeSeries,
+  bodySeries: bodySeries,
+  calendar: calendar,
+  summary: summary,
+
+  toCSV: toCSV,
+  toBackup: toBackup,
+  restore: restore,
+  exportName: exportName
 };
+
+})(window.IL);
+
+
+/* ==========================================================================
+   chart.js — the small SVG charts on the Progress tab.
+
+   No library. Everything here builds an <svg> string, drops it into a host
+   element and wires one pointer handler for the readout.
+
+   Charts are drawn at REAL PIXEL SIZE rather than scaled out of a fixed
+   viewBox. A 640-wide viewBox squeezed onto a 360px phone would shrink the
+   axis type to about six pixels, so instead we measure the host, draw to
+   that width, and redraw on resize.
+
+   Colour comes from CSS tokens via classes, never from hardcoded hex, so
+   both themes are handled by style.css and nothing here needs to know which
+   one is on.
+   ========================================================================== */
+
+window.IL = window.IL || {};
+
+(function(IL){
+"use strict";
+
+var H = 190;                                  /* plot height, px            */
+var PAD = { t:16, r:16, b:24, l:46 };
+
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;" }[c];
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Scales
+   -------------------------------------------------------------------------- */
+
+/* A round number near span/count, so the axis only ever shows clean ticks —
+   0 / 250 / 500, never 0 / 237 / 474. */
+function niceStep(span, count){
+  var raw = span / count;
+  var mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+  var norm = raw / mag;
+  return (norm > 5 ? 10 : norm > 2 ? 5 : norm > 1 ? 2 : 1) * mag;
+}
+
+/* Bars must grow from zero or their length lies about the data. A trend line
+   doesn't: forcing zero onto a 185 → 205 lift flattens the whole story into
+   one row of pixels, so lines get a padded window around their own range. */
+function axis(min, max, zero){
+  if(zero) min = 0;
+
+  if(max === min){
+    var nudge = Math.abs(max) * 0.1 || 1;
+    max += nudge;
+    if(!zero) min -= nudge;
+  }else if(!zero){
+    var pad = (max - min) * 0.12;
+    min -= pad;
+    max += pad;
+  }
+
+  var step = niceStep(max - min, 4);
+  var lo = zero ? 0 : Math.floor(min / step) * step;
+  var hi = Math.ceil(max / step) * step;
+  if(lo < 0 && min >= 0) lo = 0;               /* never invent negative load */
+  if(hi <= lo) hi = lo + step;
+
+  var ticks = [];
+  for(var v = lo; v <= hi + step * 1e-6; v += step){
+    ticks.push(Math.round(v * 1e6) / 1e6);
+  }
+  return { lo:lo, hi:hi, ticks:ticks };
+}
+
+/* --------------------------------------------------------------------------
+   Drawing
+   -------------------------------------------------------------------------- */
+
+function gridHTML(a, Y, w){
+  return a.ticks.map(function(v){
+    var y = Y(v);
+    return '<line class="c-grid" x1="' + PAD.l + '" x2="' + (w - PAD.r) +
+             '" y1="' + y + '" y2="' + y + '"></line>' +
+           '<text class="c-tick" x="' + (PAD.l - 7) + '" y="' + (y + 3.5) + '" text-anchor="end">' +
+             esc(a.fmt(v)) + '</text>';
+  }).join("");
+}
+
+/* First, middle and last only. A label under every point is unreadable at
+   phone width, and the readout carries the rest. */
+function xLabelsHTML(pts, X, cfg){
+  var picks = pts.length > 2
+    ? [0, Math.floor((pts.length - 1) / 2), pts.length - 1]
+    : [0, pts.length - 1];
+  var seen = {};
+
+  return picks.map(function(i, n){
+    if(seen[i]) return "";
+    seen[i] = 1;
+    var anchor = n === 0 ? "start" : (i === pts.length - 1 ? "end" : "middle");
+    return '<text class="c-tick" x="' + X(pts[i], i).toFixed(1) + '" y="' + (H - 6) +
+             '" text-anchor="' + anchor + '">' + esc(cfg.fmtX(pts[i].x)) + '</text>';
+  }).join("");
+}
+
+function linePath(pts, X, Y){
+  return pts.map(function(p, i){
+    return (i ? "L" : "M") + X(p, i).toFixed(1) + " " + Y(p.y).toFixed(1);
+  }).join(" ");
+}
+
+/* Square at the baseline, 4px rounded at the data end — the cap marks where
+   the value stops without the whole mark turning into a lozenge. */
+function barPath(x, y, w, bottom){
+  var r = Math.min(4, w / 2, Math.max(0, bottom - y));
+  return "M" + x + " " + bottom +
+         "V" + (y + r) +
+         "a" + r + " " + r + " 0 0 1 " + r + " " + (-r) +
+         "h" + (w - r * 2) +
+         "a" + r + " " + r + " 0 0 1 " + r + " " + r +
+         "V" + bottom + "Z";
+}
+
+/* --------------------------------------------------------------------------
+   draw(host, cfg)
+
+     cfg.points   [{ x, y }]   x is a timestamp, y the value
+     cfg.kind     "line" | "column"
+     cfg.fmtY     axis tick     -> string
+     cfg.fmtV     readout value -> string
+     cfg.fmtX     timestamp     -> string
+     cfg.empty    what to say when there isn't enough to plot
+   -------------------------------------------------------------------------- */
+
+function draw(host, cfg){
+  if(!host) return;
+
+  var pts = cfg.points || [];
+  var need = cfg.kind === "column" ? 1 : 2;
+
+  if(pts.length < need){
+    host.innerHTML = '<p class="chart-empty">' + esc(cfg.empty || "Nothing to plot yet.") + '</p>';
+    return;
+  }
+
+  var w = Math.max(260, Math.round(host.clientWidth || 320));
+  var pw = w - PAD.l - PAD.r;
+  var ph = H - PAD.t - PAD.b;
+
+  var ys = pts.map(function(p){ return p.y; });
+  var a = axis(Math.min.apply(null, ys), Math.max.apply(null, ys), cfg.kind === "column");
+  a.fmt = cfg.fmtY;
+
+  var Y = function(v){ return PAD.t + ph * (1 - (v - a.lo) / (a.hi - a.lo)); };
+
+  var band = pw / pts.length;
+  var thick = Math.max(3, Math.min(24, band - 2));   /* 2px gap between bars */
+  var x0 = pts[0].x;
+  var x1 = pts[pts.length - 1].x;
+
+  var X = cfg.kind === "column"
+    ? function(p, i){ return PAD.l + band * (i + 0.5); }
+    : function(p){ return x1 === x0 ? PAD.l + pw / 2 : PAD.l + pw * (p.x - x0) / (x1 - x0); };
+
+  var marks;
+
+  if(cfg.kind === "column"){
+    marks = pts.map(function(p, i){
+      return '<path class="c-bar" data-hi="0" d="' +
+        barPath((X(p, i) - thick / 2).toFixed(1), Y(p.y).toFixed(1), thick, Y(a.lo)) + '"></path>';
+    }).join("");
+  }else{
+    var d = linePath(pts, X, Y);
+    var base = Y(a.lo);
+    var lastX = X(pts[pts.length - 1], pts.length - 1).toFixed(1);
+
+    marks =
+      '<path class="c-area" d="' + d + ' L' + lastX + ' ' + base +
+        ' L' + X(pts[0], 0).toFixed(1) + ' ' + base + ' Z"></path>' +
+      '<path class="c-line" d="' + d + '"></path>' +
+      /* Intermediate dots only while they can still be told apart; past that
+         they merge into a caterpillar and the bare line reads better. */
+      (pts.length <= 12 ? pts.map(function(p, i){
+        return '<circle class="c-dot" cx="' + X(p, i).toFixed(1) +
+               '" cy="' + Y(p.y).toFixed(1) + '" r="4"></circle>';
+      }).join("") : "") +
+      '<circle class="c-dot end" cx="' + lastX +
+        '" cy="' + Y(pts[pts.length - 1].y).toFixed(1) + '" r="4.5"></circle>';
+  }
+
+  var last = pts[pts.length - 1];
+
+  host.innerHTML =
+    '<div class="chart-read" data-read>' +
+      '<b>' + esc(cfg.fmtV(last.y)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
+    '</div>' +
+    '<svg class="chart" width="' + w + '" height="' + H + '" viewBox="0 0 ' + w + ' ' + H +
+      '" role="img" aria-label="' + esc(cfg.label || "chart") + '">' +
+      gridHTML(a, Y, w) +
+      marks +
+      xLabelsHTML(pts, X, cfg) +
+      '<g class="c-cross" data-cross hidden>' +
+        '<line y1="' + PAD.t + '" y2="' + (H - PAD.b) + '"></line>' +
+        '<circle r="5.5"></circle>' +
+      '</g>' +
+      '<rect x="' + PAD.l + '" y="' + PAD.t + '" width="' + pw + '" height="' + ph +
+        '" fill="transparent" data-hit></rect>' +
+    '</svg>';
+
+  wire(host, pts, X, Y, cfg, band);
+}
+
+/* One pointer handler covers mouse and touch. Tapping or dragging across the
+   plot moves the crosshair and rewrites the readout above it; leaving snaps
+   back to the most recent point. */
+function wire(host, pts, X, Y, cfg, band){
+  var svg = host.querySelector("svg");
+  var cross = host.querySelector("[data-cross]");
+  var line = cross.querySelector("line");
+  var dot = cross.querySelector("circle");
+  var read = host.querySelector("[data-read]");
+  var bars = host.querySelectorAll(".c-bar");
+
+  function paintRead(p){
+    read.innerHTML = '<b>' + esc(cfg.fmtV(p.y)) + '</b><span>' + esc(cfg.fmtX(p.x)) + '</span>';
+  }
+
+  function highlight(index){
+    for(var b = 0; b < bars.length; b++) bars[b].dataset.hi = (b === index) ? "1" : "0";
+  }
+
+  function show(i){
+    var p = pts[i];
+    var x = X(p, i);
+    line.setAttribute("x1", x);
+    line.setAttribute("x2", x);
+    dot.setAttribute("cx", x);
+    dot.setAttribute("cy", Y(p.y));
+    cross.hidden = false;
+    paintRead(p);
+    highlight(i);
+  }
+
+  function reset(){
+    cross.hidden = true;
+    paintRead(pts[pts.length - 1]);
+    highlight(-1);
+  }
+
+  function at(ev){
+    var px = ev.clientX - svg.getBoundingClientRect().left;
+    var best = 0;
+
+    if(cfg.kind === "column"){
+      best = Math.max(0, Math.min(pts.length - 1, Math.floor((px - PAD.l) / band)));
+    }else{
+      var nearest = Infinity;
+      for(var i = 0; i < pts.length; i++){
+        var gap = Math.abs(X(pts[i], i) - px);
+        if(gap < nearest){ nearest = gap; best = i; }
+      }
+    }
+    show(best);
+  }
+
+  svg.addEventListener("pointermove", at);
+  svg.addEventListener("pointerdown", at);
+  svg.addEventListener("pointerleave", reset);
+}
+
+IL.chart = { draw: draw, height: H };
 
 })(window.IL);
 
@@ -1276,8 +2261,23 @@ function formatClock(secs){
 
 function formatDate(ts){
   var d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month:"short", day:"numeric" }) + " · " +
+  return d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" }) + " · " +
          d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+}
+
+/* Date without the clock — for skipped days, which have no time of day, and
+   for chart axes. The year only appears once it isn't this one. */
+function formatDay(ts){
+  var d = new Date(ts);
+  var opts = { month:"short", day:"numeric" };
+  if(d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString(undefined, opts);
+}
+
+function formatWeekday(ts){
+  return new Date(ts).toLocaleDateString(undefined, {
+    weekday:"short", month:"short", day:"numeric"
+  });
 }
 
 /* "8, 8, 5+3" — a set with drops shows its segments joined by a plus. */
@@ -1396,7 +2396,9 @@ function renderTrain(){
     '<div class="session-head">' +
       '<div>' +
         '<h2>' + esc(day.name) + '</h2>' +
-        '<p class="sub">' + esc(day.tag) + '</p>' +
+        /* The cycle badge in the top bar has no room on a narrow phone once
+           there are three tabs, so the number lives here too. */
+        '<p class="sub">' + esc(day.tag) + ' · Cycle ' + store.state.cycle + '</p>' +
       '</div>' +
       '<div class="prog">' +
         '<div class="big" id="progCount">' + progress.done + '/' + progress.total + '</div>' +
@@ -1442,7 +2444,18 @@ function setFinishLabel(armed){
    Training log
    -------------------------------------------------------------------------- */
 
-function sessionCard(h, index, isOpen){
+/* The date row inside an open card. It's a real <input type="date"> so the
+   phone's own picker does the work — and so a session logged the morning
+   after can be moved back to the day you actually trained. */
+function dateRow(h){
+  return '<div class="sess-date">' +
+    '<label class="lab" for="d-' + esc(h.id) + '">Date</label>' +
+    '<input id="d-' + esc(h.id) + '" type="date" data-date="' + esc(h.id) + '"' +
+      ' value="' + esc(store.dayKey(h.at)) + '">' +
+  '</div>';
+}
+
+function sessionCard(h, isOpen){
   var u = h.unit || "lb";
 
   var lines = h.entries.map(function(en){
@@ -1467,7 +2480,7 @@ function sessionCard(h, index, isOpen){
   }).join("");
 
   return '<div class="sess">' +
-    '<button class="sess-top" data-open="' + index + '" aria-expanded="' + isOpen + '">' +
+    '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
       '<span class="sess-tag">' + esc(h.dayId) + '</span>' +
       '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) + '</small></span>' +
       '<span class="sess-vol"><b>' + h.volume.toLocaleString() + '</b><small>' + esc(u) + ' volume</small></span>' +
@@ -1475,7 +2488,30 @@ function sessionCard(h, index, isOpen){
     (isOpen ?
       '<div class="sess-detail">' + lines +
         (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
-        '<button class="sess-del" data-del="' + index + '">Delete this session</button>' +
+        dateRow(h) +
+        '<button class="sess-del" data-del="' + esc(h.id) + '">Delete this session</button>' +
+      '</div>' : '') +
+  '</div>';
+}
+
+/* A day you didn't train. Same card shape as a session so the log reads as
+   one timeline, but struck through and without a volume to report. */
+function skipCard(h, isOpen){
+  var missed = h.skipType === "missed";
+
+  return '<div class="sess is-skip" data-skip="' + (missed ? "missed" : "rest") + '">' +
+    '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
+      '<span class="sess-tag">' + esc(missed ? "—" : "R") + '</span>' +
+      '<span class="sess-when"><b>' + esc(missed ? "Missed" : "Rest day") + '</b>' +
+        '<small>' + formatWeekday(h.at) + ' · ' + esc(h.dayName) + '</small></span>' +
+      '<span class="sess-vol"><b>' + (missed ? "✕" : "·") + '</b><small>' +
+        esc(missed ? "not trained" : "planned") + '</small></span>' +
+    '</button>' +
+    (isOpen ?
+      '<div class="sess-detail">' +
+        (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
+        dateRow(h) +
+        '<button class="sess-del" data-del="' + esc(h.id) + '">Delete this entry</button>' +
       '</div>' : '') +
   '</div>';
 }
@@ -1510,8 +2546,38 @@ function settingsPanel(){
   '</div>';
 }
 
-function renderLog(openIndex){
+/* Getting the log off the phone. Everything here is generated on the device
+   and handed to you — nothing is uploaded anywhere, because there is nowhere
+   to upload it to. */
+function dataPanel(){
+  var canShare = !!(navigator.share && navigator.canShare);
+
+  return '<div class="settings">' +
+    '<h3 class="set-title">Your data</h3>' +
+    '<p class="hint">' + store.state.history.length + ' entries and ' +
+      store.state.body.length + ' weigh-ins are saved on this device only. ' +
+      'Send yourself a copy whenever you want one off it.</p>' +
+    '<div class="datarow">' +
+      '<button class="add-btn" id="expCSV">Spreadsheet (CSV)</button>' +
+      '<button class="add-btn" id="expJSON">Full backup</button>' +
+    '</div>' +
+    (canShare
+      ? '<button class="add-btn" id="expShare">Send it to myself…</button>'
+      : '') +
+    '<div class="datarow">' +
+      '<button class="add-btn" id="expCopy">Copy CSV</button>' +
+      '<button class="add-btn" id="impPick">Restore a backup</button>' +
+    '</div>' +
+    '<input id="impFile" type="file" accept=".json,application/json" hidden>' +
+    '<p class="hint">The CSV has one row per weight you lifted, so a drop set ' +
+      'stays two rows. The backup restores everything exactly, on any device.</p>' +
+  '</div>';
+}
+
+function renderLog(openId){
   var history = store.state.history;
+  var sessions = store.sessionsOnly().length;
+  var skips = store.skipsOnly().length;
   var body;
 
   if(!history.length){
@@ -1519,7 +2585,8 @@ function renderLog(openIndex){
   }else{
     var cards = [];
     for(var i = history.length - 1; i >= 0; i--){
-      cards.push(sessionCard(history[i], i, openIndex === i));
+      var h = history[i];
+      cards.push(store.isSkip(h) ? skipCard(h, openId === h.id) : sessionCard(h, openId === h.id));
     }
     body = cards.join("");
   }
@@ -1528,13 +2595,229 @@ function renderLog(openIndex){
     '<div class="session-head">' +
       '<div>' +
         '<h2>Training log</h2>' +
-        '<p class="sub">' + history.length + ' session' + (history.length === 1 ? "" : "s") + ' recorded</p>' +
+        '<p class="sub">' + sessions + ' session' + (sessions === 1 ? "" : "s") +
+          (skips ? ' · ' + skips + ' day' + (skips === 1 ? "" : "s") + ' off' : '') +
+        '</p>' +
       '</div>' +
     '</div>' +
-    '<div class="hist">' + body + settingsPanel() + '</div>';
+    '<div class="hist">' +
+      '<button class="add-btn" id="addSkip">+ Mark a missed or rest day</button>' +
+      body + settingsPanel() + dataPanel() +
+    '</div>';
 
   $("actionbar").hidden = true;
   renderRail("log");
+}
+
+/* --------------------------------------------------------------------------
+   Progress
+
+   Three questions, three charts: is the weight on the bar going up, is my
+   own weight moving under it, and am I actually showing up. The picked
+   exercise and the ×bodyweight toggle live here rather than in app.js
+   because a resize has to repaint the same charts without app.js involved.
+   -------------------------------------------------------------------------- */
+
+var progress = { ex:null, relative:false };
+
+function compact(v){
+  return v >= 10000 ? Math.round(v / 1000) + "k" : Math.round(v).toLocaleString();
+}
+
+/* The series behind the strength chart, plus how to write its numbers. */
+function strengthView(){
+  var names = store.loggedExercises();
+  if(!names.length) return null;
+
+  if(names.indexOf(progress.ex) < 0) progress.ex = names[0];
+
+  var series = store.exerciseSeries(progress.ex);
+  var relative = progress.relative && series.metric === "load";
+  var shown = relative ? store.relativeSeries(series) : series;
+
+  return {
+    names: names,
+    series: shown,
+    metric: series.metric,
+    relative: relative,
+    canRelate: series.metric === "load" && store.state.body.length > 0,
+    fmtV: relative
+      ? function(v){ return v.toFixed(2) + "× bodyweight"; }
+      : (series.metric === "load"
+          ? function(v){ return Math.round(v).toLocaleString() + " " + unit(); }
+          : function(v){ return Math.round(v) + " reps"; }),
+    fmtY: relative
+      ? function(v){ return v.toFixed(2); }
+      : function(v){ return compact(v); }
+  };
+}
+
+function statTile(label, value, sub){
+  return '<div class="stat">' +
+    '<span class="k">' + esc(label) + '</span>' +
+    '<b>' + esc(value) + '</b>' +
+    (sub ? '<small>' + esc(sub) + '</small>' : '') +
+  '</div>';
+}
+
+/* Ten weeks of days, Sunday-first so the columns are weeks. Trained days
+   carry three steps of one hue (more volume, darker); missed and rest are
+   their own states and are named in the legend, never colour alone. */
+function calendarHTML(){
+  var cells = store.calendar(10);
+  var names = { trained:"trained", missed:"missed", rest:"rest day", none:"nothing logged" };
+
+  var head = ["S","M","T","W","T","F","S"].map(function(d){
+    return '<span class="cal-h">' + d + '</span>';
+  }).join("");
+
+  var grid = cells.map(function(c){
+    var label = formatWeekday(c.at) + " — " + names[c.state] +
+      (c.entry && !store.isSkip(c.entry) ? " · " + c.entry.dayName : "");
+    return '<i class="cal-c" data-state="' + c.state + '" data-level="' + c.level +
+             '" title="' + esc(label) + '"></i>';
+  }).join("");
+
+  return '<div class="cal">' +
+      '<div class="cal-head">' + head + '</div>' +
+      '<div class="cal-grid">' + grid + '</div>' +
+    '</div>' +
+    '<div class="cal-key">' +
+      '<span><i class="cal-c" data-state="trained" data-level="2"></i>Trained</span>' +
+      '<span><i class="cal-c" data-state="rest" data-level="0"></i>Rest day</span>' +
+      '<span><i class="cal-c" data-state="missed" data-level="0"></i>Missed</span>' +
+    '</div>';
+}
+
+function renderProgress(){
+  var s = store.summary();
+  var view = strengthView();
+  var bw = store.latestBodyweight();
+
+  var sub = s.since
+    ? "Week " + s.weeks + " · training since " + formatDay(s.since)
+    : "Nothing logged yet";
+
+  /* One weigh-in is a number with nothing to compare it to, which is not the
+     same as having none — say what's actually missing. */
+  var bwSub;
+  if(!bw)                            bwSub = "add a weigh-in";
+  else if(store.state.body.length < 2) bwSub = "log another to see the trend";
+  else if(s.bodyweightDelta)         bwSub = (s.bodyweightDelta > 0 ? "+" : "") +
+                                             s.bodyweightDelta + " since the start";
+  else                               bwSub = "level since the start";
+
+  var picker = view
+    ? '<select id="exPick" aria-label="Which exercise to chart">' +
+        view.names.map(function(n){
+          return '<option value="' + esc(n) + '"' +
+                 (n === progress.ex ? " selected" : "") + '>' + esc(n) + '</option>';
+        }).join("") +
+      '</select>'
+    : "";
+
+  var toggle = (view && view.canRelate)
+    ? '<div class="seg">' +
+        '<button data-rel="0" aria-pressed="' + (!view.relative) + '">Load</button>' +
+        '<button data-rel="1" aria-pressed="' + (view.relative) + '">× body</button>' +
+      '</div>'
+    : "";
+
+  var strengthNote = !view ? "" :
+    (view.relative
+      ? "Estimated one-rep max divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
+      : view.metric === "load"
+        ? "Estimated one-rep max (Epley) from your best set that day" +
+          (store.isBodyweight(progress.ex) ? ", with your bodyweight added in" : "") + "."
+        : "This one has never been logged with a load, so it charts your best set's reps instead.");
+
+  viewEl.innerHTML =
+    '<div class="session-head">' +
+      '<div>' +
+        '<h2>Progress</h2>' +
+        '<p class="sub">' + esc(sub) + '</p>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="prog-wrap">' +
+      '<div class="stats">' +
+        statTile("Sessions", String(s.sessions), s.weeks ? s.weeks + " weeks in" : "") +
+        statTile("Last 30 days", String(s.last30), s.missed30 ? s.missed30 + " missed" : "none missed") +
+        statTile("Total volume", compact(s.volume) + " " + unit(), "everything lifted") +
+        statTile("Bodyweight", bw ? bw.w + " " + unit() : "—", bwSub) +
+      '</div>' +
+
+      '<section class="card">' +
+        '<div class="card-head">' +
+          '<h3>Strength trend</h3>' + toggle +
+        '</div>' +
+        picker +
+        '<div class="chart-host hero" id="chStrength"></div>' +
+        (strengthNote ? '<p class="hint">' + esc(strengthNote) + '</p>' : '') +
+      '</section>' +
+
+      '<section class="card">' +
+        '<div class="card-head">' +
+          '<h3>Bodyweight</h3>' +
+          '<button class="edit" id="logWeight">Log weight</button>' +
+        '</div>' +
+        '<div class="chart-host" id="chBody"></div>' +
+      '</section>' +
+
+      '<section class="card">' +
+        '<h3>Volume per session</h3>' +
+        '<div class="chart-host" id="chVolume"></div>' +
+        '<p class="hint">Every rep of every set multiplied by the weight on it. ' +
+          'It climbs as you add load, reps or sets.</p>' +
+      '</section>' +
+
+      '<section class="card">' +
+        '<h3>Consistency</h3>' +
+        calendarHTML() +
+      '</section>' +
+    '</div>';
+
+  $("actionbar").hidden = true;
+  renderRail("progress");
+  paintCharts();
+}
+
+/* Charts are measured from their host, so they can only be drawn once the
+   markup is in the document — and have to be redrawn when it resizes. */
+function paintCharts(){
+  if(!$("chStrength")) return;
+
+  var view = strengthView();
+
+  IL.chart.draw($("chStrength"), {
+    kind: "line",
+    points: view ? view.series.points : [],
+    fmtY: view ? view.fmtY : compact,
+    fmtV: view ? view.fmtV : compact,
+    fmtX: formatDay,
+    label: view ? view.series.name + " over time" : "strength trend",
+    empty: "Log the same exercise on two different days and its trend line appears here."
+  });
+
+  IL.chart.draw($("chBody"), {
+    kind: "line",
+    points: store.bodySeries(),
+    fmtY: function(v){ return Math.round(v); },
+    fmtV: function(v){ return v + " " + unit(); },
+    fmtX: formatDay,
+    label: "bodyweight over time",
+    empty: "Two weigh-ins draw a line. Log the first one with the button above."
+  });
+
+  IL.chart.draw($("chVolume"), {
+    kind: "column",
+    points: store.volumeSeries().slice(-18),
+    fmtY: compact,
+    fmtV: function(v){ return Math.round(v).toLocaleString() + " " + unit(); },
+    fmtX: formatDay,
+    label: "volume per session",
+    empty: "Finish a session and its volume lands here."
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -1568,12 +2851,15 @@ function sheetMode(){ return sheetEl.dataset.mode; }
    Set logger — one set, one or more weights
    -------------------------------------------------------------------------- */
 
+/* An empty box, not a zero. A pre-filled 0 has to be selected and deleted
+   before you can type, which is three actions for what should be one — so
+   zero shows as the placeholder and the field starts blank. */
 function stepper(kind, index, value, step, min){
   return '<div class="stepper mini">' +
     '<button data-seg="' + kind + ',' + index + ',' + (-step) + '" aria-label="Less">−</button>' +
     '<input type="number" inputmode="' + (kind === "w" ? "decimal" : "numeric") + '"' +
       ' step="any" min="' + min + '" data-segval="' + kind + ',' + index + '"' +
-      ' value="' + value + '">' +
+      ' placeholder="0" value="' + (value || "") + '">' +
     '<button data-seg="' + kind + ',' + index + ',' + step + '" aria-label="More">+</button>' +
   '</div>';
 }
@@ -1694,6 +2980,99 @@ function exerciseSheet(i){
 }
 
 /* --------------------------------------------------------------------------
+   Marking a day off
+   -------------------------------------------------------------------------- */
+
+function skipSheet(){
+  var today = store.dayKey(Date.now());
+
+  openSheet("Day off",
+    '<p class="sheet-sub">Put the gap in the log on purpose, so a quiet week ' +
+      'reads as a quiet week and not as missing data.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="skDate">Date</label>' +
+      '<input id="skDate" type="date" value="' + today + '" max="' + today + '">' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<span class="lab">What kind of day</span>' +
+      '<div class="seg wide">' +
+        '<button data-skiptype="missed" aria-pressed="true">Missed</button>' +
+        '<button data-skiptype="rest" aria-pressed="false">Rest day</button>' +
+      '</div>' +
+      '<p class="hint">Missed is one you owe; a rest day was the plan. Either way ' +
+        'the rotation stays put — the workout you skipped is still the next one up.</p>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="skDay">Which workout it would have been</label>' +
+      '<select id="skDay">' +
+        store.state.days.map(function(d, i){
+          return '<option value="' + i + '"' + (i === store.state.day ? " selected" : "") + '>' +
+                   esc(d.name) + '</option>';
+        }).join("") +
+      '</select>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="skNote">Note</label>' +
+      '<textarea id="skNote" placeholder="Sick. Travelling. Gym shut."></textarea>' +
+    '</div>' +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="saveSkip">Add to the log</button>' +
+    '</div>',
+  "skip");
+}
+
+/* --------------------------------------------------------------------------
+   Weigh-in
+   -------------------------------------------------------------------------- */
+
+function weightSheet(){
+  var today = store.dayKey(Date.now());
+  var last = store.latestBodyweight();
+  var recent = store.state.body.slice(-6).reverse();
+
+  openSheet("Weigh-in",
+    '<p class="sheet-sub">One reading per day — weighing in twice on a Tuesday ' +
+      'replaces the first rather than making two points.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="bwDate">Date</label>' +
+      '<input id="bwDate" type="date" value="' + today + '" max="' + today + '">' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="bwVal">Weight (' + esc(unit()) + ')</label>' +
+      '<input id="bwVal" type="number" inputmode="decimal" step="any" min="0"' +
+        ' placeholder="' + (last ? last.w : "0") + '">' +
+      '<p class="hint">Your bodyweight is what makes the strength chart mean ' +
+        'something — a lift going up while you get heavier is a different story ' +
+        'from one going up while you don’t.</p>' +
+    '</div>' +
+
+    (recent.length
+      ? '<div class="field">' +
+          '<span class="lab">Recent</span>' +
+          '<div class="bwlist">' + recent.map(function(b){
+            return '<div class="bwrow">' +
+              '<span>' + esc(formatWeekday(b.at)) + '</span>' +
+              '<b>' + b.w + ' ' + esc(unit()) + '</b>' +
+              '<button class="segdel" data-bwdel="' + b.at + '">Remove</button>' +
+            '</div>';
+          }).join("") + '</div>' +
+        '</div>'
+      : "") +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="saveWeight">Save</button>' +
+    '</div>',
+  "weight");
+}
+
+/* --------------------------------------------------------------------------
    Exercise library picker
    -------------------------------------------------------------------------- */
 
@@ -1770,6 +3149,7 @@ IL.ui = {
   init: init,
   esc: esc,
   formatClock: formatClock,
+  formatDay: formatDay,
   repsSummary: repsSummary,
   segsDetail: segsDetail,
   toast: toast,
@@ -1779,6 +3159,10 @@ IL.ui = {
   patchExercise: patchExercise,
   setFinishLabel: setFinishLabel,
   renderLog: renderLog,
+  renderProgress: renderProgress,
+  paintCharts: paintCharts,
+
+  get progress(){ return progress; },
 
   openSheet: openSheet,
   closeSheet: closeSheet,
@@ -1786,7 +3170,9 @@ IL.ui = {
   setSheet: setSheet,
   refreshSetTotal: refreshSetTotal,
   exerciseSheet: exerciseSheet,
-  librarySheet: librarySheet
+  librarySheet: librarySheet,
+  skipSheet: skipSheet,
+  weightSheet: weightSheet
 };
 
 })(window.IL);
@@ -1816,8 +3202,8 @@ var ui = IL.ui;
 function $(id){ return document.getElementById(id); }
 
 /* View state that isn't worth persisting. */
-var view = "train";          /* "train" | "log"                            */
-var openSession = -1;        /* index of the expanded log entry, -1 none    */
+var view = "train";          /* "train" | "log" | "progress"                */
+var openSession = null;      /* id of the expanded log entry, or null       */
 var editing = -1;            /* exercise index open in the editor sheet     */
 var editingSet = null;       /* { row, k } open in the set logger, or null  */
 
@@ -1865,14 +3251,16 @@ function paintTimer(){
    -------------------------------------------------------------------------- */
 
 function render(){
-  if(view === "train") ui.renderTrain();
-  else ui.renderLog(openSession);
+  if(view === "train")         ui.renderTrain();
+  else if(view === "progress") ui.renderProgress();
+  else                         ui.renderLog(openSession);
   syncTabs();
 }
 
 function syncTabs(){
   $("tabTrain").setAttribute("aria-pressed", view === "train");
   $("tabLog").setAttribute("aria-pressed", view === "log");
+  $("tabProgress").setAttribute("aria-pressed", view === "progress");
 }
 
 function showTrain(){
@@ -1882,8 +3270,113 @@ function showTrain(){
 
 function showLog(){
   view = "log";
-  openSession = -1;
+  openSession = null;
   render();
+}
+
+function showProgress(){
+  view = "progress";
+  render();
+}
+
+/* --------------------------------------------------------------------------
+   Getting data off the device
+
+   Both routes are needed. An <a download> is the desktop answer and works in
+   mobile browsers, but inside an iOS home-screen app it often lands nowhere
+   you can find; the share sheet is the one that reliably reaches Mail, Files
+   or a note. So: share when the platform offers it, download otherwise.
+   -------------------------------------------------------------------------- */
+
+function saveFile(name, text, mime){
+  var url = URL.createObjectURL(new Blob([text], { type:mime }));
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+function shareFiles(files){
+  try{
+    if(!navigator.canShare || !navigator.canShare({ files:files })) return false;
+    navigator.share({
+      files: files,
+      title: "Iron Ledger",
+      text: "Training log through " + ui.formatDay(Date.now())
+    }).catch(function(){
+      /* Cancelling the share sheet rejects; that isn't an error. */
+    });
+    return true;
+  }catch(err){
+    return false;
+  }
+}
+
+function exportCSV(){
+  saveFile(store.exportName("csv"), store.toCSV(), "text/csv");
+  ui.toast("CSV saved.");
+}
+
+function exportBackup(){
+  saveFile("iron-ledger-backup-" + store.dayKey(Date.now()) + ".json",
+           store.toBackup(), "application/json");
+  ui.toast("Backup saved.");
+}
+
+function exportShare(){
+  var stamp = store.dayKey(Date.now());
+  var files = [];
+
+  try{
+    files.push(new File([store.toCSV()], "iron-ledger-" + stamp + ".csv", { type:"text/csv" }));
+    files.push(new File([store.toBackup()], "iron-ledger-backup-" + stamp + ".json",
+      { type:"application/json" }));
+  }catch(err){
+    files = [];
+  }
+
+  /* Some targets refuse a multi-file share — fall back to the readable one,
+     then to a plain download. */
+  if(files.length && shareFiles(files)) return;
+  if(files.length && shareFiles([files[0]])) return;
+  exportCSV();
+}
+
+function copyCSV(){
+  var text = store.toCSV();
+
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){
+      ui.toast("CSV copied — paste it into a spreadsheet.");
+    }, function(){
+      ui.toast("Couldn't copy. Use the CSV button instead.");
+    });
+    return;
+  }
+  ui.toast("Couldn't copy. Use the CSV button instead.");
+}
+
+function restoreFrom(file){
+  var reader = new FileReader();
+
+  reader.onload = function(){
+    try{
+      store.restore(String(reader.result));
+    }catch(err){
+      ui.toast("That file isn't an Iron Ledger backup.");
+      return;
+    }
+    openSession = null;
+    stopRest();
+    showLog();
+    ui.toast("Backup restored.");
+  };
+
+  reader.onerror = function(){ ui.toast("Couldn't read that file."); };
+  reader.readAsText(file);
 }
 
 /* --------------------------------------------------------------------------
@@ -1892,6 +3385,7 @@ function showLog(){
 
 $("tabTrain").addEventListener("click", showTrain);
 $("tabLog").addEventListener("click", showLog);
+$("tabProgress").addEventListener("click", showProgress);
 
 $("rail").addEventListener("click", function(ev){
   var btn = ev.target.closest("button[data-day]");
@@ -1948,19 +3442,47 @@ $("view").addEventListener("click", function(ev){
 
   hit = t.closest("[data-open]");
   if(hit){
-    var i = parseInt(hit.dataset.open, 10);
-    openSession = (openSession === i) ? -1 : i;
+    var id = hit.dataset.open;
+    openSession = (openSession === id) ? null : id;
     ui.renderLog(openSession);
     return;
   }
 
   hit = t.closest("[data-del]");
   if(hit){
-    store.state.history.splice(parseInt(hit.dataset.del, 10), 1);
-    openSession = -1;
-    store.save();
+    store.removeEntry(hit.dataset.del);
+    openSession = null;
     ui.renderLog(openSession);
-    ui.toast("Session deleted.");
+    ui.toast("Deleted.");
+    return;
+  }
+
+  if(t.closest("#addSkip")){
+    ui.skipSheet();
+    return;
+  }
+
+  if(t.closest("#expCSV")){   exportCSV();     return; }
+  if(t.closest("#expJSON")){  exportBackup();  return; }
+  if(t.closest("#expShare")){ exportShare();   return; }
+  if(t.closest("#expCopy")){  copyCSV();       return; }
+
+  if(t.closest("#impPick")){
+    $("impFile").click();
+    return;
+  }
+
+  /* --- progress view --- */
+
+  hit = t.closest("[data-rel]");
+  if(hit){
+    ui.progress.relative = hit.dataset.rel === "1";
+    ui.renderProgress();
+    return;
+  }
+
+  if(t.closest("#logWeight")){
+    ui.weightSheet();
     return;
   }
 
@@ -1991,7 +3513,7 @@ $("view").addEventListener("click", function(ev){
   if(t.closest("#resetAll")){
     if(confirm("Reset everything? Your plan, history and settings will be erased.")){
       store.reset();
-      openSession = -1;
+      openSession = null;
       stopRest();
       showTrain();
       ui.toast("Back to the starting plan.");
@@ -2003,6 +3525,38 @@ $("view").addEventListener("input", function(ev){
   if(ev.target.id === "dayNotes"){
     store.currentDay().notes = ev.target.value;
     store.save();
+  }
+});
+
+/* Selects, date fields and the file picker all report on "change" — they
+   have no useful half-typed state the way a text box does. */
+$("view").addEventListener("change", function(ev){
+  var t = ev.target;
+
+  if(t.dataset.date){
+    if(!t.value){                    /* cleared the field — put it back */
+      ui.renderLog(openSession);
+      return;
+    }
+    store.setEntryDate(t.dataset.date, t.value);
+    ui.renderLog(openSession);
+    ui.toast("Moved to " + ui.formatDay(store.fromDayKey(t.value)) + ".");
+    return;
+  }
+
+  if(t.id === "exPick"){
+    ui.progress.ex = t.value;
+    ui.renderProgress();
+    return;
+  }
+
+  if(t.id === "impFile" && t.files && t.files[0]){
+    var file = t.files[0];
+    t.value = "";                    /* so picking the same file again fires */
+    if(confirm("Restore this backup? Everything in the app now — plan, log and " +
+               "settings — is replaced by what's in the file.")){
+      restoreFrom(file);
+    }
   }
 });
 
@@ -2089,6 +3643,66 @@ $("sheetBody").addEventListener("click", function(ev){
 
   if(ui.sheetMode() === "set" && editingSet){
     if(setSheetClick(t)) return;
+  }
+
+  /* --- marking a day off ------------------------------------------------ */
+
+  if(ui.sheetMode() === "skip"){
+    hit = t.closest("[data-skiptype]");
+    if(hit){
+      /* Toggled by hand rather than by re-rendering, so the note you were
+         halfway through typing survives the tap. */
+      var kinds = $("sheetBody").querySelectorAll("[data-skiptype]");
+      for(var n = 0; n < kinds.length; n++){
+        kinds[n].setAttribute("aria-pressed", kinds[n] === hit);
+      }
+      return;
+    }
+
+    if(t.closest("#saveSkip")){
+      var when = $("skDate").value;
+      if(!when){
+        ui.toast("Pick a date first.");
+        return;
+      }
+      var picked = $("sheetBody").querySelector('[data-skiptype][aria-pressed="true"]');
+      var added = store.addSkip(
+        when,
+        picked ? picked.dataset.skiptype : "missed",
+        parseInt($("skDay").value, 10),
+        $("skNote").value
+      );
+      ui.closeSheet();
+      showLog();
+      ui.toast((added.skipType === "rest" ? "Rest day" : "Missed day") +
+               " logged for " + ui.formatDay(added.at) + ".");
+    }
+    return;
+  }
+
+  /* --- weigh-in --------------------------------------------------------- */
+
+  if(ui.sheetMode() === "weight"){
+    hit = t.closest("[data-bwdel]");
+    if(hit){
+      store.removeBodyweight(parseInt(hit.dataset.bwdel, 10));
+      if(view === "progress") ui.renderProgress();
+      ui.weightSheet();
+      return;
+    }
+
+    if(t.closest("#saveWeight")){
+      var pounds = parseFloat($("bwVal").value);
+      if(!pounds || pounds <= 0){
+        ui.toast("Enter a weight first.");
+        return;
+      }
+      store.addBodyweight(pounds, $("bwDate").value);
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+      ui.toast("Weigh-in saved.");
+    }
+    return;
   }
 
   /* Picked something out of the library — either a swap or an addition. */
@@ -2255,6 +3869,16 @@ $("finish").addEventListener("click", function(){
 /* --------------------------------------------------------------------------
    Boot
    -------------------------------------------------------------------------- */
+
+/* The charts are drawn to the pixel width they were measured at, so a
+   rotation or a resized window has to redraw them. Debounced, because a
+   desktop drag fires this continuously. */
+var repaintTimer;
+window.addEventListener("resize", function(){
+  if(view !== "progress") return;
+  clearTimeout(repaintTimer);
+  repaintTimer = setTimeout(ui.paintCharts, 150);
+});
 
 ui.init();
 store.onSaveError = function(){

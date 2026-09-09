@@ -47,8 +47,23 @@ function formatClock(secs){
 
 function formatDate(ts){
   var d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month:"short", day:"numeric" }) + " · " +
+  return d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" }) + " · " +
          d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+}
+
+/* Date without the clock — for skipped days, which have no time of day, and
+   for chart axes. The year only appears once it isn't this one. */
+function formatDay(ts){
+  var d = new Date(ts);
+  var opts = { month:"short", day:"numeric" };
+  if(d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString(undefined, opts);
+}
+
+function formatWeekday(ts){
+  return new Date(ts).toLocaleDateString(undefined, {
+    weekday:"short", month:"short", day:"numeric"
+  });
 }
 
 /* "8, 8, 5+3" — a set with drops shows its segments joined by a plus. */
@@ -167,7 +182,9 @@ function renderTrain(){
     '<div class="session-head">' +
       '<div>' +
         '<h2>' + esc(day.name) + '</h2>' +
-        '<p class="sub">' + esc(day.tag) + '</p>' +
+        /* The cycle badge in the top bar has no room on a narrow phone once
+           there are three tabs, so the number lives here too. */
+        '<p class="sub">' + esc(day.tag) + ' · Cycle ' + store.state.cycle + '</p>' +
       '</div>' +
       '<div class="prog">' +
         '<div class="big" id="progCount">' + progress.done + '/' + progress.total + '</div>' +
@@ -213,7 +230,18 @@ function setFinishLabel(armed){
    Training log
    -------------------------------------------------------------------------- */
 
-function sessionCard(h, index, isOpen){
+/* The date row inside an open card. It's a real <input type="date"> so the
+   phone's own picker does the work — and so a session logged the morning
+   after can be moved back to the day you actually trained. */
+function dateRow(h){
+  return '<div class="sess-date">' +
+    '<label class="lab" for="d-' + esc(h.id) + '">Date</label>' +
+    '<input id="d-' + esc(h.id) + '" type="date" data-date="' + esc(h.id) + '"' +
+      ' value="' + esc(store.dayKey(h.at)) + '">' +
+  '</div>';
+}
+
+function sessionCard(h, isOpen){
   var u = h.unit || "lb";
 
   var lines = h.entries.map(function(en){
@@ -238,7 +266,7 @@ function sessionCard(h, index, isOpen){
   }).join("");
 
   return '<div class="sess">' +
-    '<button class="sess-top" data-open="' + index + '" aria-expanded="' + isOpen + '">' +
+    '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
       '<span class="sess-tag">' + esc(h.dayId) + '</span>' +
       '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) + '</small></span>' +
       '<span class="sess-vol"><b>' + h.volume.toLocaleString() + '</b><small>' + esc(u) + ' volume</small></span>' +
@@ -246,7 +274,30 @@ function sessionCard(h, index, isOpen){
     (isOpen ?
       '<div class="sess-detail">' + lines +
         (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
-        '<button class="sess-del" data-del="' + index + '">Delete this session</button>' +
+        dateRow(h) +
+        '<button class="sess-del" data-del="' + esc(h.id) + '">Delete this session</button>' +
+      '</div>' : '') +
+  '</div>';
+}
+
+/* A day you didn't train. Same card shape as a session so the log reads as
+   one timeline, but struck through and without a volume to report. */
+function skipCard(h, isOpen){
+  var missed = h.skipType === "missed";
+
+  return '<div class="sess is-skip" data-skip="' + (missed ? "missed" : "rest") + '">' +
+    '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
+      '<span class="sess-tag">' + esc(missed ? "—" : "R") + '</span>' +
+      '<span class="sess-when"><b>' + esc(missed ? "Missed" : "Rest day") + '</b>' +
+        '<small>' + formatWeekday(h.at) + ' · ' + esc(h.dayName) + '</small></span>' +
+      '<span class="sess-vol"><b>' + (missed ? "✕" : "·") + '</b><small>' +
+        esc(missed ? "not trained" : "planned") + '</small></span>' +
+    '</button>' +
+    (isOpen ?
+      '<div class="sess-detail">' +
+        (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
+        dateRow(h) +
+        '<button class="sess-del" data-del="' + esc(h.id) + '">Delete this entry</button>' +
       '</div>' : '') +
   '</div>';
 }
@@ -281,8 +332,38 @@ function settingsPanel(){
   '</div>';
 }
 
-function renderLog(openIndex){
+/* Getting the log off the phone. Everything here is generated on the device
+   and handed to you — nothing is uploaded anywhere, because there is nowhere
+   to upload it to. */
+function dataPanel(){
+  var canShare = !!(navigator.share && navigator.canShare);
+
+  return '<div class="settings">' +
+    '<h3 class="set-title">Your data</h3>' +
+    '<p class="hint">' + store.state.history.length + ' entries and ' +
+      store.state.body.length + ' weigh-ins are saved on this device only. ' +
+      'Send yourself a copy whenever you want one off it.</p>' +
+    '<div class="datarow">' +
+      '<button class="add-btn" id="expCSV">Spreadsheet (CSV)</button>' +
+      '<button class="add-btn" id="expJSON">Full backup</button>' +
+    '</div>' +
+    (canShare
+      ? '<button class="add-btn" id="expShare">Send it to myself…</button>'
+      : '') +
+    '<div class="datarow">' +
+      '<button class="add-btn" id="expCopy">Copy CSV</button>' +
+      '<button class="add-btn" id="impPick">Restore a backup</button>' +
+    '</div>' +
+    '<input id="impFile" type="file" accept=".json,application/json" hidden>' +
+    '<p class="hint">The CSV has one row per weight you lifted, so a drop set ' +
+      'stays two rows. The backup restores everything exactly, on any device.</p>' +
+  '</div>';
+}
+
+function renderLog(openId){
   var history = store.state.history;
+  var sessions = store.sessionsOnly().length;
+  var skips = store.skipsOnly().length;
   var body;
 
   if(!history.length){
@@ -290,7 +371,8 @@ function renderLog(openIndex){
   }else{
     var cards = [];
     for(var i = history.length - 1; i >= 0; i--){
-      cards.push(sessionCard(history[i], i, openIndex === i));
+      var h = history[i];
+      cards.push(store.isSkip(h) ? skipCard(h, openId === h.id) : sessionCard(h, openId === h.id));
     }
     body = cards.join("");
   }
@@ -299,13 +381,229 @@ function renderLog(openIndex){
     '<div class="session-head">' +
       '<div>' +
         '<h2>Training log</h2>' +
-        '<p class="sub">' + history.length + ' session' + (history.length === 1 ? "" : "s") + ' recorded</p>' +
+        '<p class="sub">' + sessions + ' session' + (sessions === 1 ? "" : "s") +
+          (skips ? ' · ' + skips + ' day' + (skips === 1 ? "" : "s") + ' off' : '') +
+        '</p>' +
       '</div>' +
     '</div>' +
-    '<div class="hist">' + body + settingsPanel() + '</div>';
+    '<div class="hist">' +
+      '<button class="add-btn" id="addSkip">+ Mark a missed or rest day</button>' +
+      body + settingsPanel() + dataPanel() +
+    '</div>';
 
   $("actionbar").hidden = true;
   renderRail("log");
+}
+
+/* --------------------------------------------------------------------------
+   Progress
+
+   Three questions, three charts: is the weight on the bar going up, is my
+   own weight moving under it, and am I actually showing up. The picked
+   exercise and the ×bodyweight toggle live here rather than in app.js
+   because a resize has to repaint the same charts without app.js involved.
+   -------------------------------------------------------------------------- */
+
+var progress = { ex:null, relative:false };
+
+function compact(v){
+  return v >= 10000 ? Math.round(v / 1000) + "k" : Math.round(v).toLocaleString();
+}
+
+/* The series behind the strength chart, plus how to write its numbers. */
+function strengthView(){
+  var names = store.loggedExercises();
+  if(!names.length) return null;
+
+  if(names.indexOf(progress.ex) < 0) progress.ex = names[0];
+
+  var series = store.exerciseSeries(progress.ex);
+  var relative = progress.relative && series.metric === "load";
+  var shown = relative ? store.relativeSeries(series) : series;
+
+  return {
+    names: names,
+    series: shown,
+    metric: series.metric,
+    relative: relative,
+    canRelate: series.metric === "load" && store.state.body.length > 0,
+    fmtV: relative
+      ? function(v){ return v.toFixed(2) + "× bodyweight"; }
+      : (series.metric === "load"
+          ? function(v){ return Math.round(v).toLocaleString() + " " + unit(); }
+          : function(v){ return Math.round(v) + " reps"; }),
+    fmtY: relative
+      ? function(v){ return v.toFixed(2); }
+      : function(v){ return compact(v); }
+  };
+}
+
+function statTile(label, value, sub){
+  return '<div class="stat">' +
+    '<span class="k">' + esc(label) + '</span>' +
+    '<b>' + esc(value) + '</b>' +
+    (sub ? '<small>' + esc(sub) + '</small>' : '') +
+  '</div>';
+}
+
+/* Ten weeks of days, Sunday-first so the columns are weeks. Trained days
+   carry three steps of one hue (more volume, darker); missed and rest are
+   their own states and are named in the legend, never colour alone. */
+function calendarHTML(){
+  var cells = store.calendar(10);
+  var names = { trained:"trained", missed:"missed", rest:"rest day", none:"nothing logged" };
+
+  var head = ["S","M","T","W","T","F","S"].map(function(d){
+    return '<span class="cal-h">' + d + '</span>';
+  }).join("");
+
+  var grid = cells.map(function(c){
+    var label = formatWeekday(c.at) + " — " + names[c.state] +
+      (c.entry && !store.isSkip(c.entry) ? " · " + c.entry.dayName : "");
+    return '<i class="cal-c" data-state="' + c.state + '" data-level="' + c.level +
+             '" title="' + esc(label) + '"></i>';
+  }).join("");
+
+  return '<div class="cal">' +
+      '<div class="cal-head">' + head + '</div>' +
+      '<div class="cal-grid">' + grid + '</div>' +
+    '</div>' +
+    '<div class="cal-key">' +
+      '<span><i class="cal-c" data-state="trained" data-level="2"></i>Trained</span>' +
+      '<span><i class="cal-c" data-state="rest" data-level="0"></i>Rest day</span>' +
+      '<span><i class="cal-c" data-state="missed" data-level="0"></i>Missed</span>' +
+    '</div>';
+}
+
+function renderProgress(){
+  var s = store.summary();
+  var view = strengthView();
+  var bw = store.latestBodyweight();
+
+  var sub = s.since
+    ? "Week " + s.weeks + " · training since " + formatDay(s.since)
+    : "Nothing logged yet";
+
+  /* One weigh-in is a number with nothing to compare it to, which is not the
+     same as having none — say what's actually missing. */
+  var bwSub;
+  if(!bw)                            bwSub = "add a weigh-in";
+  else if(store.state.body.length < 2) bwSub = "log another to see the trend";
+  else if(s.bodyweightDelta)         bwSub = (s.bodyweightDelta > 0 ? "+" : "") +
+                                             s.bodyweightDelta + " since the start";
+  else                               bwSub = "level since the start";
+
+  var picker = view
+    ? '<select id="exPick" aria-label="Which exercise to chart">' +
+        view.names.map(function(n){
+          return '<option value="' + esc(n) + '"' +
+                 (n === progress.ex ? " selected" : "") + '>' + esc(n) + '</option>';
+        }).join("") +
+      '</select>'
+    : "";
+
+  var toggle = (view && view.canRelate)
+    ? '<div class="seg">' +
+        '<button data-rel="0" aria-pressed="' + (!view.relative) + '">Load</button>' +
+        '<button data-rel="1" aria-pressed="' + (view.relative) + '">× body</button>' +
+      '</div>'
+    : "";
+
+  var strengthNote = !view ? "" :
+    (view.relative
+      ? "Estimated one-rep max divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
+      : view.metric === "load"
+        ? "Estimated one-rep max (Epley) from your best set that day" +
+          (store.isBodyweight(progress.ex) ? ", with your bodyweight added in" : "") + "."
+        : "This one has never been logged with a load, so it charts your best set's reps instead.");
+
+  viewEl.innerHTML =
+    '<div class="session-head">' +
+      '<div>' +
+        '<h2>Progress</h2>' +
+        '<p class="sub">' + esc(sub) + '</p>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="prog-wrap">' +
+      '<div class="stats">' +
+        statTile("Sessions", String(s.sessions), s.weeks ? s.weeks + " weeks in" : "") +
+        statTile("Last 30 days", String(s.last30), s.missed30 ? s.missed30 + " missed" : "none missed") +
+        statTile("Total volume", compact(s.volume) + " " + unit(), "everything lifted") +
+        statTile("Bodyweight", bw ? bw.w + " " + unit() : "—", bwSub) +
+      '</div>' +
+
+      '<section class="card">' +
+        '<div class="card-head">' +
+          '<h3>Strength trend</h3>' + toggle +
+        '</div>' +
+        picker +
+        '<div class="chart-host hero" id="chStrength"></div>' +
+        (strengthNote ? '<p class="hint">' + esc(strengthNote) + '</p>' : '') +
+      '</section>' +
+
+      '<section class="card">' +
+        '<div class="card-head">' +
+          '<h3>Bodyweight</h3>' +
+          '<button class="edit" id="logWeight">Log weight</button>' +
+        '</div>' +
+        '<div class="chart-host" id="chBody"></div>' +
+      '</section>' +
+
+      '<section class="card">' +
+        '<h3>Volume per session</h3>' +
+        '<div class="chart-host" id="chVolume"></div>' +
+        '<p class="hint">Every rep of every set multiplied by the weight on it. ' +
+          'It climbs as you add load, reps or sets.</p>' +
+      '</section>' +
+
+      '<section class="card">' +
+        '<h3>Consistency</h3>' +
+        calendarHTML() +
+      '</section>' +
+    '</div>';
+
+  $("actionbar").hidden = true;
+  renderRail("progress");
+  paintCharts();
+}
+
+/* Charts are measured from their host, so they can only be drawn once the
+   markup is in the document — and have to be redrawn when it resizes. */
+function paintCharts(){
+  if(!$("chStrength")) return;
+
+  var view = strengthView();
+
+  IL.chart.draw($("chStrength"), {
+    kind: "line",
+    points: view ? view.series.points : [],
+    fmtY: view ? view.fmtY : compact,
+    fmtV: view ? view.fmtV : compact,
+    fmtX: formatDay,
+    label: view ? view.series.name + " over time" : "strength trend",
+    empty: "Log the same exercise on two different days and its trend line appears here."
+  });
+
+  IL.chart.draw($("chBody"), {
+    kind: "line",
+    points: store.bodySeries(),
+    fmtY: function(v){ return Math.round(v); },
+    fmtV: function(v){ return v + " " + unit(); },
+    fmtX: formatDay,
+    label: "bodyweight over time",
+    empty: "Two weigh-ins draw a line. Log the first one with the button above."
+  });
+
+  IL.chart.draw($("chVolume"), {
+    kind: "column",
+    points: store.volumeSeries().slice(-18),
+    fmtY: compact,
+    fmtV: function(v){ return Math.round(v).toLocaleString() + " " + unit(); },
+    fmtX: formatDay,
+    label: "volume per session",
+    empty: "Finish a session and its volume lands here."
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -339,12 +637,15 @@ function sheetMode(){ return sheetEl.dataset.mode; }
    Set logger — one set, one or more weights
    -------------------------------------------------------------------------- */
 
+/* An empty box, not a zero. A pre-filled 0 has to be selected and deleted
+   before you can type, which is three actions for what should be one — so
+   zero shows as the placeholder and the field starts blank. */
 function stepper(kind, index, value, step, min){
   return '<div class="stepper mini">' +
     '<button data-seg="' + kind + ',' + index + ',' + (-step) + '" aria-label="Less">−</button>' +
     '<input type="number" inputmode="' + (kind === "w" ? "decimal" : "numeric") + '"' +
       ' step="any" min="' + min + '" data-segval="' + kind + ',' + index + '"' +
-      ' value="' + value + '">' +
+      ' placeholder="0" value="' + (value || "") + '">' +
     '<button data-seg="' + kind + ',' + index + ',' + step + '" aria-label="More">+</button>' +
   '</div>';
 }
@@ -465,6 +766,99 @@ function exerciseSheet(i){
 }
 
 /* --------------------------------------------------------------------------
+   Marking a day off
+   -------------------------------------------------------------------------- */
+
+function skipSheet(){
+  var today = store.dayKey(Date.now());
+
+  openSheet("Day off",
+    '<p class="sheet-sub">Put the gap in the log on purpose, so a quiet week ' +
+      'reads as a quiet week and not as missing data.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="skDate">Date</label>' +
+      '<input id="skDate" type="date" value="' + today + '" max="' + today + '">' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<span class="lab">What kind of day</span>' +
+      '<div class="seg wide">' +
+        '<button data-skiptype="missed" aria-pressed="true">Missed</button>' +
+        '<button data-skiptype="rest" aria-pressed="false">Rest day</button>' +
+      '</div>' +
+      '<p class="hint">Missed is one you owe; a rest day was the plan. Either way ' +
+        'the rotation stays put — the workout you skipped is still the next one up.</p>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="skDay">Which workout it would have been</label>' +
+      '<select id="skDay">' +
+        store.state.days.map(function(d, i){
+          return '<option value="' + i + '"' + (i === store.state.day ? " selected" : "") + '>' +
+                   esc(d.name) + '</option>';
+        }).join("") +
+      '</select>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="skNote">Note</label>' +
+      '<textarea id="skNote" placeholder="Sick. Travelling. Gym shut."></textarea>' +
+    '</div>' +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="saveSkip">Add to the log</button>' +
+    '</div>',
+  "skip");
+}
+
+/* --------------------------------------------------------------------------
+   Weigh-in
+   -------------------------------------------------------------------------- */
+
+function weightSheet(){
+  var today = store.dayKey(Date.now());
+  var last = store.latestBodyweight();
+  var recent = store.state.body.slice(-6).reverse();
+
+  openSheet("Weigh-in",
+    '<p class="sheet-sub">One reading per day — weighing in twice on a Tuesday ' +
+      'replaces the first rather than making two points.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="bwDate">Date</label>' +
+      '<input id="bwDate" type="date" value="' + today + '" max="' + today + '">' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="bwVal">Weight (' + esc(unit()) + ')</label>' +
+      '<input id="bwVal" type="number" inputmode="decimal" step="any" min="0"' +
+        ' placeholder="' + (last ? last.w : "0") + '">' +
+      '<p class="hint">Your bodyweight is what makes the strength chart mean ' +
+        'something — a lift going up while you get heavier is a different story ' +
+        'from one going up while you don’t.</p>' +
+    '</div>' +
+
+    (recent.length
+      ? '<div class="field">' +
+          '<span class="lab">Recent</span>' +
+          '<div class="bwlist">' + recent.map(function(b){
+            return '<div class="bwrow">' +
+              '<span>' + esc(formatWeekday(b.at)) + '</span>' +
+              '<b>' + b.w + ' ' + esc(unit()) + '</b>' +
+              '<button class="segdel" data-bwdel="' + b.at + '">Remove</button>' +
+            '</div>';
+          }).join("") + '</div>' +
+        '</div>'
+      : "") +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="saveWeight">Save</button>' +
+    '</div>',
+  "weight");
+}
+
+/* --------------------------------------------------------------------------
    Exercise library picker
    -------------------------------------------------------------------------- */
 
@@ -541,6 +935,7 @@ IL.ui = {
   init: init,
   esc: esc,
   formatClock: formatClock,
+  formatDay: formatDay,
   repsSummary: repsSummary,
   segsDetail: segsDetail,
   toast: toast,
@@ -550,6 +945,10 @@ IL.ui = {
   patchExercise: patchExercise,
   setFinishLabel: setFinishLabel,
   renderLog: renderLog,
+  renderProgress: renderProgress,
+  paintCharts: paintCharts,
+
+  get progress(){ return progress; },
 
   openSheet: openSheet,
   closeSheet: closeSheet,
@@ -557,7 +956,9 @@ IL.ui = {
   setSheet: setSheet,
   refreshSetTotal: refreshSetTotal,
   exerciseSheet: exerciseSheet,
-  librarySheet: librarySheet
+  librarySheet: librarySheet,
+  skipSheet: skipSheet,
+  weightSheet: weightSheet
 };
 
 })(window.IL);

@@ -22,8 +22,8 @@ var ui = IL.ui;
 function $(id){ return document.getElementById(id); }
 
 /* View state that isn't worth persisting. */
-var view = "train";          /* "train" | "log"                            */
-var openSession = -1;        /* index of the expanded log entry, -1 none    */
+var view = "train";          /* "train" | "log" | "progress"                */
+var openSession = null;      /* id of the expanded log entry, or null       */
 var editing = -1;            /* exercise index open in the editor sheet     */
 var editingSet = null;       /* { row, k } open in the set logger, or null  */
 
@@ -71,14 +71,16 @@ function paintTimer(){
    -------------------------------------------------------------------------- */
 
 function render(){
-  if(view === "train") ui.renderTrain();
-  else ui.renderLog(openSession);
+  if(view === "train")         ui.renderTrain();
+  else if(view === "progress") ui.renderProgress();
+  else                         ui.renderLog(openSession);
   syncTabs();
 }
 
 function syncTabs(){
   $("tabTrain").setAttribute("aria-pressed", view === "train");
   $("tabLog").setAttribute("aria-pressed", view === "log");
+  $("tabProgress").setAttribute("aria-pressed", view === "progress");
 }
 
 function showTrain(){
@@ -88,8 +90,113 @@ function showTrain(){
 
 function showLog(){
   view = "log";
-  openSession = -1;
+  openSession = null;
   render();
+}
+
+function showProgress(){
+  view = "progress";
+  render();
+}
+
+/* --------------------------------------------------------------------------
+   Getting data off the device
+
+   Both routes are needed. An <a download> is the desktop answer and works in
+   mobile browsers, but inside an iOS home-screen app it often lands nowhere
+   you can find; the share sheet is the one that reliably reaches Mail, Files
+   or a note. So: share when the platform offers it, download otherwise.
+   -------------------------------------------------------------------------- */
+
+function saveFile(name, text, mime){
+  var url = URL.createObjectURL(new Blob([text], { type:mime }));
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+function shareFiles(files){
+  try{
+    if(!navigator.canShare || !navigator.canShare({ files:files })) return false;
+    navigator.share({
+      files: files,
+      title: "Iron Ledger",
+      text: "Training log through " + ui.formatDay(Date.now())
+    }).catch(function(){
+      /* Cancelling the share sheet rejects; that isn't an error. */
+    });
+    return true;
+  }catch(err){
+    return false;
+  }
+}
+
+function exportCSV(){
+  saveFile(store.exportName("csv"), store.toCSV(), "text/csv");
+  ui.toast("CSV saved.");
+}
+
+function exportBackup(){
+  saveFile("iron-ledger-backup-" + store.dayKey(Date.now()) + ".json",
+           store.toBackup(), "application/json");
+  ui.toast("Backup saved.");
+}
+
+function exportShare(){
+  var stamp = store.dayKey(Date.now());
+  var files = [];
+
+  try{
+    files.push(new File([store.toCSV()], "iron-ledger-" + stamp + ".csv", { type:"text/csv" }));
+    files.push(new File([store.toBackup()], "iron-ledger-backup-" + stamp + ".json",
+      { type:"application/json" }));
+  }catch(err){
+    files = [];
+  }
+
+  /* Some targets refuse a multi-file share — fall back to the readable one,
+     then to a plain download. */
+  if(files.length && shareFiles(files)) return;
+  if(files.length && shareFiles([files[0]])) return;
+  exportCSV();
+}
+
+function copyCSV(){
+  var text = store.toCSV();
+
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){
+      ui.toast("CSV copied — paste it into a spreadsheet.");
+    }, function(){
+      ui.toast("Couldn't copy. Use the CSV button instead.");
+    });
+    return;
+  }
+  ui.toast("Couldn't copy. Use the CSV button instead.");
+}
+
+function restoreFrom(file){
+  var reader = new FileReader();
+
+  reader.onload = function(){
+    try{
+      store.restore(String(reader.result));
+    }catch(err){
+      ui.toast("That file isn't an Iron Ledger backup.");
+      return;
+    }
+    openSession = null;
+    stopRest();
+    showLog();
+    ui.toast("Backup restored.");
+  };
+
+  reader.onerror = function(){ ui.toast("Couldn't read that file."); };
+  reader.readAsText(file);
 }
 
 /* --------------------------------------------------------------------------
@@ -98,6 +205,7 @@ function showLog(){
 
 $("tabTrain").addEventListener("click", showTrain);
 $("tabLog").addEventListener("click", showLog);
+$("tabProgress").addEventListener("click", showProgress);
 
 $("rail").addEventListener("click", function(ev){
   var btn = ev.target.closest("button[data-day]");
@@ -154,19 +262,47 @@ $("view").addEventListener("click", function(ev){
 
   hit = t.closest("[data-open]");
   if(hit){
-    var i = parseInt(hit.dataset.open, 10);
-    openSession = (openSession === i) ? -1 : i;
+    var id = hit.dataset.open;
+    openSession = (openSession === id) ? null : id;
     ui.renderLog(openSession);
     return;
   }
 
   hit = t.closest("[data-del]");
   if(hit){
-    store.state.history.splice(parseInt(hit.dataset.del, 10), 1);
-    openSession = -1;
-    store.save();
+    store.removeEntry(hit.dataset.del);
+    openSession = null;
     ui.renderLog(openSession);
-    ui.toast("Session deleted.");
+    ui.toast("Deleted.");
+    return;
+  }
+
+  if(t.closest("#addSkip")){
+    ui.skipSheet();
+    return;
+  }
+
+  if(t.closest("#expCSV")){   exportCSV();     return; }
+  if(t.closest("#expJSON")){  exportBackup();  return; }
+  if(t.closest("#expShare")){ exportShare();   return; }
+  if(t.closest("#expCopy")){  copyCSV();       return; }
+
+  if(t.closest("#impPick")){
+    $("impFile").click();
+    return;
+  }
+
+  /* --- progress view --- */
+
+  hit = t.closest("[data-rel]");
+  if(hit){
+    ui.progress.relative = hit.dataset.rel === "1";
+    ui.renderProgress();
+    return;
+  }
+
+  if(t.closest("#logWeight")){
+    ui.weightSheet();
     return;
   }
 
@@ -197,7 +333,7 @@ $("view").addEventListener("click", function(ev){
   if(t.closest("#resetAll")){
     if(confirm("Reset everything? Your plan, history and settings will be erased.")){
       store.reset();
-      openSession = -1;
+      openSession = null;
       stopRest();
       showTrain();
       ui.toast("Back to the starting plan.");
@@ -209,6 +345,38 @@ $("view").addEventListener("input", function(ev){
   if(ev.target.id === "dayNotes"){
     store.currentDay().notes = ev.target.value;
     store.save();
+  }
+});
+
+/* Selects, date fields and the file picker all report on "change" — they
+   have no useful half-typed state the way a text box does. */
+$("view").addEventListener("change", function(ev){
+  var t = ev.target;
+
+  if(t.dataset.date){
+    if(!t.value){                    /* cleared the field — put it back */
+      ui.renderLog(openSession);
+      return;
+    }
+    store.setEntryDate(t.dataset.date, t.value);
+    ui.renderLog(openSession);
+    ui.toast("Moved to " + ui.formatDay(store.fromDayKey(t.value)) + ".");
+    return;
+  }
+
+  if(t.id === "exPick"){
+    ui.progress.ex = t.value;
+    ui.renderProgress();
+    return;
+  }
+
+  if(t.id === "impFile" && t.files && t.files[0]){
+    var file = t.files[0];
+    t.value = "";                    /* so picking the same file again fires */
+    if(confirm("Restore this backup? Everything in the app now — plan, log and " +
+               "settings — is replaced by what's in the file.")){
+      restoreFrom(file);
+    }
   }
 });
 
@@ -295,6 +463,66 @@ $("sheetBody").addEventListener("click", function(ev){
 
   if(ui.sheetMode() === "set" && editingSet){
     if(setSheetClick(t)) return;
+  }
+
+  /* --- marking a day off ------------------------------------------------ */
+
+  if(ui.sheetMode() === "skip"){
+    hit = t.closest("[data-skiptype]");
+    if(hit){
+      /* Toggled by hand rather than by re-rendering, so the note you were
+         halfway through typing survives the tap. */
+      var kinds = $("sheetBody").querySelectorAll("[data-skiptype]");
+      for(var n = 0; n < kinds.length; n++){
+        kinds[n].setAttribute("aria-pressed", kinds[n] === hit);
+      }
+      return;
+    }
+
+    if(t.closest("#saveSkip")){
+      var when = $("skDate").value;
+      if(!when){
+        ui.toast("Pick a date first.");
+        return;
+      }
+      var picked = $("sheetBody").querySelector('[data-skiptype][aria-pressed="true"]');
+      var added = store.addSkip(
+        when,
+        picked ? picked.dataset.skiptype : "missed",
+        parseInt($("skDay").value, 10),
+        $("skNote").value
+      );
+      ui.closeSheet();
+      showLog();
+      ui.toast((added.skipType === "rest" ? "Rest day" : "Missed day") +
+               " logged for " + ui.formatDay(added.at) + ".");
+    }
+    return;
+  }
+
+  /* --- weigh-in --------------------------------------------------------- */
+
+  if(ui.sheetMode() === "weight"){
+    hit = t.closest("[data-bwdel]");
+    if(hit){
+      store.removeBodyweight(parseInt(hit.dataset.bwdel, 10));
+      if(view === "progress") ui.renderProgress();
+      ui.weightSheet();
+      return;
+    }
+
+    if(t.closest("#saveWeight")){
+      var pounds = parseFloat($("bwVal").value);
+      if(!pounds || pounds <= 0){
+        ui.toast("Enter a weight first.");
+        return;
+      }
+      store.addBodyweight(pounds, $("bwDate").value);
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+      ui.toast("Weigh-in saved.");
+    }
+    return;
   }
 
   /* Picked something out of the library — either a swap or an addition. */
@@ -461,6 +689,16 @@ $("finish").addEventListener("click", function(){
 /* --------------------------------------------------------------------------
    Boot
    -------------------------------------------------------------------------- */
+
+/* The charts are drawn to the pixel width they were measured at, so a
+   rotation or a resized window has to redraw them. Debounced, because a
+   desktop drag fires this continuously. */
+var repaintTimer;
+window.addEventListener("resize", function(){
+  if(view !== "progress") return;
+  clearTimeout(repaintTimer);
+  repaintTimer = setTimeout(ui.paintCharts, 150);
+});
 
 ui.init();
 store.onSaveError = function(){
