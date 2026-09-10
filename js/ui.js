@@ -92,6 +92,46 @@ function toast(msg){
 }
 
 /* --------------------------------------------------------------------------
+   What the last session decided
+
+   Every exercise carries the note the progression rule left on it — why it
+   is at this weight today. Showing it is most of the point: a number that
+   moved on its own is unnerving until you can see the reason.
+   -------------------------------------------------------------------------- */
+
+/* The rules write their notes as "decision — because", so the decision can
+   be bold and the reasoning can be quiet. */
+function planLine(e){
+  if(!e.progress || !e.progress.note) return "";
+
+  var bits = String(e.progress.note).split(" — ");
+  return '<p class="ex-plan" data-kind="' + esc(e.progress.kind) + '">' +
+    '<b>' + esc(bits[0]) + '</b>' +
+    (bits.length > 1 ? '<span>' + esc(bits.slice(1).join(" — ")) + '</span>' : '') +
+  '</p>';
+}
+
+/* One line above the day, so the changes are visible before you scroll. */
+function planBanner(day){
+  var n = { up:0, down:0, swap:0, hold:0 };
+
+  day.ex.forEach(function(e){
+    if(e.progress && n[e.progress.kind] !== undefined) n[e.progress.kind]++;
+  });
+  if(!n.up && !n.down && !n.swap) return "";
+
+  var parts = [];
+  if(n.up)   parts.push(n.up + " load" + (n.up === 1 ? "" : "s") + " up");
+  if(n.down) parts.push(n.down + " backed off");
+  if(n.swap) parts.push(n.swap + " new exercise" + (n.swap === 1 ? "" : "s"));
+
+  return '<div class="planbar">' +
+    '<span class="k">Since last time</span>' +
+    '<b>' + esc(parts.join(" · ")) + '</b>' +
+  '</div>';
+}
+
+/* --------------------------------------------------------------------------
    Rotation rail
    -------------------------------------------------------------------------- */
 
@@ -165,6 +205,7 @@ function exerciseRow(e, i, last){
         '<span class="chip load">' + esc(formatLoad(e)) + '</span>' +
         lastLine +
       '</div>' +
+      planLine(e) +
       (e.note ? '<p class="ex-note">' + esc(e.note) + '</p>' : '') +
       '<div class="sets">' + sets + '</div>' +
     '</div>' +
@@ -191,6 +232,7 @@ function renderTrain(){
         '<div class="cap">Sets in</div>' +
       '</div>' +
     '</div>' +
+    planBanner(day) +
     '<div class="ledger" id="ledger">' + rows + '</div>' +
     '<div class="addrow"><button class="add-btn" id="addEx">+ Add exercise</button></div>' +
     '<div class="notes">' +
@@ -326,6 +368,24 @@ function settingsPanel(){
       '</div>' +
     '</div>' +
     '<div class="setrow">' +
+      '<div class="k">Progressive overload<small>Moves each load on what you actually hit</small></div>' +
+      '<div class="seg">' +
+        '<button data-prog="1" aria-pressed="' + (p.autoProgress === true) + '">On</button>' +
+        '<button data-prog="0" aria-pressed="' + (p.autoProgress === false) + '">Off</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="setrow stack">' +
+      '<div class="k">Variety<small>How readily an exercise hands its slot to another one that does the same job</small></div>' +
+      '<div class="seg wide">' + ["off","low","medium","high"].map(function(v){
+        return '<button data-var="' + v + '" aria-pressed="' + (p.variety === v) + '">' +
+                 esc(data.VARIETY[v].label) + '</button>';
+      }).join("") + '</div>' +
+    '</div>' +
+    '<div class="setrow">' +
+      '<div class="k">Re-seed from the log<small>Sets every working weight from your own history</small></div>' +
+      '<button class="edit" id="reseedAll">Re-seed</button>' +
+    '</div>' +
+    '<div class="setrow">' +
       '<div class="k">Start over<small>Erases the plan, history and settings</small></div>' +
       '<button class="edit danger" id="resetAll">Reset</button>' +
     '</div>' +
@@ -387,7 +447,10 @@ function renderLog(openId){
       '</div>' +
     '</div>' +
     '<div class="hist">' +
-      '<button class="add-btn" id="addSkip">+ Mark a missed or rest day</button>' +
+      '<div class="datarow">' +
+        '<button class="add-btn" id="addPast">+ Past workouts</button>' +
+        '<button class="add-btn" id="addSkip">+ Missed or rest day</button>' +
+      '</div>' +
       body + settingsPanel() + dataPanel() +
     '</div>';
 
@@ -719,10 +782,28 @@ function exerciseSheet(i){
   var e = store.currentDay().ex[i];
   var step = store.state.prefs.step;
 
+  var nextUp = IL.plan.preview(e);
+
   openSheet("Edit exercise",
     '<button class="swapname" id="swapBtn">' +
       '<strong>' + esc(e.name) + '</strong><span>Swap ›</span>' +
     '</button>' +
+
+    (e.progress && e.progress.note ? planLine(e) : '') +
+
+    '<div class="setrow stack">' +
+      '<div class="k">This slot<small>' +
+        (e.pin
+          ? "Held — it will not rotate"
+          : nextUp
+            ? "Next in line: " + esc(nextUp)
+            : "Nothing else in the library does this job, so it stays put") +
+      '</small></div>' +
+      '<div class="seg wide">' +
+        '<button data-pin="0" aria-pressed="' + (e.pin !== true) + '">Rotate</button>' +
+        '<button data-pin="1" aria-pressed="' + (e.pin === true) + '">Keep</button>' +
+      '</div>' +
+    '</div>' +
 
     '<div class="field">' +
       '<label class="lab" for="fW">Working weight (' + esc(unit()) + ')</label>' +
@@ -862,25 +943,37 @@ function weightSheet(){
    Exercise library picker
    -------------------------------------------------------------------------- */
 
+/* Built-ins and your own in one list. Yours get an Edit button, which is
+   the only place they can be changed or removed. */
+function libRow(x){
+  return '<div class="lib-row" data-search="' + esc(x.name.toLowerCase()) + '">' +
+    '<button class="lib-item" data-pick="' + esc(x.name) + '">' +
+      '<strong>' + esc(x.name) + '</strong>' +
+      '<span class="d">' + x.sets + ' × ' + esc(x.reps) +
+        (x.pattern ? ' · ' + esc(data.PATTERN_LABEL[x.pattern]) : '') +
+      '</span>' +
+    '</button>' +
+    (store.isCustom(x.name)
+      ? '<button class="lib-edit" data-libedit="' + esc(x.name) + '">Edit</button>'
+      : '') +
+  '</div>';
+}
+
 function librarySheet(mode){
+  var all = store.libAll();
   var groups = [];
-  data.LIB.forEach(function(r){ if(groups.indexOf(r[0]) < 0) groups.push(r[0]); });
+  all.forEach(function(x){ if(groups.indexOf(x.group) < 0) groups.push(x.group); });
 
   var html =
     '<div class="field">' +
       '<input id="libSearch" type="text" placeholder="Search, or type a name of your own" autocomplete="off">' +
     '</div>' +
     '<div id="libCustom"></div>' +
+    '<button class="add-btn" id="libNew">+ New exercise</button>' +
     '<div id="libList">' +
       groups.map(function(g){
         return '<div class="lib-group">' + esc(g) + '</div>' +
-          data.LIB.filter(function(r){ return r[0] === g; }).map(function(r){
-            return '<button class="lib-item" data-pick="' + esc(r[1]) + '"' +
-                     ' data-search="' + esc(r[1].toLowerCase()) + '">' +
-                     '<strong>' + esc(r[1]) + '</strong>' +
-                     '<span class="d">' + r[3] + '×' + r[4] + '</span>' +
-                   '</button>';
-          }).join("");
+          all.filter(function(x){ return x.group === g; }).map(libRow).join("");
       }).join("") +
     '</div>';
 
@@ -889,16 +982,16 @@ function librarySheet(mode){
 }
 
 /* Filter the picker, hide group headings that end up empty, and offer the
-   typed text as a custom exercise when nothing matches. */
+   typed text as a new exercise when nothing matches. */
 function filterLibrary(){
   var raw = this.value.trim();
   var q = raw.toLowerCase();
   var shown = 0;
 
-  var items = document.querySelectorAll("#libList .lib-item");
-  for(var i = 0; i < items.length; i++){
-    var hit = !q || items[i].dataset.search.indexOf(q) >= 0;
-    items[i].hidden = !hit;
+  var rows = document.querySelectorAll("#libList .lib-row");
+  for(var i = 0; i < rows.length; i++){
+    var hit = !q || rows[i].dataset.search.indexOf(q) >= 0;
+    rows[i].hidden = !hit;
     if(hit) shown++;
   }
 
@@ -906,20 +999,229 @@ function filterLibrary(){
   for(var j = 0; j < heads.length; j++){
     var n = heads[j].nextElementSibling;
     var any = false;
-    while(n && n.classList.contains("lib-item")){
+    while(n && n.classList.contains("lib-row")){
       if(!n.hidden){ any = true; break; }
       n = n.nextElementSibling;
     }
     heads[j].hidden = !any;
   }
 
-  var d = data.CUSTOM_DEFAULTS;
   $("libCustom").innerHTML = (raw && shown === 0)
-    ? '<button class="lib-item" data-pick="' + esc(raw) + '">' +
+    ? '<button class="lib-item solo" data-newname="' + esc(raw) + '">' +
         '<strong>Add “' + esc(raw) + '”</strong>' +
-        '<span class="d">' + d.sets + '×' + d.reps + '</span>' +
+        '<span class="d">set it up ›</span>' +
       '</button>'
     : "";
+}
+
+/* --------------------------------------------------------------------------
+   Building an exercise the library doesn't have
+
+   Only one field here isn't cosmetic. The pattern is what tells rotation
+   which other exercises could do this one's job — leave it blank and the
+   exercise simply never rotates, which is a perfectly good answer for
+   something you always want to do.
+   -------------------------------------------------------------------------- */
+function builderSheet(name, existing){
+  var d = data.CUSTOM_DEFAULTS;
+  var x = existing || {
+    name:name || "", group:d.group, type:d.type,
+    sets:d.sets, reps:d.reps, pattern:"", bw:false
+  };
+
+  var groups = [];
+  store.libAll().forEach(function(g){
+    if(groups.indexOf(g.group) < 0) groups.push(g.group);
+  });
+
+  var types = [["compound","Compound"],["support","Support"],["small","Small"]];
+
+  openSheet(existing ? "Edit exercise" : "New exercise",
+    '<div class="field">' +
+      '<label class="lab" for="nxName">Name</label>' +
+      '<input id="nxName" type="text" value="' + esc(x.name) + '" placeholder="Hack Squat Machine">' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="nxGroup">Body part</label>' +
+      '<input id="nxGroup" type="text" list="nxGroups" value="' + esc(x.group) + '">' +
+      '<datalist id="nxGroups">' +
+        groups.map(function(g){ return '<option value="' + esc(g) + '">'; }).join("") +
+      '</datalist>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<span class="lab">Weight class</span>' +
+      '<div class="seg wide">' + types.map(function(t){
+        return '<button data-nxtype="' + t[0] + '" aria-pressed="' + (x.type === t[0]) + '">' +
+                 t[1] + '</button>';
+      }).join("") + '</div>' +
+      '<p class="hint">Compounds get the three-minute rest and rotate slowest.</p>' +
+    '</div>' +
+
+    '<div class="seggrid">' +
+      '<div class="field">' +
+        '<label class="lab" for="nxSets">Sets</label>' +
+        '<input id="nxSets" type="number" inputmode="numeric" min="1" max="' +
+          store.MAX_SETS + '" value="' + x.sets + '">' +
+      '</div>' +
+      '<div class="field">' +
+        '<label class="lab" for="nxReps">Target reps</label>' +
+        '<input id="nxReps" type="text" value="' + esc(x.reps) + '" placeholder="8-10">' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="nxPattern">What job does it do</label>' +
+      '<select id="nxPattern">' +
+        '<option value="">Nothing else — never rotate it</option>' +
+        data.PATTERNS.map(function(p){
+          return '<option value="' + esc(p[0]) + '"' +
+                 (x.pattern === p[0] ? " selected" : "") + '>' + esc(p[1]) + '</option>';
+        }).join("") +
+      '</select>' +
+      '<p class="hint">This is the field auto-rotation reads. Pick “Squat pattern” ' +
+        'for a hack squat and it can stand in for the V-squat, and the V-squat for it.</p>' +
+    '</div>' +
+
+    '<div class="setrow">' +
+      '<div class="k">Loaded by bodyweight<small>Shows BW, and progresses on reps</small></div>' +
+      '<div class="seg">' +
+        '<button data-nxbw="1" aria-pressed="' + (x.bw === true) + '">Yes</button>' +
+        '<button data-nxbw="0" aria-pressed="' + (x.bw !== true) + '">No</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="rowbtns ' + (existing ? "two" : "one") + '">' +
+      '<button class="primary" id="nxSave">' +
+        (existing ? "Save" : "Save and use it") + '</button>' +
+      (existing
+        ? '<button class="danger" data-nxdel="' + esc(x.name) + '">Remove</button>'
+        : '') +
+    '</div>',
+  "builder");
+}
+
+/* --------------------------------------------------------------------------
+   Importing training you already did
+   -------------------------------------------------------------------------- */
+
+var SAMPLE =
+  "2026-08-25 Upper A\n" +
+  "Incline Smith Press 135x8 135x8 145x6\n" +
+  "Barbell Bent-Over Row 155x8x3\n" +
+  "Pull-Ups BWx9 BWx7\n" +
+  "note: incline felt easy\n\n" +
+  "8/27 Lower A\n" +
+  "Hack Squat 250x8x4\n" +
+  "Barbell RDL 185x8 185x8 195x6";
+
+var lastImport = null;
+
+function importSheet(){
+  openSheet("Add past workouts",
+    /* The sub is set in small caps, so it has to stay one line. The rest of
+       the explanation goes under the box, where it reads as prose. */
+    '<p class="sheet-sub">Training you have already done, in the shorthand you would write anyway.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="impText">Your training</label>' +
+      '<textarea id="impText" class="tall" spellcheck="false" autocapitalize="none" ' +
+        'placeholder="' + esc(SAMPLE) + '"></textarea>' +
+      '<p class="hint">It lands in the log as real sessions, so the charts, the ' +
+        '“last time” lines and every working weight start from where you actually ' +
+        'are rather than from zero.</p>' +
+    '</div>' +
+
+    '<details class="fmt">' +
+      '<summary>What it understands</summary>' +
+      '<ul>' +
+        '<li><b>A date starts a day.</b> <code>2026-08-25</code>, <code>8/25</code>, ' +
+          '<code>8/25/26</code>, <code>Aug 25</code> or <code>yesterday</code> — then ' +
+          'the workout name, if it had one.</li>' +
+        '<li><b>Every other line is one exercise:</b> its name, then its sets.</li>' +
+        '<li><code>135x8 135x8 145x6</code> — three sets</li>' +
+        '<li><code>155x8x3</code> — that same set three times</li>' +
+        '<li><code>185x5+155x3</code> — one set with a drop in it</li>' +
+        '<li><code>BWx9</code> — bodyweight</li>' +
+        '<li><code>45 45 45</code> — reps with nothing on the bar</li>' +
+        '<li><code>note: felt strong</code> — a note on the day</li>' +
+      '</ul>' +
+      '<p class="hint">Spaces, commas, <code>lb</code> and <code>@</code> are all ' +
+        'fine. Names are matched loosely, so “hack squat” finds the hack squat ' +
+        'machine; anything genuinely new is added to your library.</p>' +
+    '</details>' +
+
+    '<div class="impview" id="impView"></div>' +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="impRun" disabled>Add to my log</button>' +
+    '</div>',
+  "import");
+
+  $("impText").addEventListener("input", previewImport);
+  previewImport();
+}
+
+/* Live read-back of what the text would become — including the lines it
+   could NOT read, because an import you can't check is one you can't trust. */
+function previewImport(){
+  var box = $("impView");
+  var btn = $("impRun");
+  if(!box || !btn) return;
+
+  var text = $("impText").value;
+
+  if(!text.trim()){
+    lastImport = null;
+    btn.disabled = true;
+    box.innerHTML = '<p class="hint">Nothing to read yet.</p>';
+    return;
+  }
+
+  var parsed = IL.plan.parseImport(text);
+  lastImport = parsed;
+  btn.disabled = !parsed.sessions.length;
+
+  if(!parsed.sessions.length){
+    box.innerHTML = '<p class="impwarn">No sessions found yet — every workout ' +
+      'needs a line starting with its date, above its exercises.</p>';
+    return;
+  }
+
+  var first = parsed.sessions[0];
+  var last = parsed.sessions[parsed.sessions.length - 1];
+
+  box.innerHTML =
+    '<div class="settotal">' +
+      '<span>' + parsed.sessions.length +
+        (parsed.sessions.length === 1 ? " session" : " sessions") + '</span>' +
+      '<b>' + parsed.sets + ' sets · ' +
+        parsed.volume.toLocaleString() + ' ' + esc(unit()) + '</b>' +
+    '</div>' +
+    '<p class="hint">' + esc(formatDay(first.at)) +
+      (parsed.sessions.length > 1 ? " to " + esc(formatDay(last.at)) : "") + '</p>' +
+
+    parsed.sessions.map(function(sn){
+      return '<div class="improw">' +
+        '<span>' + esc(formatDay(sn.at)) + '</span>' +
+        '<b>' + esc(sn.dayName || "Imported") + '</b>' +
+        '<small>' + sn.entries.length + ' exercises</small>' +
+      '</div>';
+    }).join("") +
+
+    (parsed.unknown.length
+      ? '<p class="hint">New to the app, and added to your library: ' +
+          esc(parsed.unknown.join(", ")) + '.</p>'
+      : "") +
+
+    (parsed.errors.length
+      ? '<p class="impwarn">' + parsed.errors.length +
+          (parsed.errors.length === 1 ? " line skipped" : " lines skipped") + ' — ' +
+          esc(parsed.errors.slice(0, 4).map(function(x){
+            return "line " + x.line + " (" + x.why + ")";
+          }).join(", ")) + '.</p>'
+      : "");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -957,6 +1259,10 @@ IL.ui = {
   refreshSetTotal: refreshSetTotal,
   exerciseSheet: exerciseSheet,
   librarySheet: librarySheet,
+  builderSheet: builderSheet,
+  importSheet: importSheet,
+  previewImport: previewImport,
+  get lastImport(){ return lastImport; },
   skipSheet: skipSheet,
   weightSheet: weightSheet
 };

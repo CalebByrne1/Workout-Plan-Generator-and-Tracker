@@ -11,10 +11,14 @@
        days:    [ { id, name, tag, notes, ex: [ exercise ] } x4 ]
        history: [ session | skip ]        always sorted oldest → newest
        body:    [ { at, w } ]             bodyweight log, one entry per day
-       prefs:   { unit, step, autoRest, restCompound, restOther }
+       custom:  [ libEntry ]              exercises you added on the phone
+       prefs:   { unit, step, autoRest, restCompound, restOther,
+                  autoProgress, variety }
      }
 
-     exercise = { uid, name, sets, reps, weight, note, log }
+     exercise = { uid, name, sets, reps, weight, note, log,
+                  pin, rotAge, progress }
+     libEntry = { name, group, type, sets, reps, pattern, bw }
 
    A SET IS NOT A CHECKBOX. log[k] is either null (not done yet) or an array
    of segments — [{ w, r }, ...] — because one set can be several weights.
@@ -41,7 +45,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 3;
+var SCHEMA = 4;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -106,6 +110,13 @@ function repTop(reps){
   return found ? parseInt(found[found.length - 1], 10) : 8;
 }
 
+/* Bottom of a "6-8" style target — the number a set has to clear to count
+   as on-plan. Progression reads both ends. */
+function repBottom(reps){
+  var found = String(reps).match(/\d+/g);
+  return found ? parseInt(found[0], 10) : 8;
+}
+
 /* Every whole number in the target, for the one-tap rep chips. */
 function repChoices(reps){
   var found = String(reps).match(/\d+/g);
@@ -142,8 +153,146 @@ function topWeight(segs){
 function isLogged(e, k){ return !!(e.log && e.log[k] && e.log[k].length); }
 
 /* --------------------------------------------------------------------------
+   The exercise library
+
+   Two sources, one list: the built-in library in data.js and whatever you
+   have added from the phone, which lives in the save file. A custom entry
+   with a built-in's name REPLACES it rather than sitting alongside, so
+   re-adding "Calf Raise" with a different rep target is how you correct one.
+   -------------------------------------------------------------------------- */
+
+/* Guarded because seed() runs while state is still being built — the very
+   first plan is laid out before there is a save file to read from. */
+function customLib(){ return (state && state.custom) || []; }
+
+function libLookup(name){
+  var mine = customLib();
+  for(var i = 0; i < mine.length; i++){
+    if(mine[i].name === name) return mine[i];
+  }
+  return data.LIB_BY_NAME[name] ||
+         Object.assign({ name:name }, data.CUSTOM_DEFAULTS);
+}
+
+function libAll(){
+  var out = data.LIB.map(function(r){ return data.LIB_BY_NAME[r[1]]; });
+  var at = {};
+  out.forEach(function(x, i){ at[x.name] = i; });
+
+  customLib().forEach(function(c){
+    if(at[c.name] === undefined) out.push(c);
+    else out[at[c.name]] = c;
+  });
+  return out;
+}
+
+function isCustom(name){
+  return customLib().some(function(c){ return c.name === name; });
+}
+
+/* Punctuation-blind key, so "Hack-Squat machine" and "hack squat machine"
+   are the same string to compare. */
+function normName(s){
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/* Loosely typed name -> the canonical one, or "" when it's genuinely new.
+   An exact match wins; failing that a partial only counts when exactly one
+   exercise matches, because silently turning "squat" into "Split Squat"
+   would put the wrong numbers in the log. */
+function libResolve(name){
+  var want = normName(name);
+  if(!want) return "";
+
+  var all = libAll();
+  var i;
+  for(i = 0; i < all.length; i++){
+    if(normName(all[i].name) === want) return all[i].name;
+  }
+
+  var hits = all.filter(function(x){
+    var n = normName(x.name);
+    return n.indexOf(want) >= 0 || want.indexOf(n) >= 0;
+  });
+  return hits.length === 1 ? hits[0].name : "";
+}
+
+function addCustomExercise(spec){
+  var name = String(spec.name || "").trim().replace(/\s+/g, " ");
+  if(!name) return null;
+
+  var d = data.CUSTOM_DEFAULTS;
+  var entry = {
+    name: name,
+    group: String(spec.group || d.group).trim() || d.group,
+    type: /^(compound|support|small)$/.test(spec.type) ? spec.type : d.type,
+    sets: clampSets(spec.sets || d.sets),
+    reps: String(spec.reps || d.reps).trim() || d.reps,
+    pattern: data.PATTERN_LABEL[spec.pattern] ? spec.pattern : "",
+    bw: !!spec.bw
+  };
+
+  state.custom = customLib().filter(function(c){ return c.name !== name; });
+  state.custom.push(entry);
+  state.custom.sort(function(a, b){ return a.name.localeCompare(b.name); });
+  save();
+  return entry;
+}
+
+/* Only ever forgets the library entry. Sessions already logged against the
+   name keep it, and so does any day still using it — removing the entry
+   just stops it being offered. */
+function removeCustomExercise(name){
+  var mine = customLib();
+  var kept = mine.filter(function(c){ return c.name !== name; });
+  if(kept.length === mine.length) return false;
+  state.custom = kept;
+  save();
+  return true;
+}
+
+/* Everything that could do this exercise's job: same movement pattern, same
+   weight class. A blank pattern gives a pool of one, which is how you hold
+   an exercise still — the app has not been told what it could stand in for. */
+function poolFor(name){
+  var me = libLookup(name);
+  if(!me.pattern) return [name];
+
+  return libAll().filter(function(x){
+    return x.pattern === me.pattern && x.type === me.type;
+  }).map(function(x){ return x.name; });
+}
+
+function patternOf(name){ return libLookup(name).pattern || ""; }
+
+function varietyRules(){
+  return data.VARIETY[state.prefs.variety] || data.VARIETY.medium;
+}
+
+/* --------------------------------------------------------------------------
    Seeding, loading, migrating
    -------------------------------------------------------------------------- */
+
+/* One exercise as it sits in a day's plan.
+
+   pin       keeps auto-rotation off this slot
+   rotAge    visits to this day since the slot last changed hands
+   progress  what the last finish decided — the chip on the row */
+function planned(name, sets, reps){
+  var def = libLookup(name);
+  return {
+    uid: uid(),
+    name: name,
+    sets: clampSets(sets || def.sets),
+    reps: String(reps || def.reps),
+    weight: 0,
+    note: "",
+    log: [],
+    pin: false,
+    rotAge: 0,
+    progress: null
+  };
+}
 
 function seed(){
   return {
@@ -157,13 +306,17 @@ function seed(){
         tag: t.tag,
         notes: "",
         ex: t.plan.map(function(p){
-          return { uid:uid(), name:p[0], sets:p[1], reps:p[2], weight:0, note:"", log:[] };
+          return planned(p[0], p[1], p[2]);
         })
       };
     }),
     history: [],
     body: [],
-    prefs: { unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90 }
+    custom: [],
+    prefs: {
+      unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
+      autoProgress:true, variety:"medium"
+    }
   };
 }
 
@@ -215,21 +368,37 @@ function migrateToV3(saved){
   return saved;
 }
 
+/* schema 3 knew nothing about custom exercises or auto-progression, so the
+   plan it saved has never been advanced. Every new field has a sensible
+   default and the first finished session takes it from there. */
+function migrateToV4(saved){
+  saved.custom = saved.custom || [];
+  saved.schema = 4;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
   saved.prefs = Object.assign(seed().prefs, saved.prefs || {});
   saved.history = saved.history || [];
   saved.body = saved.body || [];
+  saved.custom = Array.isArray(saved.custom) ? saved.custom : [];
   saved.cycle = saved.cycle || 1;
   saved.day = saved.day || 0;
   saved.days.forEach(function(d){ d.notes = d.notes || ""; });
 
   if(!saved.schema || saved.schema < 2) migrateToV2(saved);
   if(saved.schema < 3) migrateToV3(saved);
+  if(saved.schema < 4) migrateToV4(saved);
 
   saved.days.forEach(function(d){
-    d.ex.forEach(function(e){ if(!Array.isArray(e.log)) e.log = []; });
+    d.ex.forEach(function(e){
+      if(!Array.isArray(e.log)) e.log = [];
+      if(typeof e.pin !== "boolean") e.pin = false;
+      if(typeof e.rotAge !== "number") e.rotAge = 0;
+      if(e.progress === undefined) e.progress = null;
+    });
   });
   saved.history.sort(function(a, b){ return a.at - b.at; });
   saved.body.sort(function(a, b){ return a.at - b.at; });
@@ -279,11 +448,12 @@ function reset(){
 function currentDay(){ return state.days[state.day]; }
 
 function typeOf(name){
-  var found = data.LIB_BY_NAME[name];
-  return found ? found.type : data.CUSTOM_DEFAULTS.type;
+  return libLookup(name).type || data.CUSTOM_DEFAULTS.type;
 }
 
-function isBodyweight(name){ return !!data.BODYWEIGHT[name]; }
+function isBodyweight(name){
+  return !!(data.BODYWEIGHT[name] || libLookup(name).bw);
+}
 
 function restFor(name){
   return typeOf(name) === "compound" ? state.prefs.restCompound : state.prefs.restOther;
@@ -325,6 +495,22 @@ function lastPerformed(){
     }
   }
   return map;
+}
+
+/* The most recent session in which a movement was actually worked, handed
+   over whole — sets planned, target, every rep of every set. This is what
+   the progression rules read to decide the next load. */
+function lastEntryFor(name){
+  for(var i = state.history.length - 1; i >= 0; i--){
+    var h = state.history[i];
+    if(isSkip(h)) continue;
+    for(var j = 0; j < h.entries.length; j++){
+      if(h.entries[j].name === name && h.entries[j].completed > 0){
+        return { at:h.at, unit:h.unit || "lb", entry:h.entries[j] };
+      }
+    }
+  }
+  return null;
 }
 
 /* --------------------------------------------------------------------------
@@ -634,10 +820,7 @@ function summary(){
    Mutations
    -------------------------------------------------------------------------- */
 
-function newExercise(name){
-  var def = data.LIB_BY_NAME[name] || data.CUSTOM_DEFAULTS;
-  return { uid:uid(), name:name, sets:def.sets, reps:def.reps, weight:0, note:"", log:[] };
-}
+function newExercise(name){ return planned(name); }
 
 function clampSets(n){
   return Math.min(MAX_SETS, Math.max(1, parseInt(n, 10) || 1));
@@ -735,7 +918,7 @@ function finishSession(){
     };
   });
 
-  state.history.push({
+  var record = {
     id: uid("h"),
     at: Date.now(),
     kind: "session",
@@ -745,17 +928,25 @@ function finishSession(){
     unit: state.prefs.unit,
     volume: Math.round(volume),
     entries: entries
-  });
+  };
+
+  state.history.push(record);
   sortHistory();   /* a backdated skip may already sit after "now" */
 
   day.ex.forEach(function(e){ e.log = []; });
   day.notes = "";
 
+  /* Set the day up for next time while the session is still in hand: loads
+     move on what you actually hit, and a slot or two may change hands. It
+     happens here rather than in app.js so every route to a finished session
+     gets the same treatment. */
+  var changes = IL.plan ? IL.plan.advance(day, record) : [];
+
   if(state.day === state.days.length - 1) state.cycle++;
   state.day = (state.day + 1) % state.days.length;
 
   save();
-  return day;
+  return { day:day, record:record, changes:changes };
 }
 
 /* --------------------------------------------------------------------------
@@ -856,7 +1047,9 @@ IL.store = {
   fromDayKey: fromDayKey,
   daysBetween: daysBetween,
 
+  uid: uid,
   repTop: repTop,
+  repBottom: repBottom,
   repChoices: repChoices,
   totalReps: totalReps,
   segmentVolume: segmentVolume,
@@ -864,6 +1057,16 @@ IL.store = {
   isLogged: isLogged,
 
   currentDay: currentDay,
+  customLib: customLib,
+  libLookup: libLookup,
+  libAll: libAll,
+  libResolve: libResolve,
+  isCustom: isCustom,
+  addCustomExercise: addCustomExercise,
+  removeCustomExercise: removeCustomExercise,
+  poolFor: poolFor,
+  patternOf: patternOf,
+  varietyRules: varietyRules,
   typeOf: typeOf,
   isBodyweight: isBodyweight,
   restFor: restFor,
@@ -872,6 +1075,7 @@ IL.store = {
   exerciseVolume: exerciseVolume,
   lastPerformed: lastPerformed,
 
+  planned: planned,
   newExercise: newExercise,
   clampSets: clampSets,
   setSets: setSets,
@@ -886,6 +1090,8 @@ IL.store = {
   finishSession: finishSession,
 
   isSkip: isSkip,
+  sortHistory: sortHistory,
+  lastEntryFor: lastEntryFor,
   sessionsOnly: sessionsOnly,
   skipsOnly: skipsOnly,
   findEntry: findEntry,

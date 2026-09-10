@@ -67,6 +67,106 @@ The third tab turns the log into four things worth looking at.
 
 Tap or drag across any chart to read off a specific day.
 
+## The plan moves on its own
+
+Finishing a session doesn't just save it — it sets up the next visit to that
+day. Two things happen, and both are visible: every exercise carries a chip
+saying what was decided and why, and a line above the day sums it up.
+
+### Progressive overload
+
+Double progression, applied per exercise from the sets you actually logged:
+
+| What you did | What happens next time |
+| --- | --- |
+| Every planned set at the **top** of the rep range | **+1 weight step** on the bar |
+| Everything **inside** the range | Same load — chase the top of the range |
+| **Two or more** sets under the **bottom** of the range | **−10%**, rounded down to a step |
+| Sets you simply didn't log | Nothing. A short session isn't too much weight |
+
+Bodyweight movements have no bar to load, so clearing the top of the range
+moves the **rep target** up by one instead (`6-10` becomes `7-11`). Hang plates
+off yourself and it switches back to loading them.
+
+Nothing here invents a number. Every decision comes from a set you logged,
+which is why an empty log leaves the plan alone.
+
+### Variety
+
+Each row in a day is a **slot** with a job — "horizontal press", "hip hinge",
+"calf". An exercise can only ever be replaced by another one with the same
+**movement pattern** and the same **weight class**, so a heavy press is swapped
+for another heavy press and never for a cable fly.
+
+Three rules keep it from becoming a shuffle:
+
+- **Age.** An exercise survives a few visits before it's eligible — nothing
+  moves the week after it arrived. Compounds wait longest.
+- **Recency.** The replacement is whichever candidate you've gone longest
+  without doing, so you walk around the pool rather than bounce between two.
+- **Restraint.** At most one or two slots change per visit, and never two heavy
+  compounds at once. Walking in with no idea what any of it should weigh is
+  the opposite of progressive overload.
+
+Set the pace in **Log → Variety** (Off / Low / Medium / High), or hold a single
+exercise still with **Edit → This slot → Keep**. Two days can never land on the
+same exercise in the same week.
+
+A swapped-in exercise opens at whatever your log says you last did on it. If
+it's genuinely new, it opens blank and says so.
+
+## Adding exercises
+
+**Log → any exercise → Edit → Swap**, or **+ Add exercise**, then type a name.
+If nothing in the library matches, you get **Add "…"**, which opens a short
+form: body part, weight class, sets, reps, and **what job it does**.
+
+That last field is the only one that isn't cosmetic — it's the movement pattern
+rotation reads. Tag a hack squat as *Squat pattern* and it can stand in for the
+V-squat, and the V-squat for it. Leave it blank and the exercise simply never
+rotates, which is a fine answer for something you always want to do.
+
+Your exercises sit in the same list as the built-ins with an **Edit** button
+next to them. Giving one the same name as a built-in replaces it, which is how
+you correct a rep target or a rest length you disagree with.
+
+## Importing training you already did
+
+**Log → + Past workouts.** Type up what you've already done — a notebook page,
+months of it at once — in roughly the shorthand you'd write anyway:
+
+```
+2026-08-25 Upper A
+Incline Smith Press 135x8 135x8 145x6
+Barbell Bent-Over Row 155x8x3
+Pull-Ups BWx9 BWx7
+note: incline felt easy
+
+8/27 Lower A
+Hack Squat 250x8x4
+Barbell RDL 185x8 185x8 195x6
+```
+
+- A line starting with a **date** starts a new day; what follows names the
+  workout. `2026-08-25`, `8/25`, `8/25/26`, `Aug 25` and `yesterday` all work,
+  and a bare month/day means the most recent one that isn't in the future.
+- Every other line is one exercise: its name, then its sets.
+- `135x8 135x8 145x6` — three sets · `155x8x3` — that set three times ·
+  `185x5+155x3` — one set with a drop in it · `BWx9` — bodyweight ·
+  `45 45 45` — reps with nothing on the bar.
+- Spaces, commas, `lb` and `@` are all fine. Names match loosely, so
+  "hack squat" finds the hack squat machine; anything genuinely new is added
+  to your library.
+
+A live preview shows what it will become **and which lines it couldn't read**,
+before anything is written. An import you can't check is one you can't trust.
+
+Imported sessions are indistinguishable from logged ones everywhere
+downstream — charts, totals, "last time" lines. On commit, every working weight
+in the rotation is re-derived from the log, so the plan opens where you
+actually are rather than at zero. **Log → Re-seed** does the same thing on
+demand.
+
 ## Files
 
 ```
@@ -74,6 +174,7 @@ index.html            markup only
 style.css             all styling; the colour tokens are at the top
 js/data.js            THE PROGRAM — exercise library and the four day templates
 js/store.js           state shape, localStorage, and the domain logic
+js/plan.js            progressive overload, auto-rotation, and the importer
 js/chart.js           the SVG charts on the Progress tab; no library
 js/ui.js              everything that produces markup
 js/app.js             event wiring, rest timer, boot
@@ -88,6 +189,25 @@ runs when you double-click `index.html`. Modules would require a web server.
 Each file hangs itself off a shared `window.IL` namespace and they must load in
 the order `index.html` lists them.
 
+## On a phone
+
+The layout is built for a phone held in one hand, and a few things are nailed
+down on purpose:
+
+- **Double-tap never zooms.** `touch-action: manipulation` tells the browser
+  the document has no double-tap gesture, so tapping **+** twice quickly is
+  ten pounds rather than a zoom — and the 300ms wait-and-see delay before every
+  tap registers goes with it.
+- **Focusing a field never zooms.** Every input is at least 16px; Safari zooms
+  the page to meet anything smaller and then leaves you scrolled sideways.
+- **Buttons aren't selectable**, so a fast second tap can't start a selection
+  or raise the magnifier.
+- **Pinch-zoom still works.** It's deliberately left alone — it's the only way
+  back for anyone who needs the text bigger, and nobody pinches by accident.
+
+The steppers in the set logger update in place rather than rebuilding the
+sheet, so holding down **+** keeps up with you.
+
 ## Running it locally
 
 Double-click `index.html`. That's it.
@@ -97,8 +217,14 @@ only matters once it's hosted.
 
 ## Changing the program
 
-Edit `js/data.js`. The exercise library is `[group, name, type, sets, reps]`,
-and `TEMPLATES` is the four days.
+Edit `js/data.js`. The exercise library is
+`[group, name, type, sets, reps, pattern]`, `PATTERNS` is the list of jobs an
+exercise can do, `VARIETY` is how fast rotation moves, and `TEMPLATES` is the
+four days.
+
+You don't need to touch this file to add an exercise — the app does that (see
+**Adding exercises** above) and keeps it in your save file. Editing here is for
+changing what a *fresh* install starts with.
 
 **These only affect a fresh start.** Once the app has saved a plan, it uses the
 saved one. To pick up your edits, hit **Reset** at the bottom of the Log tab —

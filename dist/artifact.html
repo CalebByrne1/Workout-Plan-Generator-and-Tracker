@@ -86,7 +86,18 @@
    ========================================================================== */
 
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+
+/* Locked in for a phone.
+
+   touch-action:manipulation is the line that stops a double tap zooming: it
+   tells the browser this document has no double-tap gesture, so the second
+   tap of a quick +5 +5 is another +5 and the 300ms wait-and-see disappears
+   with it. Pinch-zoom is deliberately NOT disabled — it is the only way back
+   for anyone who needs the text bigger, and nobody pinches by accident. */
+html{
+  -webkit-text-size-adjust:100%;
+  touch-action:manipulation;
+}
 
 /* An author `display` beats the browser's own [hidden] rule, so anything
    given a display here — .actionbar, .sheet — would ignore `el.hidden`
@@ -105,7 +116,15 @@ body{
 }
 
 button,input,textarea,select{font:inherit;color:inherit}
-button{background:none;border:0;padding:0;cursor:pointer;color:inherit}
+
+/* A fast second tap on a button used to start selecting its label and put
+   the magnifier up. Buttons are for pressing; nothing in one needs copying. */
+button{
+  background:none;border:0;padding:0;cursor:pointer;color:inherit;
+  touch-action:manipulation;
+  -webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;
+}
 img{max-width:100%}
 h1,h2,h3{margin:0;font-family:var(--font-d);font-weight:600;text-wrap:balance}
 p{margin:0}
@@ -127,7 +146,9 @@ input[type="number"]{
   border-radius:var(--r);
   padding:11px 12px;
   color:var(--ink);
-  font-size:15px;   /* 16px or below zooms iOS on focus only under 16 — this is safe at 15 with the viewport lock */
+  /* Never below 16px. Safari zooms the page to meet any field smaller than
+     that when it takes focus, and then leaves you scrolled sideways. */
+  font-size:16px;
 }
 textarea{resize:vertical;min-height:80px;line-height:1.5}
 input[type="number"]{font-family:var(--font-m);font-variant-numeric:tabular-nums;text-align:center}
@@ -417,10 +438,30 @@ main{flex:1;padding-bottom:8px}
 }
 .lib-group:first-of-type{margin-top:0;padding-top:0;border-top:0}
 
+/* A row is the pick button plus, for your own exercises, a way into the
+   editor. Two buttons rather than one, because a button inside a button is
+   not a thing. */
+.lib-row{display:flex;align-items:stretch;gap:8px;border-bottom:1px solid var(--line-soft)}
+.lib-row:last-child{border-bottom:0}
+
 .lib-item{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
-  width:100%;min-height:48px;padding:12px 2px;text-align:left;
-  border-bottom:1px solid var(--line-soft);
+  flex:1;min-width:0;min-height:48px;padding:12px 2px;text-align:left;
+}
+.lib-row .lib-item{border-bottom:0}
+.lib-item strong{min-width:0;overflow-wrap:anywhere}
+
+.lib-item.solo{
+  border:1px dashed var(--accent);border-radius:var(--r);
+  margin-bottom:10px;padding:12px;
+}
+.lib-item.solo .d{color:var(--accent)}
+
+.lib-edit{
+  flex:none;align-self:center;padding:8px 10px;
+  border:1px solid var(--line);border-radius:8px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);
 }
 .lib-item strong{font-family:var(--font-d);font-size:17px;font-weight:500;letter-spacing:.01em;line-height:1.15}
 .lib-item .d{
@@ -624,7 +665,7 @@ select{
   border-radius:var(--r);
   padding:11px 12px;
   color:var(--ink);
-  font-size:15px;
+  font-size:16px;      /* as above: under 16 and focusing it zooms iOS */
 }
 input[type="date"]{
   -webkit-appearance:none;appearance:none;
@@ -802,6 +843,125 @@ input[type="date"]{
   font-variant-numeric:tabular-nums;
 }
 
+
+/* ==========================================================================
+   What the last session changed
+
+   Four states, and never colour alone: each carries its own word. Amber for
+   a load that went up, teal for one deliberately backed off, plain ink for
+   a hold, and an accent rule down the side for a slot that changed hands.
+   ========================================================================== */
+
+.planbar{
+  display:flex;align-items:baseline;gap:10px;
+  margin:0 14px 12px;padding:9px 12px;
+  border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:var(--r);background:var(--surface);
+}
+.planbar .k{
+  flex:none;font-family:var(--font-m);font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.planbar b{font-family:var(--font-d);font-size:14px;font-weight:600;letter-spacing:.03em}
+
+.ex-plan{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 7px;
+  margin-top:9px;padding-left:9px;
+  border-left:2px solid var(--line);
+  font-size:12px;line-height:1.4;
+}
+.ex-plan b{
+  font-family:var(--font-m);font-size:11.5px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.ex-plan span{color:var(--ink-3)}
+
+.ex-plan[data-kind="up"]{border-left-color:var(--accent)}
+.ex-plan[data-kind="up"] b{color:var(--accent)}
+.ex-plan[data-kind="down"]{border-left-color:var(--good)}
+.ex-plan[data-kind="down"] b{color:var(--good)}
+.ex-plan[data-kind="swap"]{border-left-color:var(--accent);background:var(--accent-soft);
+  padding:7px 9px;border-radius:0 6px 6px 0}
+.ex-plan[data-kind="swap"] b{color:var(--accent)}
+.ex-plan[data-kind="hold"] b,
+.ex-plan[data-kind="open"] b{color:var(--ink-2)}
+
+
+/* ==========================================================================
+   Settings rows that need the full width for their control
+   ========================================================================== */
+
+.setrow.stack{
+  display:block;
+  padding:4px 0 2px;
+}
+.setrow.stack .k{margin-bottom:8px}
+.setrow.stack .k small{margin-top:2px}
+
+.rowbtns.two{grid-template-columns:1fr 1fr}
+
+
+/* ==========================================================================
+   Importing past training
+   ========================================================================== */
+
+textarea.tall{
+  min-height:190px;
+  /* 16px like every other field: anything smaller and Safari zooms the page
+     to meet it the moment it takes focus. */
+  font-family:var(--font-m);font-size:16px;line-height:1.5;
+  font-variant-numeric:tabular-nums;
+  /* Keep the line breaks that separate one day from the next, but let a long
+     exercise line wrap. A sideways scrollbar inside a sheet that already
+     scrolls down is a fight on a touchscreen. */
+  white-space:pre-wrap;overflow-wrap:break-word;
+}
+
+/* The format guide. Closed by default — it is reference, not instruction,
+   and the placeholder in the box above already shows the shape. */
+.fmt{
+  border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);
+}
+.fmt summary{
+  padding:12px 13px;cursor:pointer;
+  font-family:var(--font-d);font-size:14px;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);
+}
+.fmt ul{margin:0;padding:0 14px 4px 30px;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.fmt li{margin-bottom:4px}
+.fmt li b{font-weight:600;color:var(--ink)}
+.fmt .hint{padding:0 14px 13px}
+.fmt code{
+  font-family:var(--font-m);font-size:11.5px;
+  padding:1px 5px;border-radius:4px;
+  background:var(--surface-2);color:var(--ink);
+}
+
+.impview{display:flex;flex-direction:column;gap:8px}
+
+.improw{
+  display:flex;align-items:baseline;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--line-soft);
+}
+.improw:last-child{border-bottom:0}
+.improw span{
+  flex:none;width:74px;
+  font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+}
+.improw b{flex:1;min-width:0;font-family:var(--font-d);font-size:14px;font-weight:600}
+.improw small{flex:none;font-size:11px;color:var(--ink-3)}
+
+/* Lines the parser could not read. Stated plainly rather than hidden — an
+   import you cannot check is one you cannot trust. */
+.impwarn{
+  padding:10px 12px;border-radius:var(--r);
+  border:1px solid var(--danger);
+  font-size:12.5px;line-height:1.45;color:var(--danger);
+}
+
+.rowbtns button[disabled]{opacity:.45}
+
 </style>
 
 <div class="app">
@@ -852,7 +1012,8 @@ input[type="date"]{
 
    Note: changing these only affects a FRESH start. Once the app has saved a
    plan to localStorage it uses that, so edits here won't show up until you
-   hit Reset in the Log tab (or clear site data).
+   hit Reset in the Log tab (or clear site data). Exercises you add from the
+   phone live in the save file, not here — see store.libAll().
    ========================================================================== */
 
 window.IL = window.IL || {};
@@ -861,77 +1022,218 @@ window.IL = window.IL || {};
 "use strict";
 
 /* --------------------------------------------------------------------------
+   Movement patterns
+
+   A pattern is "what job does this exercise do in the session". It is the
+   thing that makes auto-rotation safe: a slot can only ever be refilled by
+   another exercise with the same pattern AND the same type, so a heavy press
+   gets swapped for another heavy press and never for a cable fly.
+
+   Pool = same pattern + same type. That's the whole rule. Add an exercise
+   with an existing pattern and it joins that rotation automatically.
+   -------------------------------------------------------------------------- */
+var PATTERNS = [
+  ["push-horiz","Horizontal press"],
+  ["push-vert","Overhead press"],
+  ["push-fly","Chest fly"],
+  ["pull-horiz","Row"],
+  ["pull-vert","Pulldown / pull-up"],
+  ["delt-lat","Lateral raise"],
+  ["delt-rear","Rear delt"],
+  ["trap","Shrug"],
+  ["curl","Biceps curl"],
+  ["triceps","Triceps extension"],
+  ["forearm","Forearm"],
+  ["squat","Squat pattern"],
+  ["hinge","Hip hinge"],
+  ["lunge","Single leg"],
+  ["quad-iso","Quad isolation"],
+  ["ham-iso","Hamstring isolation"],
+  ["glute","Glute"],
+  ["abduct","Abduction"],
+  ["adduct","Adduction"],
+  ["calf","Calf"],
+  ["core-flex","Trunk flexion"],
+  ["core-brace","Bracing / anti-extension"],
+  ["core-rot","Rotation"],
+  ["carry","Loaded carry"]
+];
+
+var PATTERN_LABEL = {};
+PATTERNS.forEach(function(p){ PATTERN_LABEL[p[0]] = p[1]; });
+
+/* --------------------------------------------------------------------------
    Exercise library — everything at your gym, grouped by what it trains.
 
-   [ group, name, type, default sets, default reps ]
+   [ group, name, type, default sets, default reps, pattern ]
 
-   type drives two defaults:
-     compound  heaviest movements, 3:00 rest
+   type drives the rest timer and how eagerly the exercise rotates:
+     compound  heaviest movements, 3:00 rest, rotates slowly
      support   secondary movements, 1:30 rest
      small     arms / calves / abs,  1:30 rest
    -------------------------------------------------------------------------- */
 var LIB = [
-  ["Chest","Incline Smith Press","compound",4,"6-8"],
-  ["Chest","Flat Smith Press","compound",4,"6-8"],
-  ["Chest","Incline DB Press","compound",4,"8-10"],
-  ["Chest","Flat DB Press","compound",4,"8-12"],
-  ["Chest","Seated Chest Press Machine","compound",3,"8-10"],
-  ["Chest","Chest Fly Machine","support",3,"12-15"],
-  ["Chest","Dips","compound",3,"8-10"],
+  ["Chest","Incline Smith Press","compound",4,"6-8","push-horiz"],
+  ["Chest","Flat Smith Press","compound",4,"6-8","push-horiz"],
+  ["Chest","Incline Barbell Bench Press","compound",4,"6-8","push-horiz"],
+  ["Chest","Flat Barbell Bench Press","compound",4,"6-8","push-horiz"],
+  ["Chest","Incline DB Press","compound",4,"8-10","push-horiz"],
+  ["Chest","Flat DB Press","compound",4,"8-12","push-horiz"],
+  ["Chest","Decline Smith Press","compound",3,"8-10","push-horiz"],
+  ["Chest","Seated Chest Press Machine","compound",3,"8-10","push-horiz"],
+  ["Chest","Incline Chest Press Machine","compound",3,"8-10","push-horiz"],
+  ["Chest","Dips","compound",3,"8-10","push-horiz"],
+  ["Chest","Push-Ups","support",3,"12-20","push-horiz"],
+  ["Chest","Chest Fly Machine","support",3,"12-15","push-fly"],
+  ["Chest","Pec Deck","support",3,"12-15","push-fly"],
+  ["Chest","Cable Fly (High to Low)","support",3,"12-15","push-fly"],
+  ["Chest","Cable Fly (Low to High)","support",3,"12-15","push-fly"],
+  ["Chest","Incline DB Fly","support",3,"12-15","push-fly"],
 
-  ["Back","Barbell Bent-Over Row","compound",4,"6-8"],
-  ["Back","Pull-Ups","compound",4,"6-10"],
-  ["Back","Chest-Supported DB Row","support",3,"8-10"],
-  ["Back","Cable Lat Pulldown","support",3,"8-10"],
-  ["Back","Lat Pulldown Machine","support",3,"10-12"],
-  ["Back","Seated Cable Low Row","support",3,"8-10"],
-  ["Back","Chest-Supported Row Machine","support",3,"10-12"],
+  ["Back","Barbell Bent-Over Row","compound",4,"6-8","pull-horiz"],
+  ["Back","Pendlay Row","compound",4,"6-8","pull-horiz"],
+  ["Back","T-Bar Row","compound",4,"8-10","pull-horiz"],
+  ["Back","Chest-Supported DB Row","support",3,"8-10","pull-horiz"],
+  ["Back","Single-Arm DB Row","support",3,"8-10","pull-horiz"],
+  ["Back","Seated Cable Low Row","support",3,"8-10","pull-horiz"],
+  ["Back","Chest-Supported Row Machine","support",3,"10-12","pull-horiz"],
+  ["Back","Seated Row Machine","support",3,"10-12","pull-horiz"],
+  ["Back","Landmine Row","support",3,"10-12","pull-horiz"],
+  ["Back","Inverted Row","support",3,"10-15","pull-horiz"],
+  ["Back","Pull-Ups","compound",4,"6-10","pull-vert"],
+  ["Back","Chin-Ups","compound",4,"6-10","pull-vert"],
+  ["Back","Neutral-Grip Pull-Ups","compound",4,"6-10","pull-vert"],
+  ["Back","Cable Lat Pulldown","support",3,"8-10","pull-vert"],
+  ["Back","Lat Pulldown Machine","support",3,"10-12","pull-vert"],
+  ["Back","Close-Grip Lat Pulldown","support",3,"10-12","pull-vert"],
+  ["Back","Single-Arm Lat Pulldown","support",3,"10-12","pull-vert"],
+  ["Back","Straight-Arm Pulldown","small",3,"12-15","pull-vert"],
+  ["Back","Rear Delt Fly Machine","small",3,"12-15","delt-rear"],
+  ["Back","Cable Face Pull","small",3,"12-15","delt-rear"],
+  ["Back","Bent-Over DB Rear Delt Fly","small",3,"12-15","delt-rear"],
 
-  ["Shoulders","Seated Smith Shoulder Press","compound",3,"6-8"],
-  ["Shoulders","Seated DB Shoulder Press","compound",3,"8-10"],
-  ["Shoulders","Shoulder Press Machine","support",3,"10-12"],
-  ["Shoulders","Cable Lateral Raise","small",3,"12-15"],
-  ["Shoulders","DB Shrugs","small",3,"12-15"],
+  ["Shoulders","Seated Smith Shoulder Press","compound",3,"6-8","push-vert"],
+  ["Shoulders","Seated DB Shoulder Press","compound",3,"8-10","push-vert"],
+  ["Shoulders","Standing Barbell Overhead Press","compound",3,"6-8","push-vert"],
+  ["Shoulders","Arnold Press","compound",3,"8-10","push-vert"],
+  ["Shoulders","Shoulder Press Machine","support",3,"10-12","push-vert"],
+  ["Shoulders","Cable Lateral Raise","small",3,"12-15","delt-lat"],
+  ["Shoulders","DB Lateral Raise","small",3,"12-15","delt-lat"],
+  ["Shoulders","Lateral Raise Machine","small",3,"12-15","delt-lat"],
+  ["Shoulders","Upright Row","small",3,"10-12","delt-lat"],
+  ["Shoulders","DB Shrugs","small",3,"12-15","trap"],
+  ["Shoulders","Barbell Shrugs","small",3,"12-15","trap"],
+  ["Shoulders","Smith Machine Shrugs","small",3,"12-15","trap"],
 
-  ["Arms","DB Bicep Curl","small",3,"10-12"],
-  ["Arms","DB Hammer Curl","small",3,"10-12"],
-  ["Arms","Seated Preacher Curl","small",3,"10-12"],
-  ["Arms","Seated Preacher Hammer Curl","small",3,"10-12"],
-  ["Arms","Incline Seated DB Curl","small",3,"12-15"],
-  ["Arms","Cable Bicep Curl","small",3,"12-15"],
-  ["Arms","Cable Tricep Pushdown","small",3,"10-12"],
-  ["Arms","Tricep Pushdown Machine","small",3,"12-15"],
-  ["Arms","Overhead DB Tricep Extension","small",3,"12-15"],
-  ["Arms","DB Wrist Curl","small",3,"15-20"],
+  ["Arms","DB Bicep Curl","small",3,"10-12","curl"],
+  ["Arms","DB Hammer Curl","small",3,"10-12","curl"],
+  ["Arms","Seated Preacher Curl","small",3,"10-12","curl"],
+  ["Arms","Seated Preacher Hammer Curl","small",3,"10-12","curl"],
+  ["Arms","Incline Seated DB Curl","small",3,"12-15","curl"],
+  ["Arms","Cable Bicep Curl","small",3,"12-15","curl"],
+  ["Arms","EZ-Bar Curl","small",3,"8-10","curl"],
+  ["Arms","Barbell Curl","small",3,"8-10","curl"],
+  ["Arms","Concentration Curl","small",3,"12-15","curl"],
+  ["Arms","Reverse Curl","small",3,"12-15","curl"],
+  ["Arms","Machine Preacher Curl","small",3,"10-12","curl"],
+  ["Arms","Cable Tricep Pushdown","small",3,"10-12","triceps"],
+  ["Arms","Rope Tricep Pushdown","small",3,"12-15","triceps"],
+  ["Arms","Tricep Pushdown Machine","small",3,"12-15","triceps"],
+  ["Arms","Overhead DB Tricep Extension","small",3,"12-15","triceps"],
+  ["Arms","Overhead Cable Tricep Extension","small",3,"12-15","triceps"],
+  ["Arms","EZ-Bar Skullcrusher","small",3,"10-12","triceps"],
+  ["Arms","Bench Dips","small",3,"12-15","triceps"],
+  ["Arms","DB Tricep Kickback","small",3,"12-15","triceps"],
+  ["Arms","Close-Grip Bench Press","support",3,"8-10","triceps"],
+  ["Arms","DB Wrist Curl","small",3,"15-20","forearm"],
+  ["Arms","Reverse Wrist Curl","small",3,"15-20","forearm"],
 
-  ["Legs","V-Squat Machine","compound",4,"6-8"],
-  ["Legs","Leg Press","compound",4,"10-12"],
-  ["Legs","Barbell RDL","compound",4,"6-8"],
-  ["Legs","Bulgarian Split Squat","compound",3,"8-10"],
-  ["Legs","Leg Extension","support",3,"12-15"],
-  ["Legs","Seated Leg Curl","support",3,"10-12"],
-  ["Legs","Cable Kickback","small",3,"12-15"],
-  ["Legs","Calf Raise","small",4,"12-15"],
-  ["Legs","Abductor Machine","small",3,"12-15"],
-  ["Legs","Adductor Machine","small",3,"12-15"],
+  ["Legs","V-Squat Machine","compound",4,"6-8","squat"],
+  ["Legs","Hack Squat Machine","compound",4,"6-8","squat"],
+  ["Legs","Pendulum Squat","compound",4,"8-10","squat"],
+  ["Legs","Barbell Back Squat","compound",4,"5-8","squat"],
+  ["Legs","Barbell Front Squat","compound",4,"6-8","squat"],
+  ["Legs","Smith Machine Squat","compound",4,"8-10","squat"],
+  ["Legs","Belt Squat","compound",4,"8-10","squat"],
+  ["Legs","Leg Press","compound",4,"10-12","squat"],
+  ["Legs","Goblet Squat","support",3,"10-12","squat"],
+  ["Legs","Barbell RDL","compound",4,"6-8","hinge"],
+  ["Legs","DB RDL","compound",4,"8-10","hinge"],
+  ["Legs","Barbell Deadlift","compound",4,"5-6","hinge"],
+  ["Legs","Trap-Bar Deadlift","compound",4,"6-8","hinge"],
+  ["Legs","Good Morning","support",3,"8-10","hinge"],
+  ["Legs","Cable Pull-Through","support",3,"12-15","hinge"],
+  ["Legs","45-Degree Back Extension","support",3,"12-15","hinge"],
+  ["Legs","Bulgarian Split Squat","compound",3,"8-10","lunge"],
+  ["Legs","Reverse Lunge","compound",3,"10-12","lunge"],
+  ["Legs","Walking Lunge","compound",3,"10-12","lunge"],
+  ["Legs","Split Squat","compound",3,"8-10","lunge"],
+  ["Legs","DB Step-Up","compound",3,"10-12","lunge"],
+  ["Legs","Leg Extension","support",3,"12-15","quad-iso"],
+  ["Legs","Sissy Squat","support",3,"12-15","quad-iso"],
+  ["Legs","Seated Leg Curl","support",3,"10-12","ham-iso"],
+  ["Legs","Lying Leg Curl","support",3,"10-12","ham-iso"],
+  ["Legs","Standing Leg Curl","support",3,"12-15","ham-iso"],
+  ["Legs","Nordic Curl","support",3,"6-10","ham-iso"],
+  ["Legs","Cable Kickback","small",3,"12-15","glute"],
+  ["Legs","Barbell Hip Thrust","support",3,"8-12","glute"],
+  ["Legs","Machine Hip Thrust","support",3,"10-12","glute"],
+  ["Legs","Glute Kickback Machine","small",3,"12-15","glute"],
+  ["Legs","Glute Bridge","small",3,"12-15","glute"],
+  ["Legs","Abductor Machine","small",3,"12-15","abduct"],
+  ["Legs","Cable Hip Abduction","small",3,"12-15","abduct"],
+  ["Legs","Adductor Machine","small",3,"12-15","adduct"],
+  ["Legs","Cable Hip Adduction","small",3,"12-15","adduct"],
+  ["Legs","Calf Raise","small",4,"12-15","calf"],
+  ["Legs","Standing Calf Raise","small",4,"12-15","calf"],
+  ["Legs","Seated Calf Raise","small",4,"12-15","calf"],
+  ["Legs","Leg Press Calf Raise","small",4,"12-15","calf"],
+  ["Legs","Smith Machine Calf Raise","small",4,"12-15","calf"],
 
-  ["Core","Cable Crunch","small",3,"12-15"],
-  ["Core","Captain's Chair Leg Raise","small",3,"12-15"],
-  ["Core","Hanging Leg Raise","small",3,"10-15"]
+  ["Core","Cable Crunch","small",3,"12-15","core-flex"],
+  ["Core","Machine Crunch","small",3,"12-15","core-flex"],
+  ["Core","Decline Sit-Up","small",3,"12-15","core-flex"],
+  ["Core","Captain's Chair Leg Raise","small",3,"12-15","core-flex"],
+  ["Core","Hanging Leg Raise","small",3,"10-15","core-flex"],
+  ["Core","Ab Wheel Rollout","small",3,"10-12","core-brace"],
+  ["Core","Plank","small",3,"30-60","core-brace"],
+  ["Core","Dead Bug","small",3,"10-12","core-brace"],
+  ["Core","Pallof Press","small",3,"12-15","core-rot"],
+  ["Core","Cable Woodchopper","small",3,"12-15","core-rot"],
+  ["Core","Russian Twist","small",3,"15-20","core-rot"],
+  ["Core","Farmer's Carry","small",3,"30-45","carry"],
+  ["Core","Suitcase Carry","small",3,"30-45","carry"]
 ];
 
 /* Name -> details, so lookups don't scan the array. */
 var LIB_BY_NAME = {};
 LIB.forEach(function(row){
-  LIB_BY_NAME[row[1]] = { group:row[0], type:row[2], sets:row[3], reps:row[4] };
+  LIB_BY_NAME[row[1]] = {
+    group:row[0], name:row[1], type:row[2],
+    sets:row[3], reps:row[4], pattern:row[5]
+  };
 });
 
-/* Loaded by bodyweight — these show BW instead of a blank weight. */
+/* Loaded by bodyweight — these show BW instead of a blank weight, and their
+   progression adds reps rather than plates until you start hanging weight
+   off yourself. */
 var BODYWEIGHT = {
   "Pull-Ups":1,
+  "Chin-Ups":1,
+  "Neutral-Grip Pull-Ups":1,
   "Dips":1,
+  "Push-Ups":1,
+  "Inverted Row":1,
+  "Bench Dips":1,
   "Hanging Leg Raise":1,
-  "Captain's Chair Leg Raise":1
+  "Captain's Chair Leg Raise":1,
+  "Ab Wheel Rollout":1,
+  "Plank":1,
+  "Dead Bug":1,
+  "Nordic Curl":1,
+  "Sissy Squat":1,
+  "Glute Bridge":1,
+  "45-Degree Back Extension":1
 };
 
 /* --------------------------------------------------------------------------
@@ -996,15 +1298,36 @@ var TEMPLATES = [
   }
 ];
 
-/* Defaults applied to an exercise typed in by hand, i.e. not in the library. */
-var CUSTOM_DEFAULTS = { sets:3, reps:"10-12", type:"support" };
+/* Defaults applied to an exercise typed in by hand, i.e. not in the library.
+   An empty pattern means "don't auto-rotate this" — there is nothing to
+   rotate it with until you tell the app what job it does. */
+var CUSTOM_DEFAULTS = {
+  sets:3, reps:"10-12", type:"support", pattern:"", group:"My exercises"
+};
+
+/* --------------------------------------------------------------------------
+   How much variety, and how fast
+
+   cap       most slots that may change on one visit to a day
+   compound  visits a compound must survive before it becomes eligible
+   other     the same, for support and small work
+   -------------------------------------------------------------------------- */
+var VARIETY = {
+  off:    { cap:0, compound:99, other:99, label:"Off" },
+  low:    { cap:1, compound:4,  other:3,  label:"Low" },
+  medium: { cap:2, compound:3,  other:2,  label:"Medium" },
+  high:   { cap:3, compound:2,  other:1,  label:"High" }
+};
 
 IL.data = {
   LIB: LIB,
   LIB_BY_NAME: LIB_BY_NAME,
   BODYWEIGHT: BODYWEIGHT,
   TEMPLATES: TEMPLATES,
-  CUSTOM_DEFAULTS: CUSTOM_DEFAULTS
+  CUSTOM_DEFAULTS: CUSTOM_DEFAULTS,
+  PATTERNS: PATTERNS,
+  PATTERN_LABEL: PATTERN_LABEL,
+  VARIETY: VARIETY
 };
 
 })(window.IL);
@@ -1023,10 +1346,14 @@ IL.data = {
        days:    [ { id, name, tag, notes, ex: [ exercise ] } x4 ]
        history: [ session | skip ]        always sorted oldest → newest
        body:    [ { at, w } ]             bodyweight log, one entry per day
-       prefs:   { unit, step, autoRest, restCompound, restOther }
+       custom:  [ libEntry ]              exercises you added on the phone
+       prefs:   { unit, step, autoRest, restCompound, restOther,
+                  autoProgress, variety }
      }
 
-     exercise = { uid, name, sets, reps, weight, note, log }
+     exercise = { uid, name, sets, reps, weight, note, log,
+                  pin, rotAge, progress }
+     libEntry = { name, group, type, sets, reps, pattern, bw }
 
    A SET IS NOT A CHECKBOX. log[k] is either null (not done yet) or an array
    of segments — [{ w, r }, ...] — because one set can be several weights.
@@ -1053,7 +1380,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 3;
+var SCHEMA = 4;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -1118,6 +1445,13 @@ function repTop(reps){
   return found ? parseInt(found[found.length - 1], 10) : 8;
 }
 
+/* Bottom of a "6-8" style target — the number a set has to clear to count
+   as on-plan. Progression reads both ends. */
+function repBottom(reps){
+  var found = String(reps).match(/\d+/g);
+  return found ? parseInt(found[0], 10) : 8;
+}
+
 /* Every whole number in the target, for the one-tap rep chips. */
 function repChoices(reps){
   var found = String(reps).match(/\d+/g);
@@ -1154,8 +1488,146 @@ function topWeight(segs){
 function isLogged(e, k){ return !!(e.log && e.log[k] && e.log[k].length); }
 
 /* --------------------------------------------------------------------------
+   The exercise library
+
+   Two sources, one list: the built-in library in data.js and whatever you
+   have added from the phone, which lives in the save file. A custom entry
+   with a built-in's name REPLACES it rather than sitting alongside, so
+   re-adding "Calf Raise" with a different rep target is how you correct one.
+   -------------------------------------------------------------------------- */
+
+/* Guarded because seed() runs while state is still being built — the very
+   first plan is laid out before there is a save file to read from. */
+function customLib(){ return (state && state.custom) || []; }
+
+function libLookup(name){
+  var mine = customLib();
+  for(var i = 0; i < mine.length; i++){
+    if(mine[i].name === name) return mine[i];
+  }
+  return data.LIB_BY_NAME[name] ||
+         Object.assign({ name:name }, data.CUSTOM_DEFAULTS);
+}
+
+function libAll(){
+  var out = data.LIB.map(function(r){ return data.LIB_BY_NAME[r[1]]; });
+  var at = {};
+  out.forEach(function(x, i){ at[x.name] = i; });
+
+  customLib().forEach(function(c){
+    if(at[c.name] === undefined) out.push(c);
+    else out[at[c.name]] = c;
+  });
+  return out;
+}
+
+function isCustom(name){
+  return customLib().some(function(c){ return c.name === name; });
+}
+
+/* Punctuation-blind key, so "Hack-Squat machine" and "hack squat machine"
+   are the same string to compare. */
+function normName(s){
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/* Loosely typed name -> the canonical one, or "" when it's genuinely new.
+   An exact match wins; failing that a partial only counts when exactly one
+   exercise matches, because silently turning "squat" into "Split Squat"
+   would put the wrong numbers in the log. */
+function libResolve(name){
+  var want = normName(name);
+  if(!want) return "";
+
+  var all = libAll();
+  var i;
+  for(i = 0; i < all.length; i++){
+    if(normName(all[i].name) === want) return all[i].name;
+  }
+
+  var hits = all.filter(function(x){
+    var n = normName(x.name);
+    return n.indexOf(want) >= 0 || want.indexOf(n) >= 0;
+  });
+  return hits.length === 1 ? hits[0].name : "";
+}
+
+function addCustomExercise(spec){
+  var name = String(spec.name || "").trim().replace(/\s+/g, " ");
+  if(!name) return null;
+
+  var d = data.CUSTOM_DEFAULTS;
+  var entry = {
+    name: name,
+    group: String(spec.group || d.group).trim() || d.group,
+    type: /^(compound|support|small)$/.test(spec.type) ? spec.type : d.type,
+    sets: clampSets(spec.sets || d.sets),
+    reps: String(spec.reps || d.reps).trim() || d.reps,
+    pattern: data.PATTERN_LABEL[spec.pattern] ? spec.pattern : "",
+    bw: !!spec.bw
+  };
+
+  state.custom = customLib().filter(function(c){ return c.name !== name; });
+  state.custom.push(entry);
+  state.custom.sort(function(a, b){ return a.name.localeCompare(b.name); });
+  save();
+  return entry;
+}
+
+/* Only ever forgets the library entry. Sessions already logged against the
+   name keep it, and so does any day still using it — removing the entry
+   just stops it being offered. */
+function removeCustomExercise(name){
+  var mine = customLib();
+  var kept = mine.filter(function(c){ return c.name !== name; });
+  if(kept.length === mine.length) return false;
+  state.custom = kept;
+  save();
+  return true;
+}
+
+/* Everything that could do this exercise's job: same movement pattern, same
+   weight class. A blank pattern gives a pool of one, which is how you hold
+   an exercise still — the app has not been told what it could stand in for. */
+function poolFor(name){
+  var me = libLookup(name);
+  if(!me.pattern) return [name];
+
+  return libAll().filter(function(x){
+    return x.pattern === me.pattern && x.type === me.type;
+  }).map(function(x){ return x.name; });
+}
+
+function patternOf(name){ return libLookup(name).pattern || ""; }
+
+function varietyRules(){
+  return data.VARIETY[state.prefs.variety] || data.VARIETY.medium;
+}
+
+/* --------------------------------------------------------------------------
    Seeding, loading, migrating
    -------------------------------------------------------------------------- */
+
+/* One exercise as it sits in a day's plan.
+
+   pin       keeps auto-rotation off this slot
+   rotAge    visits to this day since the slot last changed hands
+   progress  what the last finish decided — the chip on the row */
+function planned(name, sets, reps){
+  var def = libLookup(name);
+  return {
+    uid: uid(),
+    name: name,
+    sets: clampSets(sets || def.sets),
+    reps: String(reps || def.reps),
+    weight: 0,
+    note: "",
+    log: [],
+    pin: false,
+    rotAge: 0,
+    progress: null
+  };
+}
 
 function seed(){
   return {
@@ -1169,13 +1641,17 @@ function seed(){
         tag: t.tag,
         notes: "",
         ex: t.plan.map(function(p){
-          return { uid:uid(), name:p[0], sets:p[1], reps:p[2], weight:0, note:"", log:[] };
+          return planned(p[0], p[1], p[2]);
         })
       };
     }),
     history: [],
     body: [],
-    prefs: { unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90 }
+    custom: [],
+    prefs: {
+      unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
+      autoProgress:true, variety:"medium"
+    }
   };
 }
 
@@ -1227,21 +1703,37 @@ function migrateToV3(saved){
   return saved;
 }
 
+/* schema 3 knew nothing about custom exercises or auto-progression, so the
+   plan it saved has never been advanced. Every new field has a sensible
+   default and the first finished session takes it from there. */
+function migrateToV4(saved){
+  saved.custom = saved.custom || [];
+  saved.schema = 4;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
   saved.prefs = Object.assign(seed().prefs, saved.prefs || {});
   saved.history = saved.history || [];
   saved.body = saved.body || [];
+  saved.custom = Array.isArray(saved.custom) ? saved.custom : [];
   saved.cycle = saved.cycle || 1;
   saved.day = saved.day || 0;
   saved.days.forEach(function(d){ d.notes = d.notes || ""; });
 
   if(!saved.schema || saved.schema < 2) migrateToV2(saved);
   if(saved.schema < 3) migrateToV3(saved);
+  if(saved.schema < 4) migrateToV4(saved);
 
   saved.days.forEach(function(d){
-    d.ex.forEach(function(e){ if(!Array.isArray(e.log)) e.log = []; });
+    d.ex.forEach(function(e){
+      if(!Array.isArray(e.log)) e.log = [];
+      if(typeof e.pin !== "boolean") e.pin = false;
+      if(typeof e.rotAge !== "number") e.rotAge = 0;
+      if(e.progress === undefined) e.progress = null;
+    });
   });
   saved.history.sort(function(a, b){ return a.at - b.at; });
   saved.body.sort(function(a, b){ return a.at - b.at; });
@@ -1291,11 +1783,12 @@ function reset(){
 function currentDay(){ return state.days[state.day]; }
 
 function typeOf(name){
-  var found = data.LIB_BY_NAME[name];
-  return found ? found.type : data.CUSTOM_DEFAULTS.type;
+  return libLookup(name).type || data.CUSTOM_DEFAULTS.type;
 }
 
-function isBodyweight(name){ return !!data.BODYWEIGHT[name]; }
+function isBodyweight(name){
+  return !!(data.BODYWEIGHT[name] || libLookup(name).bw);
+}
 
 function restFor(name){
   return typeOf(name) === "compound" ? state.prefs.restCompound : state.prefs.restOther;
@@ -1337,6 +1830,22 @@ function lastPerformed(){
     }
   }
   return map;
+}
+
+/* The most recent session in which a movement was actually worked, handed
+   over whole — sets planned, target, every rep of every set. This is what
+   the progression rules read to decide the next load. */
+function lastEntryFor(name){
+  for(var i = state.history.length - 1; i >= 0; i--){
+    var h = state.history[i];
+    if(isSkip(h)) continue;
+    for(var j = 0; j < h.entries.length; j++){
+      if(h.entries[j].name === name && h.entries[j].completed > 0){
+        return { at:h.at, unit:h.unit || "lb", entry:h.entries[j] };
+      }
+    }
+  }
+  return null;
 }
 
 /* --------------------------------------------------------------------------
@@ -1646,10 +2155,7 @@ function summary(){
    Mutations
    -------------------------------------------------------------------------- */
 
-function newExercise(name){
-  var def = data.LIB_BY_NAME[name] || data.CUSTOM_DEFAULTS;
-  return { uid:uid(), name:name, sets:def.sets, reps:def.reps, weight:0, note:"", log:[] };
-}
+function newExercise(name){ return planned(name); }
 
 function clampSets(n){
   return Math.min(MAX_SETS, Math.max(1, parseInt(n, 10) || 1));
@@ -1747,7 +2253,7 @@ function finishSession(){
     };
   });
 
-  state.history.push({
+  var record = {
     id: uid("h"),
     at: Date.now(),
     kind: "session",
@@ -1757,17 +2263,25 @@ function finishSession(){
     unit: state.prefs.unit,
     volume: Math.round(volume),
     entries: entries
-  });
+  };
+
+  state.history.push(record);
   sortHistory();   /* a backdated skip may already sit after "now" */
 
   day.ex.forEach(function(e){ e.log = []; });
   day.notes = "";
 
+  /* Set the day up for next time while the session is still in hand: loads
+     move on what you actually hit, and a slot or two may change hands. It
+     happens here rather than in app.js so every route to a finished session
+     gets the same treatment. */
+  var changes = IL.plan ? IL.plan.advance(day, record) : [];
+
   if(state.day === state.days.length - 1) state.cycle++;
   state.day = (state.day + 1) % state.days.length;
 
   save();
-  return day;
+  return { day:day, record:record, changes:changes };
 }
 
 /* --------------------------------------------------------------------------
@@ -1868,7 +2382,9 @@ IL.store = {
   fromDayKey: fromDayKey,
   daysBetween: daysBetween,
 
+  uid: uid,
   repTop: repTop,
+  repBottom: repBottom,
   repChoices: repChoices,
   totalReps: totalReps,
   segmentVolume: segmentVolume,
@@ -1876,6 +2392,16 @@ IL.store = {
   isLogged: isLogged,
 
   currentDay: currentDay,
+  customLib: customLib,
+  libLookup: libLookup,
+  libAll: libAll,
+  libResolve: libResolve,
+  isCustom: isCustom,
+  addCustomExercise: addCustomExercise,
+  removeCustomExercise: removeCustomExercise,
+  poolFor: poolFor,
+  patternOf: patternOf,
+  varietyRules: varietyRules,
   typeOf: typeOf,
   isBodyweight: isBodyweight,
   restFor: restFor,
@@ -1884,6 +2410,7 @@ IL.store = {
   exerciseVolume: exerciseVolume,
   lastPerformed: lastPerformed,
 
+  planned: planned,
   newExercise: newExercise,
   clampSets: clampSets,
   setSets: setSets,
@@ -1898,6 +2425,8 @@ IL.store = {
   finishSession: finishSession,
 
   isSkip: isSkip,
+  sortHistory: sortHistory,
+  lastEntryFor: lastEntryFor,
   sessionsOnly: sessionsOnly,
   skipsOnly: skipsOnly,
   findEntry: findEntry,
@@ -1923,6 +2452,624 @@ IL.store = {
   toBackup: toBackup,
   restore: restore,
   exportName: exportName
+};
+
+})(window.IL);
+
+
+/* ==========================================================================
+   plan.js — the part that decides what next week looks like.
+
+   Three jobs, all of them reading the log and writing the plan:
+
+     overload()   what load and rep target this exercise has earned
+     advance()    run after a finished session: move the loads, and let a
+                  slot or two change hands so the day is never identical
+     reseed()     re-derive every working weight from history, which is what
+                  makes importing old training worth doing
+
+   plus the importer, which turns notebook shorthand into real sessions.
+
+   NOTHING HERE INVENTS A NUMBER. Every decision is made from a set you
+   actually logged, which is why an empty log leaves the plan alone.
+   ========================================================================== */
+
+window.IL = window.IL || {};
+
+(function(IL){
+"use strict";
+
+var store = IL.store;
+
+/* Load rounded onto the increment you actually have — plates, pins, the
+   dumbbell rack's next pair up. */
+function toStep(w){
+  var step = store.state.prefs.step || 5;
+  return Math.max(0, Math.round(w / step) * step);
+}
+
+function downStep(w){
+  var step = store.state.prefs.step || 5;
+  return Math.max(step, Math.floor(w / step) * step);
+}
+
+/* --------------------------------------------------------------------------
+   Double progression
+
+   In one sentence: earn the top of the rep range on every set and the load
+   goes up; hold the range and the load stays while you chase reps; fall out
+   of the bottom of it twice and the load comes down.
+
+   `last` is what store.lastEntryFor() hands back — a whole logged entry, so
+   the rule can see every set rather than an average.
+   -------------------------------------------------------------------------- */
+function overload(e, last){
+  var unit = store.state.prefs.unit;
+  var step = store.state.prefs.step || 5;
+
+  /* Never trained, or trained and nothing recorded: there is no evidence to
+     act on, so the plan is left exactly as it is. */
+  if(!last || !last.entry || !last.entry.completed){
+    return {
+      kind: "open",
+      weight: e.weight || 0,
+      reps: e.reps,
+      note: "no logged sets yet — find a working weight"
+    };
+  }
+
+  var en = last.entry;
+  var target = en.target || e.reps;
+  var top = store.repTop(target);
+  var bottom = store.repBottom(target);
+  var plannedSets = en.sets || e.sets;
+
+  var reps = (en.logged || []).map(function(item){
+    return store.totalReps(item.segs);
+  });
+  var lowest = reps.length ? Math.min.apply(null, reps) : 0;
+  var missing = Math.max(0, plannedSets - reps.length);
+  var under = reps.filter(function(r){ return r < bottom; }).length;
+  var loaded = en.topWeight > 0;
+
+  /* Earned it — every planned set at the top of the range. */
+  if(!missing && lowest >= top){
+    if(loaded){
+      return {
+        kind: "up",
+        weight: toStep(en.topWeight + step),
+        reps: e.reps,
+        note: "+" + step + " " + unit + " — all " + plannedSets +
+              " sets hit " + top
+      };
+    }
+    /* Bodyweight with nothing hanging off you: reps ARE the progression. */
+    return {
+      kind: "up",
+      weight: 0,
+      reps: (bottom + 1) + "-" + (top + 1),
+      note: "target up to " + (bottom + 1) + "-" + (top + 1) +
+            " — you cleared " + top + " on every set"
+    };
+  }
+
+  /* Inside the range everywhere: same load, more reps. */
+  if(!under && !missing){
+    return {
+      kind: "hold",
+      weight: loaded ? en.topWeight : 0,
+      reps: e.reps,
+      note: "same load — chase " + top + " on all " + plannedSets + " sets"
+    };
+  }
+
+  /* Two or more sets that you DID do coming in under the bottom of the range
+     is a load problem, not a bad night's sleep. Back off enough to rebuild,
+     not enough to lose the month it took to get there.
+
+     Sets you never logged are deliberately not counted here: leaving the gym
+     early is a short session, and taking weight off the bar for it would
+     punish you for something the bar didn't do. */
+  if(under >= 2 && loaded){
+    var lighter = downStep(en.topWeight * 0.9);
+    return {
+      kind: "down",
+      weight: lighter,
+      reps: e.reps,
+      note: "−" + Math.round(en.topWeight - lighter) + " " + unit +
+            " to rebuild — " + under + " sets came in under " + bottom
+    };
+  }
+
+  return {
+    kind: "hold",
+    weight: loaded ? en.topWeight : 0,
+    reps: e.reps,
+    note: missing
+      ? "same load — " + missing + (missing === 1 ? " set" : " sets") +
+        " of " + plannedSets + " went unlogged"
+      : "same load — a set came in under " + bottom
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Variety
+
+   A slot keeps its job and changes its exercise. Two rules keep that from
+   becoming a shuffle:
+
+     age      an exercise has to survive a few visits before it's eligible,
+              so nothing moves the week after it arrived
+     recency  the candidate chosen is the one you have gone longest without
+
+   Together they walk you round the pool instead of bouncing between two.
+   -------------------------------------------------------------------------- */
+
+/* Everything the four days are currently using, so Lower A and Lower B
+   can't both land on the hack squat in the same week. */
+function inUse(exceptUid){
+  var used = {};
+  store.state.days.forEach(function(d){
+    d.ex.forEach(function(e){
+      if(e.uid !== exceptUid) used[e.name] = true;
+    });
+  });
+  return used;
+}
+
+function lastTouched(name){
+  var found = store.lastEntryFor(name);
+  return found ? found.at : 0;
+}
+
+/* The exercise this slot should hand over to, or "" for "leave it". */
+function nextAlternative(e){
+  var pool = store.poolFor(e.name);
+  if(pool.length < 2) return "";
+
+  var used = inUse(e.uid);
+  var options = pool.filter(function(n){ return n !== e.name && !used[n]; });
+  if(!options.length) return "";
+
+  options.sort(function(a, b){
+    return lastTouched(a) - lastTouched(b) || a.localeCompare(b);
+  });
+  return options[0];
+}
+
+/* What a slot would rotate to next, for the exercise editor to show. */
+function preview(e){
+  if(e.pin) return "";
+  return nextAlternative(e);
+}
+
+/* --------------------------------------------------------------------------
+   After a session
+
+   Called by store.finishSession() with the record it just wrote. Loads move
+   first so that a slot which then rotates is replaced with a decision
+   already made, and the sets count is left alone so the day's shape — and
+   therefore its volume — stays recognisable across a swap.
+   -------------------------------------------------------------------------- */
+function advance(day, record){
+  var p = store.state.prefs;
+  var entries = record.entries || [];
+  var changes = [];
+  var byName = {};
+
+  entries.forEach(function(en){ byName[en.name] = en; });
+
+  day.ex.forEach(function(e, i){
+    e.rotAge = (e.rotAge || 0) + 1;
+
+    /* entries are built in plan order, so the index is exact; the name is
+       there as a belt-and-braces fallback. */
+    var en = (entries[i] && entries[i].name === e.name) ? entries[i] : byName[e.name];
+
+    /* Progression off, or nothing logged against this one: clear the chip
+       rather than leave it. Advice from three weeks ago, still sitting under
+       an exercise as though it were about today, is worse than no advice. */
+    if(!p.autoProgress || !en){
+      e.progress = null;
+      return;
+    }
+
+    var res = overload(e, { at:record.at, unit:record.unit, entry:en });
+    if(res.kind === "open"){
+      e.progress = null;
+      return;
+    }
+
+    e.weight = res.weight;
+    e.reps = res.reps;
+    e.progress = { kind:res.kind, note:res.note };
+    changes.push({ name:e.name, kind:res.kind, note:res.note });
+  });
+
+  var rules = store.varietyRules();
+  if(!rules.cap) return changes;
+
+  /* Oldest slot first, and never more than the cap in one go — "a little
+     bit different", not a new program every week. */
+  var queue = day.ex.slice().sort(function(a, b){
+    return (b.rotAge || 0) - (a.rotAge || 0);
+  });
+  var swapped = 0;
+  var heavy = 0;
+
+  queue.forEach(function(e){
+    if(swapped >= rules.cap || e.pin) return;
+
+    var compound = store.typeOf(e.name) === "compound";
+    var due = compound ? rules.compound : rules.other;
+    if((e.rotAge || 0) < due) return;
+
+    /* Only ever one of the heavy movements at a time. Two compounds changing
+       in the same session means walking in with no idea what any of it
+       should weigh, which is the opposite of progressive overload. */
+    if(compound && heavy) return;
+
+    var next = nextAlternative(e);
+    if(!next) return;
+
+    var from = e.name;
+    var def = store.libLookup(next);
+    var seen = store.lastEntryFor(next);
+
+    e.name = next;
+    e.reps = String(def.reps);
+    e.note = "";                 /* the old note was about the old machine */
+    e.log = [];
+    e.rotAge = 0;
+    e.weight = seen ? overload(e, seen).weight : 0;
+    e.progress = {
+      kind: "swap",
+      note: seen
+        ? "in for " + from + " — you had " + seen.entry.topWeight + " " +
+          seen.unit + " on it last time"
+        : "in for " + from + " — new, find a working weight"
+    };
+
+    changes.push({ name:next, from:from, kind:"swap", note:e.progress.note });
+    swapped++;
+    if(compound) heavy++;
+  });
+
+  return changes;
+}
+
+/* --------------------------------------------------------------------------
+   Re-deriving the whole plan from the log
+
+   Paste in a month of old training, press this, and every day in the
+   rotation opens at the load your own history says you have earned. Also
+   the repair button for a plan that has drifted away from reality.
+   -------------------------------------------------------------------------- */
+function reseed(){
+  var touched = 0;
+
+  store.state.days.forEach(function(day){
+    day.ex.forEach(function(e){
+      var last = store.lastEntryFor(e.name);
+      if(!last) return;
+
+      var res = overload(e, last);
+      if(res.kind === "open") return;
+
+      e.weight = res.weight;
+      e.reps = res.reps;
+      e.progress = { kind:res.kind, note:res.note };
+      touched++;
+    });
+  });
+
+  store.save();
+  return touched;
+}
+
+/* --------------------------------------------------------------------------
+   Importing training you already did
+
+   The format is what you would scribble in a notebook:
+
+     2026-08-25 Upper A
+     Incline Smith Press 135x8 135x8 145x6
+     Barbell Bent-Over Row 155x8x3
+     Pull-Ups BWx9 BWx7
+     Cable Crunch 60x15, 60x15
+     note: incline felt easy
+
+   A line that starts with a date starts a new day, and whatever follows the
+   date says which workout it was. Every other line is one exercise: its
+   name, then its sets.
+   -------------------------------------------------------------------------- */
+
+var MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+
+function fullYear(y){ return y < 100 ? 2000 + y : y; }
+
+/* No year given means the most recent one that isn't in the future — you're
+   typing up training you have already done, not booking it. */
+function stamp(y, mo, d, rest){
+  if(mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+
+  var now = new Date();
+  var at = new Date(y || now.getFullYear(), mo - 1, d, 12, 0, 0, 0);
+
+  if(!y && at.getTime() > now.getTime() + 86400000){
+    at = new Date(now.getFullYear() - 1, mo - 1, d, 12, 0, 0, 0);
+  }
+  if(isNaN(at.getTime())) return null;
+
+  return { at:at.getTime(), rest:String(rest || "").trim() };
+}
+
+/* Reads a date off the front of a line and hands back the timestamp plus
+   whatever text followed it. null means "this isn't a header", which is how
+   the parser tells a day from an exercise. */
+function readDate(line){
+  var s = String(line).trim();
+  var m;
+
+  m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})\b(.*)$/);
+  if(m) return stamp(+m[1], +m[2], +m[3], m[4]);
+
+  m = s.match(/^(\d{1,2})[-\/.](\d{1,2})(?:[-\/.](\d{2,4}))?(?![\d])(.*)$/);
+  if(m) return stamp(m[3] ? fullYear(+m[3]) : 0, +m[1], +m[2], m[4]);
+
+  m = s.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(\d{4})?\b(.*)$/);
+  if(m){
+    var mi = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase());
+    if(mi >= 0) return stamp(m[3] ? +m[3] : 0, mi + 1, +m[2], m[4]);
+  }
+
+  m = s.match(/^(today|yesterday)\b(.*)$/i);
+  if(m){
+    var back = m[1].toLowerCase() === "yesterday" ? 86400000 : 0;
+    return {
+      at: store.fromDayKey(store.dayKey(Date.now() - back)),
+      rest: String(m[2] || "").trim()
+    };
+  }
+
+  return null;
+}
+
+/* Understood, in any mix, separated by spaces or commas:
+
+     135x8         one set
+     135x8x3       that same set three times
+     135 x 8       spaces are fine, so are * and @
+     BWx9          bodyweight
+     185x5+155x3   one set with a drop in it
+     8 8 6         reps only, for a line with no load to record
+*/
+var SET_TOKEN = /^(?:bw|\d+(?:\.\d+)?)x\d+(?:x\d+)?(?:\+(?:bw|\d+(?:\.\d+)?)x\d+)*$/i;
+var BARE_REPS = /^\d{1,3}$/;
+
+/* Close up the gaps so every set becomes one token.
+
+   Two details earn their keep. The digit-or-bw guard on the left stops the x
+   in "Box Squat" being eaten. And the right-hand side is a LOOKAHEAD, not a
+   capture — matching it would consume the digit, and "155 x 8 x 3" needs
+   that 8 still available to pair with the second x. */
+function tighten(line){
+  var s = String(line);
+  s = s.replace(/[×✕]/g, "x").replace(/[–—]/g, "-");
+  s = s.replace(/(\d)\s*(?:lbs?|kgs?|#)\b/gi, "$1");
+  s = s.replace(/(\d|bw)\s*[x*@]\s*(?=\d)/gi, "$1x");
+  s = s.replace(/(\d)\s*\+\s*(?=\d|bw)/gi, "$1+");
+  return s;
+}
+
+function readExercise(line){
+  var s = tighten(line).trim();
+  if(!s) return null;
+
+  var tokens = s.split(/[\s,;]+/).filter(Boolean);
+  var cut = tokens.length;
+  var hasSpec = false;
+
+  while(cut > 0 && SET_TOKEN.test(tokens[cut - 1])){
+    hasSpec = true;
+    cut--;
+  }
+
+  /* No "weight x reps" anywhere on the line: a trailing run of bare numbers
+     is reps with nothing on the bar — sit-ups, planks, pull-ups from before
+     you started hanging plates off yourself. */
+  if(!hasSpec){
+    while(cut > 0 && BARE_REPS.test(tokens[cut - 1])) cut--;
+  }
+
+  var name = tokens.slice(0, cut).join(" ").replace(/[:\-]\s*$/, "").trim();
+  var specs = tokens.slice(cut);
+  if(!name || !specs.length) return null;
+
+  var sets = [];
+
+  specs.forEach(function(tok){
+    if(BARE_REPS.test(tok)){
+      sets.push([{ w:0, r:parseInt(tok, 10) }]);
+      return;
+    }
+
+    var repeat = 1;
+    var segs = [];
+
+    tok.split("+").forEach(function(part, i){
+      var bits = part.split(/x/i);
+      segs.push({
+        w: /^bw$/i.test(bits[0]) ? 0 : (parseFloat(bits[0]) || 0),
+        r: parseInt(bits[1], 10) || 0
+      });
+      if(i === 0 && bits[2]) repeat = Math.min(12, parseInt(bits[2], 10) || 1);
+    });
+
+    for(var n = 0; n < repeat; n++){
+      sets.push(segs.map(function(sg){ return { w:sg.w, r:sg.r }; }));
+    }
+  });
+
+  return { name:name, sets:sets };
+}
+
+function parseImport(text){
+  var lines = String(text || "").split(/\r?\n/);
+  var sessions = [];
+  var errors = [];
+  var unknown = {};
+  var current = null;
+
+  lines.forEach(function(raw, i){
+    var line = raw.trim();
+    if(!line || line.charAt(0) === "#") return;
+
+    var head = readDate(line);
+    if(head){
+      current = { at:head.at, dayName:head.rest, notes:"", entries:[] };
+      sessions.push(current);
+      return;
+    }
+
+    var noteHit = line.match(/^(?:notes?|comment)\s*[:\-]\s*(.*)$/i);
+    if(noteHit && current){
+      current.notes = current.notes ? current.notes + " " + noteHit[1] : noteHit[1];
+      return;
+    }
+
+    if(!current){
+      errors.push({ line:i + 1, text:line, why:"no date above it" });
+      return;
+    }
+
+    var ex = readExercise(line);
+    if(!ex){
+      errors.push({ line:i + 1, text:line, why:"no sets found in it" });
+      return;
+    }
+
+    var canonical = store.libResolve(ex.name);
+    if(!canonical) unknown[ex.name] = true;
+
+    current.entries.push({ name:canonical || ex.name, sets:ex.sets });
+  });
+
+  /* A date with nothing under it is a stray header, not a session. */
+  sessions = sessions.filter(function(s){ return s.entries.length; });
+  sessions.sort(function(a, b){ return a.at - b.at; });
+
+  var sets = 0;
+  var volume = 0;
+  sessions.forEach(function(s){
+    s.entries.forEach(function(en){
+      sets += en.sets.length;
+      en.sets.forEach(function(segs){ volume += store.segmentVolume(segs); });
+    });
+  });
+
+  return {
+    sessions: sessions,
+    errors: errors,
+    unknown: Object.keys(unknown),
+    sets: sets,
+    volume: Math.round(volume)
+  };
+}
+
+/* "upper a", "UA" and "Upper-A" all find the day. When the text matches
+   none of them the session keeps its own label — an imported day from a
+   program you no longer run is still a real day you trained. */
+function matchDay(text){
+  var want = String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if(!want) return null;
+
+  var days = store.state.days;
+  var i;
+  var keys = days.map(function(d){
+    return d.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  });
+
+  for(i = 0; i < days.length; i++){
+    if(want === days[i].id.toLowerCase() || want === keys[i]) return days[i];
+  }
+  for(i = 0; i < days.length; i++){
+    if(want.indexOf(keys[i]) >= 0 || keys[i].indexOf(want) >= 0) return days[i];
+  }
+  return null;
+}
+
+/* Turn parsed sessions into real history.
+
+   Volume, top weight and completed counts are computed exactly the way a
+   live session computes them, so an imported day and a logged one are the
+   same kind of thing to everything downstream — the charts, the totals, the
+   "last time" line, and the progression rules. */
+function commitImport(parsed, opts){
+  opts = opts || {};
+  var learned = 0;
+
+  if(opts.learn !== false){
+    parsed.unknown.forEach(function(name){
+      if(store.addCustomExercise({ name:name, group:"Imported" })) learned++;
+    });
+  }
+
+  parsed.sessions.forEach(function(s){
+    var volume = 0;
+
+    var entries = s.entries.map(function(en){
+      var def = store.libLookup(en.name);
+      var logged = [];
+      var heaviest = 0;
+      var exVolume = 0;
+
+      en.sets.forEach(function(segs, k){
+        logged.push({ set:k + 1, segs:segs });
+        heaviest = Math.max(heaviest, store.topWeight(segs));
+        exVolume += store.segmentVolume(segs);
+      });
+
+      volume += exVolume;
+      return {
+        name: en.name,
+        sets: logged.length,
+        target: String(def.reps || "8-10"),
+        completed: logged.length,
+        topWeight: heaviest,
+        volume: Math.round(exVolume),
+        logged: logged
+      };
+    });
+
+    var day = matchDay(s.dayName);
+    store.state.history.push({
+      id: store.uid("h"),
+      at: s.at,
+      kind: "session",
+      dayId: day ? day.id : "IM",
+      dayName: day ? day.name : (s.dayName || "Imported"),
+      notes: s.notes,
+      unit: store.state.prefs.unit,
+      volume: Math.round(volume),
+      entries: entries
+    });
+  });
+
+  store.sortHistory();
+  store.save();
+
+  return { sessions:parsed.sessions.length, learned:learned };
+}
+
+IL.plan = {
+  overload: overload,
+  advance: advance,
+  reseed: reseed,
+  nextAlternative: nextAlternative,
+  preview: preview,
+  parseImport: parseImport,
+  commitImport: commitImport
 };
 
 })(window.IL);
@@ -2295,6 +3442,46 @@ function toast(msg){
 }
 
 /* --------------------------------------------------------------------------
+   What the last session decided
+
+   Every exercise carries the note the progression rule left on it — why it
+   is at this weight today. Showing it is most of the point: a number that
+   moved on its own is unnerving until you can see the reason.
+   -------------------------------------------------------------------------- */
+
+/* The rules write their notes as "decision — because", so the decision can
+   be bold and the reasoning can be quiet. */
+function planLine(e){
+  if(!e.progress || !e.progress.note) return "";
+
+  var bits = String(e.progress.note).split(" — ");
+  return '<p class="ex-plan" data-kind="' + esc(e.progress.kind) + '">' +
+    '<b>' + esc(bits[0]) + '</b>' +
+    (bits.length > 1 ? '<span>' + esc(bits.slice(1).join(" — ")) + '</span>' : '') +
+  '</p>';
+}
+
+/* One line above the day, so the changes are visible before you scroll. */
+function planBanner(day){
+  var n = { up:0, down:0, swap:0, hold:0 };
+
+  day.ex.forEach(function(e){
+    if(e.progress && n[e.progress.kind] !== undefined) n[e.progress.kind]++;
+  });
+  if(!n.up && !n.down && !n.swap) return "";
+
+  var parts = [];
+  if(n.up)   parts.push(n.up + " load" + (n.up === 1 ? "" : "s") + " up");
+  if(n.down) parts.push(n.down + " backed off");
+  if(n.swap) parts.push(n.swap + " new exercise" + (n.swap === 1 ? "" : "s"));
+
+  return '<div class="planbar">' +
+    '<span class="k">Since last time</span>' +
+    '<b>' + esc(parts.join(" · ")) + '</b>' +
+  '</div>';
+}
+
+/* --------------------------------------------------------------------------
    Rotation rail
    -------------------------------------------------------------------------- */
 
@@ -2368,6 +3555,7 @@ function exerciseRow(e, i, last){
         '<span class="chip load">' + esc(formatLoad(e)) + '</span>' +
         lastLine +
       '</div>' +
+      planLine(e) +
       (e.note ? '<p class="ex-note">' + esc(e.note) + '</p>' : '') +
       '<div class="sets">' + sets + '</div>' +
     '</div>' +
@@ -2394,6 +3582,7 @@ function renderTrain(){
         '<div class="cap">Sets in</div>' +
       '</div>' +
     '</div>' +
+    planBanner(day) +
     '<div class="ledger" id="ledger">' + rows + '</div>' +
     '<div class="addrow"><button class="add-btn" id="addEx">+ Add exercise</button></div>' +
     '<div class="notes">' +
@@ -2529,6 +3718,24 @@ function settingsPanel(){
       '</div>' +
     '</div>' +
     '<div class="setrow">' +
+      '<div class="k">Progressive overload<small>Moves each load on what you actually hit</small></div>' +
+      '<div class="seg">' +
+        '<button data-prog="1" aria-pressed="' + (p.autoProgress === true) + '">On</button>' +
+        '<button data-prog="0" aria-pressed="' + (p.autoProgress === false) + '">Off</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="setrow stack">' +
+      '<div class="k">Variety<small>How readily an exercise hands its slot to another one that does the same job</small></div>' +
+      '<div class="seg wide">' + ["off","low","medium","high"].map(function(v){
+        return '<button data-var="' + v + '" aria-pressed="' + (p.variety === v) + '">' +
+                 esc(data.VARIETY[v].label) + '</button>';
+      }).join("") + '</div>' +
+    '</div>' +
+    '<div class="setrow">' +
+      '<div class="k">Re-seed from the log<small>Sets every working weight from your own history</small></div>' +
+      '<button class="edit" id="reseedAll">Re-seed</button>' +
+    '</div>' +
+    '<div class="setrow">' +
       '<div class="k">Start over<small>Erases the plan, history and settings</small></div>' +
       '<button class="edit danger" id="resetAll">Reset</button>' +
     '</div>' +
@@ -2590,7 +3797,10 @@ function renderLog(openId){
       '</div>' +
     '</div>' +
     '<div class="hist">' +
-      '<button class="add-btn" id="addSkip">+ Mark a missed or rest day</button>' +
+      '<div class="datarow">' +
+        '<button class="add-btn" id="addPast">+ Past workouts</button>' +
+        '<button class="add-btn" id="addSkip">+ Missed or rest day</button>' +
+      '</div>' +
       body + settingsPanel() + dataPanel() +
     '</div>';
 
@@ -2922,10 +4132,28 @@ function exerciseSheet(i){
   var e = store.currentDay().ex[i];
   var step = store.state.prefs.step;
 
+  var nextUp = IL.plan.preview(e);
+
   openSheet("Edit exercise",
     '<button class="swapname" id="swapBtn">' +
       '<strong>' + esc(e.name) + '</strong><span>Swap ›</span>' +
     '</button>' +
+
+    (e.progress && e.progress.note ? planLine(e) : '') +
+
+    '<div class="setrow stack">' +
+      '<div class="k">This slot<small>' +
+        (e.pin
+          ? "Held — it will not rotate"
+          : nextUp
+            ? "Next in line: " + esc(nextUp)
+            : "Nothing else in the library does this job, so it stays put") +
+      '</small></div>' +
+      '<div class="seg wide">' +
+        '<button data-pin="0" aria-pressed="' + (e.pin !== true) + '">Rotate</button>' +
+        '<button data-pin="1" aria-pressed="' + (e.pin === true) + '">Keep</button>' +
+      '</div>' +
+    '</div>' +
 
     '<div class="field">' +
       '<label class="lab" for="fW">Working weight (' + esc(unit()) + ')</label>' +
@@ -3065,25 +4293,37 @@ function weightSheet(){
    Exercise library picker
    -------------------------------------------------------------------------- */
 
+/* Built-ins and your own in one list. Yours get an Edit button, which is
+   the only place they can be changed or removed. */
+function libRow(x){
+  return '<div class="lib-row" data-search="' + esc(x.name.toLowerCase()) + '">' +
+    '<button class="lib-item" data-pick="' + esc(x.name) + '">' +
+      '<strong>' + esc(x.name) + '</strong>' +
+      '<span class="d">' + x.sets + ' × ' + esc(x.reps) +
+        (x.pattern ? ' · ' + esc(data.PATTERN_LABEL[x.pattern]) : '') +
+      '</span>' +
+    '</button>' +
+    (store.isCustom(x.name)
+      ? '<button class="lib-edit" data-libedit="' + esc(x.name) + '">Edit</button>'
+      : '') +
+  '</div>';
+}
+
 function librarySheet(mode){
+  var all = store.libAll();
   var groups = [];
-  data.LIB.forEach(function(r){ if(groups.indexOf(r[0]) < 0) groups.push(r[0]); });
+  all.forEach(function(x){ if(groups.indexOf(x.group) < 0) groups.push(x.group); });
 
   var html =
     '<div class="field">' +
       '<input id="libSearch" type="text" placeholder="Search, or type a name of your own" autocomplete="off">' +
     '</div>' +
     '<div id="libCustom"></div>' +
+    '<button class="add-btn" id="libNew">+ New exercise</button>' +
     '<div id="libList">' +
       groups.map(function(g){
         return '<div class="lib-group">' + esc(g) + '</div>' +
-          data.LIB.filter(function(r){ return r[0] === g; }).map(function(r){
-            return '<button class="lib-item" data-pick="' + esc(r[1]) + '"' +
-                     ' data-search="' + esc(r[1].toLowerCase()) + '">' +
-                     '<strong>' + esc(r[1]) + '</strong>' +
-                     '<span class="d">' + r[3] + '×' + r[4] + '</span>' +
-                   '</button>';
-          }).join("");
+          all.filter(function(x){ return x.group === g; }).map(libRow).join("");
       }).join("") +
     '</div>';
 
@@ -3092,16 +4332,16 @@ function librarySheet(mode){
 }
 
 /* Filter the picker, hide group headings that end up empty, and offer the
-   typed text as a custom exercise when nothing matches. */
+   typed text as a new exercise when nothing matches. */
 function filterLibrary(){
   var raw = this.value.trim();
   var q = raw.toLowerCase();
   var shown = 0;
 
-  var items = document.querySelectorAll("#libList .lib-item");
-  for(var i = 0; i < items.length; i++){
-    var hit = !q || items[i].dataset.search.indexOf(q) >= 0;
-    items[i].hidden = !hit;
+  var rows = document.querySelectorAll("#libList .lib-row");
+  for(var i = 0; i < rows.length; i++){
+    var hit = !q || rows[i].dataset.search.indexOf(q) >= 0;
+    rows[i].hidden = !hit;
     if(hit) shown++;
   }
 
@@ -3109,20 +4349,229 @@ function filterLibrary(){
   for(var j = 0; j < heads.length; j++){
     var n = heads[j].nextElementSibling;
     var any = false;
-    while(n && n.classList.contains("lib-item")){
+    while(n && n.classList.contains("lib-row")){
       if(!n.hidden){ any = true; break; }
       n = n.nextElementSibling;
     }
     heads[j].hidden = !any;
   }
 
-  var d = data.CUSTOM_DEFAULTS;
   $("libCustom").innerHTML = (raw && shown === 0)
-    ? '<button class="lib-item" data-pick="' + esc(raw) + '">' +
+    ? '<button class="lib-item solo" data-newname="' + esc(raw) + '">' +
         '<strong>Add “' + esc(raw) + '”</strong>' +
-        '<span class="d">' + d.sets + '×' + d.reps + '</span>' +
+        '<span class="d">set it up ›</span>' +
       '</button>'
     : "";
+}
+
+/* --------------------------------------------------------------------------
+   Building an exercise the library doesn't have
+
+   Only one field here isn't cosmetic. The pattern is what tells rotation
+   which other exercises could do this one's job — leave it blank and the
+   exercise simply never rotates, which is a perfectly good answer for
+   something you always want to do.
+   -------------------------------------------------------------------------- */
+function builderSheet(name, existing){
+  var d = data.CUSTOM_DEFAULTS;
+  var x = existing || {
+    name:name || "", group:d.group, type:d.type,
+    sets:d.sets, reps:d.reps, pattern:"", bw:false
+  };
+
+  var groups = [];
+  store.libAll().forEach(function(g){
+    if(groups.indexOf(g.group) < 0) groups.push(g.group);
+  });
+
+  var types = [["compound","Compound"],["support","Support"],["small","Small"]];
+
+  openSheet(existing ? "Edit exercise" : "New exercise",
+    '<div class="field">' +
+      '<label class="lab" for="nxName">Name</label>' +
+      '<input id="nxName" type="text" value="' + esc(x.name) + '" placeholder="Hack Squat Machine">' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="nxGroup">Body part</label>' +
+      '<input id="nxGroup" type="text" list="nxGroups" value="' + esc(x.group) + '">' +
+      '<datalist id="nxGroups">' +
+        groups.map(function(g){ return '<option value="' + esc(g) + '">'; }).join("") +
+      '</datalist>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<span class="lab">Weight class</span>' +
+      '<div class="seg wide">' + types.map(function(t){
+        return '<button data-nxtype="' + t[0] + '" aria-pressed="' + (x.type === t[0]) + '">' +
+                 t[1] + '</button>';
+      }).join("") + '</div>' +
+      '<p class="hint">Compounds get the three-minute rest and rotate slowest.</p>' +
+    '</div>' +
+
+    '<div class="seggrid">' +
+      '<div class="field">' +
+        '<label class="lab" for="nxSets">Sets</label>' +
+        '<input id="nxSets" type="number" inputmode="numeric" min="1" max="' +
+          store.MAX_SETS + '" value="' + x.sets + '">' +
+      '</div>' +
+      '<div class="field">' +
+        '<label class="lab" for="nxReps">Target reps</label>' +
+        '<input id="nxReps" type="text" value="' + esc(x.reps) + '" placeholder="8-10">' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="nxPattern">What job does it do</label>' +
+      '<select id="nxPattern">' +
+        '<option value="">Nothing else — never rotate it</option>' +
+        data.PATTERNS.map(function(p){
+          return '<option value="' + esc(p[0]) + '"' +
+                 (x.pattern === p[0] ? " selected" : "") + '>' + esc(p[1]) + '</option>';
+        }).join("") +
+      '</select>' +
+      '<p class="hint">This is the field auto-rotation reads. Pick “Squat pattern” ' +
+        'for a hack squat and it can stand in for the V-squat, and the V-squat for it.</p>' +
+    '</div>' +
+
+    '<div class="setrow">' +
+      '<div class="k">Loaded by bodyweight<small>Shows BW, and progresses on reps</small></div>' +
+      '<div class="seg">' +
+        '<button data-nxbw="1" aria-pressed="' + (x.bw === true) + '">Yes</button>' +
+        '<button data-nxbw="0" aria-pressed="' + (x.bw !== true) + '">No</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="rowbtns ' + (existing ? "two" : "one") + '">' +
+      '<button class="primary" id="nxSave">' +
+        (existing ? "Save" : "Save and use it") + '</button>' +
+      (existing
+        ? '<button class="danger" data-nxdel="' + esc(x.name) + '">Remove</button>'
+        : '') +
+    '</div>',
+  "builder");
+}
+
+/* --------------------------------------------------------------------------
+   Importing training you already did
+   -------------------------------------------------------------------------- */
+
+var SAMPLE =
+  "2026-08-25 Upper A\n" +
+  "Incline Smith Press 135x8 135x8 145x6\n" +
+  "Barbell Bent-Over Row 155x8x3\n" +
+  "Pull-Ups BWx9 BWx7\n" +
+  "note: incline felt easy\n\n" +
+  "8/27 Lower A\n" +
+  "Hack Squat 250x8x4\n" +
+  "Barbell RDL 185x8 185x8 195x6";
+
+var lastImport = null;
+
+function importSheet(){
+  openSheet("Add past workouts",
+    /* The sub is set in small caps, so it has to stay one line. The rest of
+       the explanation goes under the box, where it reads as prose. */
+    '<p class="sheet-sub">Training you have already done, in the shorthand you would write anyway.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="impText">Your training</label>' +
+      '<textarea id="impText" class="tall" spellcheck="false" autocapitalize="none" ' +
+        'placeholder="' + esc(SAMPLE) + '"></textarea>' +
+      '<p class="hint">It lands in the log as real sessions, so the charts, the ' +
+        '“last time” lines and every working weight start from where you actually ' +
+        'are rather than from zero.</p>' +
+    '</div>' +
+
+    '<details class="fmt">' +
+      '<summary>What it understands</summary>' +
+      '<ul>' +
+        '<li><b>A date starts a day.</b> <code>2026-08-25</code>, <code>8/25</code>, ' +
+          '<code>8/25/26</code>, <code>Aug 25</code> or <code>yesterday</code> — then ' +
+          'the workout name, if it had one.</li>' +
+        '<li><b>Every other line is one exercise:</b> its name, then its sets.</li>' +
+        '<li><code>135x8 135x8 145x6</code> — three sets</li>' +
+        '<li><code>155x8x3</code> — that same set three times</li>' +
+        '<li><code>185x5+155x3</code> — one set with a drop in it</li>' +
+        '<li><code>BWx9</code> — bodyweight</li>' +
+        '<li><code>45 45 45</code> — reps with nothing on the bar</li>' +
+        '<li><code>note: felt strong</code> — a note on the day</li>' +
+      '</ul>' +
+      '<p class="hint">Spaces, commas, <code>lb</code> and <code>@</code> are all ' +
+        'fine. Names are matched loosely, so “hack squat” finds the hack squat ' +
+        'machine; anything genuinely new is added to your library.</p>' +
+    '</details>' +
+
+    '<div class="impview" id="impView"></div>' +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="impRun" disabled>Add to my log</button>' +
+    '</div>',
+  "import");
+
+  $("impText").addEventListener("input", previewImport);
+  previewImport();
+}
+
+/* Live read-back of what the text would become — including the lines it
+   could NOT read, because an import you can't check is one you can't trust. */
+function previewImport(){
+  var box = $("impView");
+  var btn = $("impRun");
+  if(!box || !btn) return;
+
+  var text = $("impText").value;
+
+  if(!text.trim()){
+    lastImport = null;
+    btn.disabled = true;
+    box.innerHTML = '<p class="hint">Nothing to read yet.</p>';
+    return;
+  }
+
+  var parsed = IL.plan.parseImport(text);
+  lastImport = parsed;
+  btn.disabled = !parsed.sessions.length;
+
+  if(!parsed.sessions.length){
+    box.innerHTML = '<p class="impwarn">No sessions found yet — every workout ' +
+      'needs a line starting with its date, above its exercises.</p>';
+    return;
+  }
+
+  var first = parsed.sessions[0];
+  var last = parsed.sessions[parsed.sessions.length - 1];
+
+  box.innerHTML =
+    '<div class="settotal">' +
+      '<span>' + parsed.sessions.length +
+        (parsed.sessions.length === 1 ? " session" : " sessions") + '</span>' +
+      '<b>' + parsed.sets + ' sets · ' +
+        parsed.volume.toLocaleString() + ' ' + esc(unit()) + '</b>' +
+    '</div>' +
+    '<p class="hint">' + esc(formatDay(first.at)) +
+      (parsed.sessions.length > 1 ? " to " + esc(formatDay(last.at)) : "") + '</p>' +
+
+    parsed.sessions.map(function(sn){
+      return '<div class="improw">' +
+        '<span>' + esc(formatDay(sn.at)) + '</span>' +
+        '<b>' + esc(sn.dayName || "Imported") + '</b>' +
+        '<small>' + sn.entries.length + ' exercises</small>' +
+      '</div>';
+    }).join("") +
+
+    (parsed.unknown.length
+      ? '<p class="hint">New to the app, and added to your library: ' +
+          esc(parsed.unknown.join(", ")) + '.</p>'
+      : "") +
+
+    (parsed.errors.length
+      ? '<p class="impwarn">' + parsed.errors.length +
+          (parsed.errors.length === 1 ? " line skipped" : " lines skipped") + ' — ' +
+          esc(parsed.errors.slice(0, 4).map(function(x){
+            return "line " + x.line + " (" + x.why + ")";
+          }).join(", ")) + '.</p>'
+      : "");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -3160,6 +4609,10 @@ IL.ui = {
   refreshSetTotal: refreshSetTotal,
   exerciseSheet: exerciseSheet,
   librarySheet: librarySheet,
+  builderSheet: builderSheet,
+  importSheet: importSheet,
+  previewImport: previewImport,
+  get lastImport(){ return lastImport; },
   skipSheet: skipSheet,
   weightSheet: weightSheet
 };
@@ -3195,6 +4648,77 @@ var view = "train";          /* "train" | "log" | "progress"                */
 var openSession = null;      /* id of the expanded log entry, or null       */
 var editing = -1;            /* exercise index open in the editor sheet     */
 var editingSet = null;       /* { row, k } open in the set logger, or null  */
+var builderFrom = null;      /* the picker mode the exercise builder came from */
+var builderName = null;      /* library entry being edited, or null to create  */
+
+/* --------------------------------------------------------------------------
+   Small shared helpers
+   -------------------------------------------------------------------------- */
+
+/* Flip a row of toggle buttons by hand rather than re-rendering the sheet,
+   so a half-typed field in the same sheet survives the tap. */
+function toggleGroup(hit, attr){
+  var all = $("sheetBody").querySelectorAll("[data-" + attr + "]");
+  for(var i = 0; i < all.length; i++){
+    all[i].setAttribute("aria-pressed", all[i] === hit);
+  }
+}
+
+/* Which of those buttons is currently pressed. */
+function pickedValue(attr){
+  var el = $("sheetBody").querySelector('[data-' + attr + '][aria-pressed="true"]');
+  return el ? el.dataset[attr] : "";
+}
+
+/* Open an exercise at the load your log says you have earned rather than at
+   nothing. Trained it before — even years ago, even only in an import — and
+   the first set is already the right weight. */
+function seedFromLog(e){
+  var seen = store.lastEntryFor(e.name);
+  if(!seen) return e;
+
+  var res = IL.plan.overload(e, seen);
+  if(res.kind !== "open"){
+    e.weight = res.weight;
+    e.reps = res.reps;
+    e.progress = { kind:res.kind, note:res.note };
+  }
+  return e;
+}
+
+/* Put a chosen exercise into the day — replacing the one being edited, or on
+   the end. Shared by the library picker and by saving a brand-new exercise,
+   which both finish the same way. */
+function applyPick(name, mode){
+  var day = store.currentDay();
+
+  if(mode === "swap" && editing >= 0){
+    var target = day.ex[editing];
+    var fresh = store.newExercise(name);
+
+    target.name = fresh.name;
+    target.sets = fresh.sets;
+    target.reps = fresh.reps;
+    target.weight = 0;
+    target.note = "";
+    target.log = [];
+    target.pin = false;
+    target.rotAge = 0;
+    target.progress = null;
+    seedFromLog(target);
+
+    store.save();
+    ui.renderTrain();
+    ui.exerciseSheet(editing);
+    return;
+  }
+
+  day.ex.push(seedFromLog(store.newExercise(name)));
+  store.save();
+  ui.renderTrain();
+  ui.closeSheet();
+  ui.toast(name + " added to " + day.name + ".");
+}
 
 /* --------------------------------------------------------------------------
    Rest timer
@@ -3451,6 +4975,11 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  if(t.closest("#addPast")){
+    ui.importSheet();
+    return;
+  }
+
   if(t.closest("#expCSV")){   exportCSV();     return; }
   if(t.closest("#expJSON")){  exportBackup();  return; }
   if(t.closest("#expShare")){ exportShare();   return; }
@@ -3496,6 +5025,30 @@ $("view").addEventListener("click", function(ev){
     store.state.prefs.autoRest = hit.dataset.auto === "1";
     store.save();
     ui.renderLog(openSession);
+    return;
+  }
+
+  hit = t.closest("[data-prog]");
+  if(hit){
+    store.state.prefs.autoProgress = hit.dataset.prog === "1";
+    store.save();
+    ui.renderLog(openSession);
+    return;
+  }
+
+  hit = t.closest("[data-var]");
+  if(hit){
+    store.state.prefs.variety = hit.dataset["var"];
+    store.save();
+    ui.renderLog(openSession);
+    return;
+  }
+
+  if(t.closest("#reseedAll")){
+    var seeded = IL.plan.reseed();
+    ui.toast(seeded
+      ? seeded + " working weights set from your log."
+      : "Nothing in the log to read yet — import or finish a session first.");
     return;
   }
 
@@ -3562,34 +5115,59 @@ document.addEventListener("keydown", function(ev){
 
 /* --- the set logger --------------------------------------------------- */
 
+/* The rep chips mirror the first segment's reps, so they have to follow a
+   stepper tap that no longer rebuilds the sheet. */
+function syncRepChips(e, k){
+  var segs = e.log[k];
+  var chips = $("sheetBody").querySelectorAll("[data-repquick]");
+
+  for(var i = 0; i < chips.length; i++){
+    chips[i].setAttribute("aria-pressed",
+      !!segs && parseInt(chips[i].dataset.repquick, 10) === segs[0].r);
+  }
+}
+
 function setSheetClick(t){
   var e = store.currentDay().ex[editingSet.row];
   var k = editingSet.k;
   var hit;
 
-  /* Stepper: data-seg is "w|r, segment index, delta". */
+  /* Stepper: data-seg is "w|r, segment index, delta".
+
+     The field and the running total are updated in place rather than by
+     rebuilding the sheet. Rebuilding on every tap is what made a quick
+     +5 +5 +5 feel like it was fighting you, and it threw away the caret. */
   hit = t.closest("[data-seg]");
   if(hit){
     var parts = hit.dataset.seg.split(",");
     var index = parseInt(parts[1], 10);
     var delta = parseFloat(parts[2]);
     var seg = e.log[k][index];
+    var value;
 
-    if(parts[0] === "w") store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
-    else store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
+    if(parts[0] === "w") value = store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
+    else value = store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
 
+    var field = $("sheetBody").querySelector('[data-segval="' + parts[0] + ',' + index + '"]');
+    if(field) field.value = value || "";
+
+    syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k);
     return true;
   }
 
   hit = t.closest("[data-repquick]");
   if(hit){
-    store.setSegmentReps(e, k, 0, hit.dataset.repquick);
+    var reps = store.setSegmentReps(e, k, 0, hit.dataset.repquick);
+    var box = $("sheetBody").querySelector('[data-segval="r,0"]');
+    if(box) box.value = reps || "";
+
+    syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k);
     return true;
   }
 
@@ -3639,12 +5217,7 @@ $("sheetBody").addEventListener("click", function(ev){
   if(ui.sheetMode() === "skip"){
     hit = t.closest("[data-skiptype]");
     if(hit){
-      /* Toggled by hand rather than by re-rendering, so the note you were
-         halfway through typing survives the tap. */
-      var kinds = $("sheetBody").querySelectorAll("[data-skiptype]");
-      for(var n = 0; n < kinds.length; n++){
-        kinds[n].setAttribute("aria-pressed", kinds[n] === hit);
-      }
+      toggleGroup(hit, "skiptype");
       return;
     }
 
@@ -3694,28 +5267,85 @@ $("sheetBody").addEventListener("click", function(ev){
     return;
   }
 
+  /* --- adding training you already did ---------------------------------- */
+
+  if(ui.sheetMode() === "import"){
+    if(t.closest("#impRun")){
+      var parsed = ui.lastImport;
+      if(!parsed || !parsed.sessions.length){
+        ui.toast("Nothing to add yet.");
+        return;
+      }
+
+      var added = IL.plan.commitImport(parsed);
+      /* The whole reason for importing: the plan now opens at the loads your
+         own history says you have earned. */
+      var reseeded = IL.plan.reseed();
+
+      ui.closeSheet();
+      showLog();
+      ui.toast(added.sessions + " session" + (added.sessions === 1 ? "" : "s") +
+               " added" +
+               (reseeded ? " · " + reseeded + " working weights updated" : "") + ".");
+    }
+    return;
+  }
+
+  /* --- building an exercise the library doesn't have --------------------- */
+
+  if(ui.sheetMode() === "builder"){
+    hit = t.closest("[data-nxtype]");
+    if(hit){ toggleGroup(hit, "nxtype"); return; }
+
+    hit = t.closest("[data-nxbw]");
+    if(hit){ toggleGroup(hit, "nxbw"); return; }
+
+    hit = t.closest("[data-nxdel]");
+    if(hit){
+      var goner = hit.dataset.nxdel;
+      if(confirm("Remove " + goner + " from your library? Sessions already " +
+                 "logged against it are untouched.")){
+        store.removeCustomExercise(goner);
+        builderName = null;
+        ui.librarySheet(builderFrom || "add");
+        ui.toast(goner + " removed from the library.");
+      }
+      return;
+    }
+
+    if(t.closest("#nxSave")) saveBuilder();
+    return;
+  }
+
+  /* --- the library picker ----------------------------------------------- */
+
+  hit = t.closest("[data-libedit]");
+  if(hit){
+    builderFrom = ui.sheetMode();
+    builderName = hit.dataset.libedit;
+    ui.builderSheet(null, store.libLookup(builderName));
+    return;
+  }
+
+  hit = t.closest("[data-newname]");
+  if(hit){
+    builderFrom = ui.sheetMode();
+    builderName = null;
+    ui.builderSheet(hit.dataset.newname);
+    return;
+  }
+
+  if(t.closest("#libNew")){
+    builderFrom = ui.sheetMode();
+    builderName = null;
+    ui.builderSheet("");
+    return;
+  }
+
   /* Picked something out of the library — either a swap or an addition. */
   hit = t.closest("[data-pick]");
   if(hit){
-    var name = hit.dataset.pick;
-    if(ui.sheetMode() === "swap" && editing >= 0){
-      var target = day.ex[editing];
-      var fresh = store.newExercise(name);
-      target.name = fresh.name;
-      target.sets = fresh.sets;
-      target.reps = fresh.reps;
-      target.weight = 0;
-      target.log = [];
-      store.save();
-      ui.renderTrain();
-      ui.exerciseSheet(editing);
-    }else{
-      day.ex.push(store.newExercise(name));
-      store.save();
-      ui.renderTrain();
-      ui.closeSheet();
-      ui.toast(name + " added to " + day.name + ".");
-    }
+    applyPick(hit.dataset.pick, ui.sheetMode());
     return;
   }
 
@@ -3749,6 +5379,14 @@ $("sheetBody").addEventListener("click", function(ev){
     $("fR").value = e.reps;
     store.save();
     ui.patchExercise(editing);
+    return;
+  }
+
+  hit = t.closest("[data-pin]");
+  if(hit){
+    e.pin = hit.dataset.pin === "1";
+    store.save();
+    ui.exerciseSheet(editing);
     return;
   }
 
@@ -3825,6 +5463,39 @@ $("sheetBody").addEventListener("change", function(ev){
   }
 });
 
+/* Save what the builder is holding. Creating ends by putting the exercise
+   straight into the day — the button says "save and use it" and means it.
+   Editing ends back at the library, because you were managing a list. */
+function saveBuilder(){
+  var typed = $("nxName").value.trim();
+  if(!typed){
+    ui.toast("Give it a name first.");
+    return;
+  }
+
+  var saved = store.addCustomExercise({
+    name: typed,
+    group: $("nxGroup").value,
+    type: pickedValue("nxtype"),
+    sets: $("nxSets").value,
+    reps: $("nxReps").value,
+    pattern: $("nxPattern").value,
+    bw: pickedValue("nxbw") === "1"
+  });
+
+  /* Renaming leaves the entry it came from behind. */
+  if(builderName && builderName !== saved.name) store.removeCustomExercise(builderName);
+
+  if(builderName){
+    builderName = null;
+    ui.librarySheet(builderFrom || "add");
+    ui.toast(saved.name + " saved to your library.");
+    return;
+  }
+
+  applyPick(saved.name, builderFrom);
+}
+
 /* --------------------------------------------------------------------------
    Action bar
    -------------------------------------------------------------------------- */
@@ -3846,14 +5517,41 @@ $("finish").addEventListener("click", function(){
     return;
   }
 
-  var finished = store.finishSession();
+  var out = store.finishSession();
   editingSet = null;
   editing = -1;
   stopRest();
   render();
   window.scrollTo({ top:0, behavior:"smooth" });
-  ui.toast(finished.name + " logged · " + store.currentDay().name + " is up next.");
+
+  /* Say what the finish decided, not just that it happened — the plan for
+     next time changed, and finding that out by surprise is worse. */
+  var ups = 0, swaps = 0;
+  out.changes.forEach(function(c){
+    if(c.kind === "up") ups++;
+    else if(c.kind === "swap") swaps++;
+  });
+
+  ui.toast(out.day.name + " logged" +
+    (ups ? " · " + ups + " load" + (ups === 1 ? "" : "s") + " up" : "") +
+    (swaps ? " · " + swaps + " new next time" : "") +
+    " · " + store.currentDay().name + " is up next.");
 });
+
+/* --------------------------------------------------------------------------
+   Mobile
+
+   Tapping + twice quickly means ten pounds, not "zoom in". The real fix is
+   touch-action:manipulation in the stylesheet, which turns double-tap zoom
+   off for the whole document; this is the belt to that pair of braces, for
+   engines that still synthesise a dblclick before honouring it.
+
+   Pinch-zoom is deliberately left alone. It is the only way back for anyone
+   who needs the text bigger, and nobody pinches by accident.
+   -------------------------------------------------------------------------- */
+document.addEventListener("dblclick", function(ev){
+  ev.preventDefault();
+}, { passive:false });
 
 /* --------------------------------------------------------------------------
    Boot

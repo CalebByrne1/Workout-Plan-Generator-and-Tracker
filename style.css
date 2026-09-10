@@ -79,7 +79,18 @@
    ========================================================================== */
 
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+
+/* Locked in for a phone.
+
+   touch-action:manipulation is the line that stops a double tap zooming: it
+   tells the browser this document has no double-tap gesture, so the second
+   tap of a quick +5 +5 is another +5 and the 300ms wait-and-see disappears
+   with it. Pinch-zoom is deliberately NOT disabled — it is the only way back
+   for anyone who needs the text bigger, and nobody pinches by accident. */
+html{
+  -webkit-text-size-adjust:100%;
+  touch-action:manipulation;
+}
 
 /* An author `display` beats the browser's own [hidden] rule, so anything
    given a display here — .actionbar, .sheet — would ignore `el.hidden`
@@ -98,7 +109,15 @@ body{
 }
 
 button,input,textarea,select{font:inherit;color:inherit}
-button{background:none;border:0;padding:0;cursor:pointer;color:inherit}
+
+/* A fast second tap on a button used to start selecting its label and put
+   the magnifier up. Buttons are for pressing; nothing in one needs copying. */
+button{
+  background:none;border:0;padding:0;cursor:pointer;color:inherit;
+  touch-action:manipulation;
+  -webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;
+}
 img{max-width:100%}
 h1,h2,h3{margin:0;font-family:var(--font-d);font-weight:600;text-wrap:balance}
 p{margin:0}
@@ -120,7 +139,9 @@ input[type="number"]{
   border-radius:var(--r);
   padding:11px 12px;
   color:var(--ink);
-  font-size:15px;   /* 16px or below zooms iOS on focus only under 16 — this is safe at 15 with the viewport lock */
+  /* Never below 16px. Safari zooms the page to meet any field smaller than
+     that when it takes focus, and then leaves you scrolled sideways. */
+  font-size:16px;
 }
 textarea{resize:vertical;min-height:80px;line-height:1.5}
 input[type="number"]{font-family:var(--font-m);font-variant-numeric:tabular-nums;text-align:center}
@@ -410,10 +431,30 @@ main{flex:1;padding-bottom:8px}
 }
 .lib-group:first-of-type{margin-top:0;padding-top:0;border-top:0}
 
+/* A row is the pick button plus, for your own exercises, a way into the
+   editor. Two buttons rather than one, because a button inside a button is
+   not a thing. */
+.lib-row{display:flex;align-items:stretch;gap:8px;border-bottom:1px solid var(--line-soft)}
+.lib-row:last-child{border-bottom:0}
+
 .lib-item{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
-  width:100%;min-height:48px;padding:12px 2px;text-align:left;
-  border-bottom:1px solid var(--line-soft);
+  flex:1;min-width:0;min-height:48px;padding:12px 2px;text-align:left;
+}
+.lib-row .lib-item{border-bottom:0}
+.lib-item strong{min-width:0;overflow-wrap:anywhere}
+
+.lib-item.solo{
+  border:1px dashed var(--accent);border-radius:var(--r);
+  margin-bottom:10px;padding:12px;
+}
+.lib-item.solo .d{color:var(--accent)}
+
+.lib-edit{
+  flex:none;align-self:center;padding:8px 10px;
+  border:1px solid var(--line);border-radius:8px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-3);
 }
 .lib-item strong{font-family:var(--font-d);font-size:17px;font-weight:500;letter-spacing:.01em;line-height:1.15}
 .lib-item .d{
@@ -617,7 +658,7 @@ select{
   border-radius:var(--r);
   padding:11px 12px;
   color:var(--ink);
-  font-size:15px;
+  font-size:16px;      /* as above: under 16 and focusing it zooms iOS */
 }
 input[type="date"]{
   -webkit-appearance:none;appearance:none;
@@ -794,3 +835,122 @@ input[type="date"]{
   font-family:var(--font-m);font-size:13.5px;font-weight:600;
   font-variant-numeric:tabular-nums;
 }
+
+
+/* ==========================================================================
+   What the last session changed
+
+   Four states, and never colour alone: each carries its own word. Amber for
+   a load that went up, teal for one deliberately backed off, plain ink for
+   a hold, and an accent rule down the side for a slot that changed hands.
+   ========================================================================== */
+
+.planbar{
+  display:flex;align-items:baseline;gap:10px;
+  margin:0 14px 12px;padding:9px 12px;
+  border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:var(--r);background:var(--surface);
+}
+.planbar .k{
+  flex:none;font-family:var(--font-m);font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.planbar b{font-family:var(--font-d);font-size:14px;font-weight:600;letter-spacing:.03em}
+
+.ex-plan{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 7px;
+  margin-top:9px;padding-left:9px;
+  border-left:2px solid var(--line);
+  font-size:12px;line-height:1.4;
+}
+.ex-plan b{
+  font-family:var(--font-m);font-size:11.5px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.ex-plan span{color:var(--ink-3)}
+
+.ex-plan[data-kind="up"]{border-left-color:var(--accent)}
+.ex-plan[data-kind="up"] b{color:var(--accent)}
+.ex-plan[data-kind="down"]{border-left-color:var(--good)}
+.ex-plan[data-kind="down"] b{color:var(--good)}
+.ex-plan[data-kind="swap"]{border-left-color:var(--accent);background:var(--accent-soft);
+  padding:7px 9px;border-radius:0 6px 6px 0}
+.ex-plan[data-kind="swap"] b{color:var(--accent)}
+.ex-plan[data-kind="hold"] b,
+.ex-plan[data-kind="open"] b{color:var(--ink-2)}
+
+
+/* ==========================================================================
+   Settings rows that need the full width for their control
+   ========================================================================== */
+
+.setrow.stack{
+  display:block;
+  padding:4px 0 2px;
+}
+.setrow.stack .k{margin-bottom:8px}
+.setrow.stack .k small{margin-top:2px}
+
+.rowbtns.two{grid-template-columns:1fr 1fr}
+
+
+/* ==========================================================================
+   Importing past training
+   ========================================================================== */
+
+textarea.tall{
+  min-height:190px;
+  /* 16px like every other field: anything smaller and Safari zooms the page
+     to meet it the moment it takes focus. */
+  font-family:var(--font-m);font-size:16px;line-height:1.5;
+  font-variant-numeric:tabular-nums;
+  /* Keep the line breaks that separate one day from the next, but let a long
+     exercise line wrap. A sideways scrollbar inside a sheet that already
+     scrolls down is a fight on a touchscreen. */
+  white-space:pre-wrap;overflow-wrap:break-word;
+}
+
+/* The format guide. Closed by default — it is reference, not instruction,
+   and the placeholder in the box above already shows the shape. */
+.fmt{
+  border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);
+}
+.fmt summary{
+  padding:12px 13px;cursor:pointer;
+  font-family:var(--font-d);font-size:14px;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);
+}
+.fmt ul{margin:0;padding:0 14px 4px 30px;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.fmt li{margin-bottom:4px}
+.fmt li b{font-weight:600;color:var(--ink)}
+.fmt .hint{padding:0 14px 13px}
+.fmt code{
+  font-family:var(--font-m);font-size:11.5px;
+  padding:1px 5px;border-radius:4px;
+  background:var(--surface-2);color:var(--ink);
+}
+
+.impview{display:flex;flex-direction:column;gap:8px}
+
+.improw{
+  display:flex;align-items:baseline;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--line-soft);
+}
+.improw:last-child{border-bottom:0}
+.improw span{
+  flex:none;width:74px;
+  font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+}
+.improw b{flex:1;min-width:0;font-family:var(--font-d);font-size:14px;font-weight:600}
+.improw small{flex:none;font-size:11px;color:var(--ink-3)}
+
+/* Lines the parser could not read. Stated plainly rather than hidden — an
+   import you cannot check is one you cannot trust. */
+.impwarn{
+  padding:10px 12px;border-radius:var(--r);
+  border:1px solid var(--danger);
+  font-size:12.5px;line-height:1.45;color:var(--danger);
+}
+
+.rowbtns button[disabled]{opacity:.45}

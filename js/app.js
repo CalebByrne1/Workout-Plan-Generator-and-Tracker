@@ -26,6 +26,77 @@ var view = "train";          /* "train" | "log" | "progress"                */
 var openSession = null;      /* id of the expanded log entry, or null       */
 var editing = -1;            /* exercise index open in the editor sheet     */
 var editingSet = null;       /* { row, k } open in the set logger, or null  */
+var builderFrom = null;      /* the picker mode the exercise builder came from */
+var builderName = null;      /* library entry being edited, or null to create  */
+
+/* --------------------------------------------------------------------------
+   Small shared helpers
+   -------------------------------------------------------------------------- */
+
+/* Flip a row of toggle buttons by hand rather than re-rendering the sheet,
+   so a half-typed field in the same sheet survives the tap. */
+function toggleGroup(hit, attr){
+  var all = $("sheetBody").querySelectorAll("[data-" + attr + "]");
+  for(var i = 0; i < all.length; i++){
+    all[i].setAttribute("aria-pressed", all[i] === hit);
+  }
+}
+
+/* Which of those buttons is currently pressed. */
+function pickedValue(attr){
+  var el = $("sheetBody").querySelector('[data-' + attr + '][aria-pressed="true"]');
+  return el ? el.dataset[attr] : "";
+}
+
+/* Open an exercise at the load your log says you have earned rather than at
+   nothing. Trained it before — even years ago, even only in an import — and
+   the first set is already the right weight. */
+function seedFromLog(e){
+  var seen = store.lastEntryFor(e.name);
+  if(!seen) return e;
+
+  var res = IL.plan.overload(e, seen);
+  if(res.kind !== "open"){
+    e.weight = res.weight;
+    e.reps = res.reps;
+    e.progress = { kind:res.kind, note:res.note };
+  }
+  return e;
+}
+
+/* Put a chosen exercise into the day — replacing the one being edited, or on
+   the end. Shared by the library picker and by saving a brand-new exercise,
+   which both finish the same way. */
+function applyPick(name, mode){
+  var day = store.currentDay();
+
+  if(mode === "swap" && editing >= 0){
+    var target = day.ex[editing];
+    var fresh = store.newExercise(name);
+
+    target.name = fresh.name;
+    target.sets = fresh.sets;
+    target.reps = fresh.reps;
+    target.weight = 0;
+    target.note = "";
+    target.log = [];
+    target.pin = false;
+    target.rotAge = 0;
+    target.progress = null;
+    seedFromLog(target);
+
+    store.save();
+    ui.renderTrain();
+    ui.exerciseSheet(editing);
+    return;
+  }
+
+  day.ex.push(seedFromLog(store.newExercise(name)));
+  store.save();
+  ui.renderTrain();
+  ui.closeSheet();
+  ui.toast(name + " added to " + day.name + ".");
+}
 
 /* --------------------------------------------------------------------------
    Rest timer
@@ -282,6 +353,11 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  if(t.closest("#addPast")){
+    ui.importSheet();
+    return;
+  }
+
   if(t.closest("#expCSV")){   exportCSV();     return; }
   if(t.closest("#expJSON")){  exportBackup();  return; }
   if(t.closest("#expShare")){ exportShare();   return; }
@@ -327,6 +403,30 @@ $("view").addEventListener("click", function(ev){
     store.state.prefs.autoRest = hit.dataset.auto === "1";
     store.save();
     ui.renderLog(openSession);
+    return;
+  }
+
+  hit = t.closest("[data-prog]");
+  if(hit){
+    store.state.prefs.autoProgress = hit.dataset.prog === "1";
+    store.save();
+    ui.renderLog(openSession);
+    return;
+  }
+
+  hit = t.closest("[data-var]");
+  if(hit){
+    store.state.prefs.variety = hit.dataset["var"];
+    store.save();
+    ui.renderLog(openSession);
+    return;
+  }
+
+  if(t.closest("#reseedAll")){
+    var seeded = IL.plan.reseed();
+    ui.toast(seeded
+      ? seeded + " working weights set from your log."
+      : "Nothing in the log to read yet — import or finish a session first.");
     return;
   }
 
@@ -393,34 +493,59 @@ document.addEventListener("keydown", function(ev){
 
 /* --- the set logger --------------------------------------------------- */
 
+/* The rep chips mirror the first segment's reps, so they have to follow a
+   stepper tap that no longer rebuilds the sheet. */
+function syncRepChips(e, k){
+  var segs = e.log[k];
+  var chips = $("sheetBody").querySelectorAll("[data-repquick]");
+
+  for(var i = 0; i < chips.length; i++){
+    chips[i].setAttribute("aria-pressed",
+      !!segs && parseInt(chips[i].dataset.repquick, 10) === segs[0].r);
+  }
+}
+
 function setSheetClick(t){
   var e = store.currentDay().ex[editingSet.row];
   var k = editingSet.k;
   var hit;
 
-  /* Stepper: data-seg is "w|r, segment index, delta". */
+  /* Stepper: data-seg is "w|r, segment index, delta".
+
+     The field and the running total are updated in place rather than by
+     rebuilding the sheet. Rebuilding on every tap is what made a quick
+     +5 +5 +5 feel like it was fighting you, and it threw away the caret. */
   hit = t.closest("[data-seg]");
   if(hit){
     var parts = hit.dataset.seg.split(",");
     var index = parseInt(parts[1], 10);
     var delta = parseFloat(parts[2]);
     var seg = e.log[k][index];
+    var value;
 
-    if(parts[0] === "w") store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
-    else store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
+    if(parts[0] === "w") value = store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
+    else value = store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
 
+    var field = $("sheetBody").querySelector('[data-segval="' + parts[0] + ',' + index + '"]');
+    if(field) field.value = value || "";
+
+    syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k);
     return true;
   }
 
   hit = t.closest("[data-repquick]");
   if(hit){
-    store.setSegmentReps(e, k, 0, hit.dataset.repquick);
+    var reps = store.setSegmentReps(e, k, 0, hit.dataset.repquick);
+    var box = $("sheetBody").querySelector('[data-segval="r,0"]');
+    if(box) box.value = reps || "";
+
+    syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k);
     return true;
   }
 
@@ -470,12 +595,7 @@ $("sheetBody").addEventListener("click", function(ev){
   if(ui.sheetMode() === "skip"){
     hit = t.closest("[data-skiptype]");
     if(hit){
-      /* Toggled by hand rather than by re-rendering, so the note you were
-         halfway through typing survives the tap. */
-      var kinds = $("sheetBody").querySelectorAll("[data-skiptype]");
-      for(var n = 0; n < kinds.length; n++){
-        kinds[n].setAttribute("aria-pressed", kinds[n] === hit);
-      }
+      toggleGroup(hit, "skiptype");
       return;
     }
 
@@ -525,28 +645,85 @@ $("sheetBody").addEventListener("click", function(ev){
     return;
   }
 
+  /* --- adding training you already did ---------------------------------- */
+
+  if(ui.sheetMode() === "import"){
+    if(t.closest("#impRun")){
+      var parsed = ui.lastImport;
+      if(!parsed || !parsed.sessions.length){
+        ui.toast("Nothing to add yet.");
+        return;
+      }
+
+      var added = IL.plan.commitImport(parsed);
+      /* The whole reason for importing: the plan now opens at the loads your
+         own history says you have earned. */
+      var reseeded = IL.plan.reseed();
+
+      ui.closeSheet();
+      showLog();
+      ui.toast(added.sessions + " session" + (added.sessions === 1 ? "" : "s") +
+               " added" +
+               (reseeded ? " · " + reseeded + " working weights updated" : "") + ".");
+    }
+    return;
+  }
+
+  /* --- building an exercise the library doesn't have --------------------- */
+
+  if(ui.sheetMode() === "builder"){
+    hit = t.closest("[data-nxtype]");
+    if(hit){ toggleGroup(hit, "nxtype"); return; }
+
+    hit = t.closest("[data-nxbw]");
+    if(hit){ toggleGroup(hit, "nxbw"); return; }
+
+    hit = t.closest("[data-nxdel]");
+    if(hit){
+      var goner = hit.dataset.nxdel;
+      if(confirm("Remove " + goner + " from your library? Sessions already " +
+                 "logged against it are untouched.")){
+        store.removeCustomExercise(goner);
+        builderName = null;
+        ui.librarySheet(builderFrom || "add");
+        ui.toast(goner + " removed from the library.");
+      }
+      return;
+    }
+
+    if(t.closest("#nxSave")) saveBuilder();
+    return;
+  }
+
+  /* --- the library picker ----------------------------------------------- */
+
+  hit = t.closest("[data-libedit]");
+  if(hit){
+    builderFrom = ui.sheetMode();
+    builderName = hit.dataset.libedit;
+    ui.builderSheet(null, store.libLookup(builderName));
+    return;
+  }
+
+  hit = t.closest("[data-newname]");
+  if(hit){
+    builderFrom = ui.sheetMode();
+    builderName = null;
+    ui.builderSheet(hit.dataset.newname);
+    return;
+  }
+
+  if(t.closest("#libNew")){
+    builderFrom = ui.sheetMode();
+    builderName = null;
+    ui.builderSheet("");
+    return;
+  }
+
   /* Picked something out of the library — either a swap or an addition. */
   hit = t.closest("[data-pick]");
   if(hit){
-    var name = hit.dataset.pick;
-    if(ui.sheetMode() === "swap" && editing >= 0){
-      var target = day.ex[editing];
-      var fresh = store.newExercise(name);
-      target.name = fresh.name;
-      target.sets = fresh.sets;
-      target.reps = fresh.reps;
-      target.weight = 0;
-      target.log = [];
-      store.save();
-      ui.renderTrain();
-      ui.exerciseSheet(editing);
-    }else{
-      day.ex.push(store.newExercise(name));
-      store.save();
-      ui.renderTrain();
-      ui.closeSheet();
-      ui.toast(name + " added to " + day.name + ".");
-    }
+    applyPick(hit.dataset.pick, ui.sheetMode());
     return;
   }
 
@@ -580,6 +757,14 @@ $("sheetBody").addEventListener("click", function(ev){
     $("fR").value = e.reps;
     store.save();
     ui.patchExercise(editing);
+    return;
+  }
+
+  hit = t.closest("[data-pin]");
+  if(hit){
+    e.pin = hit.dataset.pin === "1";
+    store.save();
+    ui.exerciseSheet(editing);
     return;
   }
 
@@ -656,6 +841,39 @@ $("sheetBody").addEventListener("change", function(ev){
   }
 });
 
+/* Save what the builder is holding. Creating ends by putting the exercise
+   straight into the day — the button says "save and use it" and means it.
+   Editing ends back at the library, because you were managing a list. */
+function saveBuilder(){
+  var typed = $("nxName").value.trim();
+  if(!typed){
+    ui.toast("Give it a name first.");
+    return;
+  }
+
+  var saved = store.addCustomExercise({
+    name: typed,
+    group: $("nxGroup").value,
+    type: pickedValue("nxtype"),
+    sets: $("nxSets").value,
+    reps: $("nxReps").value,
+    pattern: $("nxPattern").value,
+    bw: pickedValue("nxbw") === "1"
+  });
+
+  /* Renaming leaves the entry it came from behind. */
+  if(builderName && builderName !== saved.name) store.removeCustomExercise(builderName);
+
+  if(builderName){
+    builderName = null;
+    ui.librarySheet(builderFrom || "add");
+    ui.toast(saved.name + " saved to your library.");
+    return;
+  }
+
+  applyPick(saved.name, builderFrom);
+}
+
 /* --------------------------------------------------------------------------
    Action bar
    -------------------------------------------------------------------------- */
@@ -677,14 +895,41 @@ $("finish").addEventListener("click", function(){
     return;
   }
 
-  var finished = store.finishSession();
+  var out = store.finishSession();
   editingSet = null;
   editing = -1;
   stopRest();
   render();
   window.scrollTo({ top:0, behavior:"smooth" });
-  ui.toast(finished.name + " logged · " + store.currentDay().name + " is up next.");
+
+  /* Say what the finish decided, not just that it happened — the plan for
+     next time changed, and finding that out by surprise is worse. */
+  var ups = 0, swaps = 0;
+  out.changes.forEach(function(c){
+    if(c.kind === "up") ups++;
+    else if(c.kind === "swap") swaps++;
+  });
+
+  ui.toast(out.day.name + " logged" +
+    (ups ? " · " + ups + " load" + (ups === 1 ? "" : "s") + " up" : "") +
+    (swaps ? " · " + swaps + " new next time" : "") +
+    " · " + store.currentDay().name + " is up next.");
 });
+
+/* --------------------------------------------------------------------------
+   Mobile
+
+   Tapping + twice quickly means ten pounds, not "zoom in". The real fix is
+   touch-action:manipulation in the stylesheet, which turns double-tap zoom
+   off for the whole document; this is the belt to that pair of braces, for
+   engines that still synthesise a dblclick before honouring it.
+
+   Pinch-zoom is deliberately left alone. It is the only way back for anyone
+   who needs the text bigger, and nobody pinches by accident.
+   -------------------------------------------------------------------------- */
+document.addEventListener("dblclick", function(ev){
+  ev.preventDefault();
+}, { passive:false });
 
 /* --------------------------------------------------------------------------
    Boot

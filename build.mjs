@@ -19,7 +19,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 const ROOT = import.meta.dirname;
-const SCRIPTS = ["js/data.js", "js/store.js", "js/chart.js", "js/ui.js", "js/app.js"];
+const SCRIPTS = ["js/data.js", "js/store.js", "js/plan.js", "js/chart.js", "js/ui.js", "js/app.js"];
 
 const read = (p) => readFile(join(ROOT, p), "utf8");
 
