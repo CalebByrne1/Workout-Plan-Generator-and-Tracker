@@ -84,7 +84,8 @@ const server = createServer((req, res) => {
 
   if (path === "/index.html") {
     body = Buffer.from(
-      body.toString("utf8").replace("</body>", '<script src="/test/harness.js"></script></body>')
+      body.toString("utf8").replace("</body>",
+        '<script src="/test/fake-supabase.js"></script><script src="/test/harness.js"></script></body>')
     );
   }
 

@@ -392,15 +392,163 @@ function settingsPanel(){
   '</div>';
 }
 
-/* Getting the log off the phone. Everything here is generated on the device
-   and handed to you — nothing is uploaded anywhere, because there is nowhere
-   to upload it to. */
+/* --------------------------------------------------------------------------
+   Sync — signing in, and how it's going
+
+   The sign-in form is two steps (email, then the code from the email), and
+   which step you're on lives here rather than in sync.js: it's a fact about
+   this screen, not about the account.
+   -------------------------------------------------------------------------- */
+
+var syncForm = { step:"email", email:"", error:"", busy:false };
+
+function resetSyncForm(){
+  syncForm.step = "email";
+  syncForm.error = "";
+  syncForm.busy = false;
+}
+
+function plural(n, one, many){ return n + " " + (n === 1 ? one : many); }
+
+function agoText(ts){
+  var mins = Math.round((Date.now() - ts) / 60000);
+  if(mins < 1) return "just now";
+  if(mins < 60) return mins + " min ago";
+  var hours = Math.round(mins / 60);
+  if(hours < 24) return hours + " h ago";
+  return "on " + formatDay(ts);
+}
+
+function syncStatusText(s){
+  if(s.status === "syncing") return "Syncing…";
+  if(s.status === "offline") return "Offline — changes wait here and go up when you're back online.";
+  if(s.status === "error") return s.message || "Couldn't sync.";
+  if(s.status === "choose") return "Paused until you choose which data to keep.";
+  if(!s.lastSync) return "Not synced yet.";
+  return "Synced " + agoText(s.lastSync) + (s.dirty ? " · changes waiting" : "") + ".";
+}
+
+function syncHTML(){
+  if(!IL.sync) return "";
+  var s = IL.sync.info();
+  var head = '<h3 class="set-title">Sync</h3>';
+  var err = syncForm.error ? '<p class="impwarn" id="syErr">' + esc(syncForm.error) + '</p>' : '';
+
+  if(!s.signedIn && syncForm.step === "code"){
+    return head +
+      '<p class="hint">A code is on its way to <b>' + esc(syncForm.email) + '</b>. Type it in ' +
+        'here — the code keeps you in the app, where the link in the email would open ' +
+        'your browser instead.</p>' +
+      '<div class="field">' +
+        '<label class="lab" for="syCode">Code from the email</label>' +
+        '<input id="syCode" type="text" inputmode="numeric" autocomplete="one-time-code"' +
+          ' maxlength="12" placeholder="123456">' +
+      '</div>' +
+      err +
+      '<div class="datarow">' +
+        '<button class="add-btn" id="syVerify"' + (syncForm.busy ? ' disabled' : '') + '>' +
+          (syncForm.busy ? 'Signing in…' : 'Sign in') + '</button>' +
+        '<button class="add-btn" id="syBack">Other email</button>' +
+      '</div>' +
+      '<button class="linkish" id="syResend">Send a new code</button>';
+  }
+
+  if(!s.signedIn){
+    return head +
+      '<p class="hint">Sign in and this log is on every device you sign in on — and ' +
+        'survives losing this one. Everything still works offline; it catches up ' +
+        'when you’re back.</p>' +
+      (s.message ? '<p class="impwarn">' + esc(s.message) + '</p>' : '') +
+      '<div class="field">' +
+        '<label class="lab" for="syEmail">Email</label>' +
+        '<input id="syEmail" type="email" inputmode="email" autocomplete="email"' +
+          ' autocapitalize="none" spellcheck="false" placeholder="you@example.com"' +
+          ' value="' + esc(syncForm.email) + '">' +
+      '</div>' +
+      err +
+      '<button class="add-btn" id="sySend"' + (syncForm.busy ? ' disabled' : '') + '>' +
+        (syncForm.busy ? 'Sending…' : 'Email me a sign-in code') + '</button>';
+  }
+
+  return head +
+    '<div class="syncrow">' +
+      /* A status dot always sits beside words that say the same thing. */
+      '<i class="syncdot" data-state="' + esc(s.status) + '"></i>' +
+      '<div class="k">' +
+        '<b>' + esc(s.email || "Signed in") + '</b>' +
+        '<small id="syStatus">' + esc(syncStatusText(s)) + '</small>' +
+      '</div>' +
+    '</div>' +
+    (s.choosing ? '<button class="add-btn" id="syChoose">Choose which data to keep</button>' : '') +
+    '<div class="datarow">' +
+      '<button class="add-btn" id="syNow">Sync now</button>' +
+      '<button class="add-btn" id="syOut">Sign out</button>' +
+    '</div>';
+}
+
+/* Redrawn whole when signed in (there's nothing to type into). While signing
+   in it's only redrawn on purpose, between steps — a status change must never
+   wipe a half-typed code. */
+function paintSync(){
+  var box = $("syncBox");
+  if(box) box.innerHTML = syncHTML();
+  /* The "last copy off this device" line depends on sync too — signing in
+     or out, or a fresh sync, changes what it should say. */
+  var age = $("exportAge");
+  if(age) age.innerHTML = exportAgeHTML();
+}
+
+/* "Which data do you keep?" — the one question sync ever asks. */
+function syncChoiceSheet(c){
+  /* Each side lists what it actually holds. No single headline number: the
+     difference that matters might be sessions, or weigh-ins, or food, and a
+     bold "0 sessions" on both sides would hide it. */
+  function side(title, x, from){
+    function count(n, one, many){
+      return n ? '<li><b>' + n + '</b> ' + (n === 1 ? one : many) + '</li>' : '';
+    }
+    var lines = count(x.sessions, "session", "sessions") +
+                count(x.weighIns, "weigh-in", "weigh-ins") +
+                count(x.foodDays, "day of food", "days of food") +
+                count(x.custom, "custom exercise", "custom exercises");
+
+    return '<div class="choice">' +
+      '<span class="lab">' + esc(title) + '</span>' +
+      '<ul>' + (lines || '<li>nothing logged</li>') + '</ul>' +
+      (x.last ? '<small>last trained ' + esc(formatDay(x.last)) + '</small>' : '') +
+      (from ? '<small>last written from ' + esc(from) + '</small>' : '') +
+    '</div>';
+  }
+
+  openSheet("Which data to keep?",
+    '<p class="sheet-sub">This device and your account both have training in them, and they’re different.</p>' +
+    '<div class="choices">' +
+      side("This device", c.local, "") +
+      side("Your account", c.remote, c.remoteDevice) +
+    '</div>' +
+    '<p class="hint">Whichever you don’t pick is kept as a snapshot on this device, ' +
+      'so either answer can be undone from Snapshots.</p>' +
+    '<div class="rowbtns two">' +
+      '<button class="primary" data-keep="remote">Use the account’s</button>' +
+      '<button data-keep="local">Use this device’s</button>' +
+    '</div>',
+  "syncchoice");
+}
+
+/* Getting the log off the phone: syncing it to your account, or files built
+   on the device and handed to you. */
+
 /* How long since a copy actually left the device. Snapshots don't count —
    they sit in the same origin as the thing they're backing up, so a wiped
-   phone takes both. */
+   phone takes both. A recent sync does count: that copy is on the server. */
 function exportAge(){
   var history = store.state.history.length;
   if(!history) return null;
+
+  var sync = IL.sync ? IL.sync.info() : null;
+  if(sync && sync.signedIn && sync.lastSync && Date.now() - sync.lastSync < 30 * 86400000){
+    return { stale:false, text:"Synced to your account " + agoText(sync.lastSync) + "." };
+  }
 
   var days = store.daysSinceExport();
   if(days === null){
@@ -417,21 +565,25 @@ function exportAge(){
   };
 }
 
+function exportAgeHTML(){
+  var age = exportAge();
+  if(!age) return "";
+  return age.stale
+    ? '<p class="nudge">' + esc(age.text) + ' Clearing your browser data ' +
+        'or losing the phone would take all of it. Sign in to sync, or send yourself a backup.</p>'
+    : '<p class="hint good">' + esc(age.text) + '</p>';
+}
+
 function dataPanel(){
   var canShare = !!(navigator.share && navigator.canShare);
-  var age = exportAge();
 
   return '<div class="settings">' +
+    '<div id="syncBox">' + syncHTML() + '</div>' +
     '<h3 class="set-title">Your data</h3>' +
-    '<p class="hint">' + store.state.history.length + ' entries and ' +
-      store.state.body.length + ' weigh-ins, saved on this device.</p>' +
+    '<p class="hint">' + plural(store.state.history.length, "entry", "entries") + ' and ' +
+      plural(store.state.body.length, "weigh-in", "weigh-ins") + ', saved on this device.</p>' +
 
-    (age
-      ? (age.stale
-          ? '<p class="nudge">' + esc(age.text) + ' Clearing your browser data ' +
-              'or losing the phone would take all of it. Send yourself a backup.</p>'
-          : '<p class="hint good">' + esc(age.text) + '</p>')
-      : '') +
+    '<div id="exportAge">' + exportAgeHTML() + '</div>' +
 
     '<div class="datarow">' +
       '<button class="add-btn" id="expCSV">Spreadsheet (CSV)</button>' +
@@ -1833,6 +1985,10 @@ IL.ui = {
   setFinishLabel: setFinishLabel,
   renderLog: renderLog,
   paintDataPanel: paintDataPanel,
+  paintSync: paintSync,
+  get syncForm(){ return syncForm; },
+  resetSyncForm: resetSyncForm,
+  syncChoiceSheet: syncChoiceSheet,
   renderProgress: renderProgress,
   paintCharts: paintCharts,
 

@@ -22,5 +22,8 @@ jobs:
       - name: Logic tests
         run: node test/logic.mjs
 
+      - name: Sync tests
+        run: node test/sync.mjs
+
       - name: Browser tests
         run: node test/browser.mjs

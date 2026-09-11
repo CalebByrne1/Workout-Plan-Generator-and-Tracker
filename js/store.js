@@ -448,15 +448,20 @@ function load(){
 
 var state = load();
 
-/* onSaveError is set by app.js so a failed write can surface in the UI. */
+/* onSaveError is set by app.js so a failed write can surface in the UI.
+   onSaved is set by sync.js: every change goes through save(), which makes
+   it the one place that can say "something changed, send it up". */
 var onSaveError = null;
+var onSaved = null;
 
 function save(){
   try{
     localStorage.setItem(KEY, JSON.stringify(state));
   }catch(err){
     if(onSaveError) onSaveError();
+    return;
   }
+  if(onSaved) onSaved();
 }
 
 function reset(){
@@ -1421,6 +1426,7 @@ IL.store = {
 
   get state(){ return state; },
   set onSaveError(fn){ onSaveError = fn; },
+  set onSaved(fn){ onSaved = fn; },
 
   save: save,
   reset: reset,

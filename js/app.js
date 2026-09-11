@@ -99,6 +99,84 @@ function applyPick(name, mode){
 }
 
 /* --------------------------------------------------------------------------
+   Signing in to sync
+
+   Two steps: an email, then the code that arrives in it. The form's state
+   lives in ui.syncForm; these move it along and redraw.
+   -------------------------------------------------------------------------- */
+
+var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/* What to say once the first sync after signing in has run. */
+var SIGNED_IN = {
+  created:   "Signed in — this device's data is now on your account.",
+  pulled:    "Signed in — your account's data is on this device.",
+  pushed:    "Signed in and synced.",
+  unchanged: "Signed in — already up to date.",
+  choose:    "",                 /* the question sheet is already on screen */
+  offline:   "Signed in — it'll sync when you're back online.",
+  error:     "Signed in, but the first sync didn't work — see Sync for why."
+};
+
+function sendSyncCode(again){
+  var form = ui.syncForm;
+  var email = again || ($("syEmail") ? $("syEmail").value.trim() : "");
+
+  form.email = email;
+  if(!EMAIL_RE.test(email)){
+    form.error = "That doesn't look like an email address.";
+    ui.paintSync();
+    return;
+  }
+
+  form.error = "";
+  form.busy = true;
+  ui.paintSync();
+
+  IL.sync.sendCode(email).then(function(){
+    form.busy = false;
+    form.step = "code";
+    ui.paintSync();
+    if($("syCode")) $("syCode").focus();
+    if(again) ui.toast("New code sent.");
+  }, function(err){
+    form.busy = false;
+    form.error = IL.sync.explain(err);
+    ui.paintSync();
+  });
+}
+
+function verifySyncCode(){
+  var form = ui.syncForm;
+  var code = $("syCode") ? $("syCode").value.replace(/\s+/g, "") : "";
+
+  if(!/^\d{4,10}$/.test(code)){
+    form.error = "Type the code from the email — just the digits.";
+    ui.paintSync();
+    if($("syCode")){ $("syCode").value = code; $("syCode").focus(); }
+    return;
+  }
+
+  form.error = "";
+  form.busy = true;
+  ui.paintSync();
+  if($("syCode")) $("syCode").value = code;
+
+  IL.sync.verifyCode(form.email, code).then(function(result){
+    ui.resetSyncForm();
+    ui.paintSync();
+    var said = SIGNED_IN.hasOwnProperty(result) ? SIGNED_IN[result] : "Signed in.";
+    if(said) ui.toast(said);
+  }, function(err){
+    form.busy = false;
+    form.error = IL.sync.explain(err);
+    ui.paintSync();
+    /* Put the code back so a typo can be fixed rather than retyped. */
+    if($("syCode")){ $("syCode").value = code; $("syCode").focus(); }
+  });
+}
+
+/* --------------------------------------------------------------------------
    Rest timer
    -------------------------------------------------------------------------- */
 
@@ -517,6 +595,43 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  /* --- sync ------------------------------------------------------------- */
+
+  if(t.closest("#sySend")){ sendSyncCode(); return; }
+  if(t.closest("#syResend")){ sendSyncCode(ui.syncForm.email); return; }
+  if(t.closest("#syVerify")){ verifySyncCode(); return; }
+
+  if(t.closest("#syBack")){
+    ui.resetSyncForm();
+    ui.paintSync();
+    return;
+  }
+
+  if(t.closest("#syNow")){
+    IL.sync.syncNow("button").then(function(result){
+      if(result === "unchanged") ui.toast("Already up to date.");
+      if(view === "log") ui.paintSync();
+    });
+    return;
+  }
+
+  if(t.closest("#syOut")){
+    if(confirm("Sign out of sync? Everything stays on this device — it just stops " +
+               "syncing until you sign back in.")){
+      IL.sync.signOut();
+      ui.resetSyncForm();
+      ui.paintSync();
+      ui.toast("Signed out. Your data is all still here.");
+    }
+    return;
+  }
+
+  if(t.closest("#syChoose")){
+    var choice = IL.sync.pendingChoice();
+    if(choice) ui.syncChoiceSheet(choice);
+    return;
+  }
+
   /* --- snapshots -------------------------------------------------------- */
 
   if(t.closest("#snapNow")){
@@ -564,6 +679,13 @@ $("view").addEventListener("click", function(ev){
     });
     return;
   }
+});
+
+/* The phone keyboard's Go / Enter submits the step you're on. */
+$("view").addEventListener("keydown", function(ev){
+  if(ev.key !== "Enter") return;
+  if(ev.target.id === "syEmail"){ ev.preventDefault(); sendSyncCode(); }
+  else if(ev.target.id === "syCode"){ ev.preventDefault(); verifySyncCode(); }
 });
 
 $("view").addEventListener("input", function(ev){
@@ -766,6 +888,23 @@ $("sheetBody").addEventListener("click", function(ev){
       ui.closeSheet();
       if(view === "progress") ui.renderProgress();
       ui.toast("Weigh-in saved.");
+    }
+    return;
+  }
+
+  /* --- which data to keep, on first sync -------------------------------- */
+
+  if(ui.sheetMode() === "syncchoice"){
+    hit = t.closest("[data-keep]");
+    if(hit){
+      var keep = hit.dataset.keep;
+      ui.closeSheet();
+      IL.sync.resolveChoice(keep).then(function(){
+        if(view === "log") ui.paintSync();
+        ui.toast(keep === "remote"
+          ? "Using your account's data. This device's is kept in Snapshots."
+          : "Using this device's data. The account's old copy is kept in Snapshots.");
+      });
     }
     return;
   }
@@ -1186,6 +1325,45 @@ render();
    likeliest to get a yes. Either way it is one call and it costs nothing,
    and the answer is reported in the Data panel rather than in a popup. */
 IL.vault.persist();
+
+/* --------------------------------------------------------------------------
+   Sync
+   -------------------------------------------------------------------------- */
+
+/* The account's copy just replaced this device's. Anything open was pointing
+   at the old data, so it's closed and the view redrawn from the new. A pull
+   only ever happens when this device had nothing unsaved, so nothing typed
+   is lost by it. */
+IL.sync.hooks.applied = function(row){
+  editing = -1;
+  editingSet = null;
+  if(!$("sheet").hidden && ui.sheetMode() !== "syncchoice") ui.closeSheet();
+  render();
+  ui.toast("Updated from " + (row.device || "another device") + ".");
+};
+
+IL.sync.hooks.choose = function(choice){
+  ui.syncChoiceSheet(choice);
+  if(view === "log") ui.paintSync();
+};
+
+IL.sync.hooks.conflict = function(c){
+  ui.toast(c.kept === "remote"
+    ? "Both devices had changes — kept the newer copy from " + (c.device || "the other device") +
+      ". This device's is kept in Snapshots."
+    : "Both devices had changes — kept this device's newer copy. The account's is kept in Snapshots.");
+};
+
+IL.sync.hooks.signedOut = function(){
+  if(view === "log") ui.paintSync();
+  ui.toast("Signed out of sync — sign in again from the Log tab to keep syncing.");
+};
+
+IL.sync.onChange(function(){
+  if(view === "log" && IL.sync.info().signedIn) ui.paintSync();
+});
+
+IL.sync.init();
 
 /* Offline support. Only meaningful over http(s); skipped when the file is
    opened straight off the disk. */

@@ -1,8 +1,11 @@
 # Iron Ledger
 
-A single-page workout tracker for a four-day upper/lower split. No backend, no
-login, no accounts — everything lives in the browser's `localStorage` on the
-device you're using.
+A single-page workout tracker for a four-day upper/lower split, with nutrition
+and a maintenance estimate worked out from your own numbers. Everything lives
+in the browser's `localStorage` on the device you're using and works offline;
+signing in is optional and syncs the same log to every device you use (see
+**Sync across devices**). No server of its own and no dependencies — just
+files a browser opens.
 
 ## Logging a set
 
@@ -260,6 +263,7 @@ js/data.js            THE PROGRAM — exercise library and the four day template
 js/vault.js           snapshots in IndexedDB, and asking for persistent storage
 js/store.js           state shape, localStorage, and the domain logic
 js/plan.js            progressive overload, auto-rotation, and the importer
+js/sync.js            sign-in and sync with Supabase, over plain fetch
 js/chart.js           the SVG charts on the Progress tab; no library
 js/ui.js              everything that produces markup
 js/app.js             event wiring, rest timer, boot
@@ -268,10 +272,13 @@ sw.js                 offline cache, so a dead gym signal doesn't matter
 icon.svg              app icon
 build.mjs             optional: bundles everything into one file (see below)
 package.json          npm scripts only — there are no dependencies
+supabase/schema.sql   the sync table and its security rules — run once in Supabase
 test/logic.mjs        the rules, run in Node with no browser
+test/sync.mjs         several devices syncing through a fake Supabase
+test/fake-supabase.js the fake: same HTTP, same security rules, no network
 test/browser.mjs      serves the app and drives it in headless Chrome/Edge
 test/harness.js       the in-page half of the browser tests
-.github/workflows/    runs both suites on every push
+.github/workflows/    runs every suite on every push
 ```
 
 The scripts are plain `<script>` tags rather than ES modules, so the app also
@@ -308,8 +315,9 @@ the last ninety seconds it also tells you so.
 ## Tests
 
 ```
-npm test               build, then both suites
+npm test               build, then every suite
 npm run test:logic     just the rules — fast, needs only Node
+npm run test:sync      several devices syncing through a fake Supabase
 npm run test:browser   the real app in headless Chrome or Edge
 ```
 
@@ -317,18 +325,30 @@ There is nothing to install; Node 22 or newer is the only requirement.
 
 **test/logic.mjs** loads the data, store, plan and vault files into a bare
 Node context and checks the arithmetic: progression, rotation, the import
-parser, migrations from older saves, and that the vault degrades quietly when
-there is no IndexedDB at all.
+parser, the weight trend and maintenance estimate, nutrition phases,
+migrations from older saves, and that the vault degrades quietly when there is
+no IndexedDB at all.
+
+**test/sync.mjs** runs several copies of the app side by side — an iPhone, a
+laptop, a tablet — each with its own storage, syncing through
+`test/fake-supabase.js`, a stand-in that speaks the same HTTP as Supabase and
+enforces the same rules as `supabase/schema.sql`. It covers conflicts both
+ways, two devices writing at the same instant, edits landing mid-upload,
+expired and revoked sessions, going offline, the "which data to keep?"
+question, and a broken copy on the account being refused — and checks that
+every copy that loses a conflict turns up in a snapshot. It never touches the
+real project.
 
 **test/browser.mjs** serves the repository over http — so IndexedDB, storage
 and the service worker behave the way they do once deployed — and drives it in
 a headless browser over the DevTools protocol: logging sets, the rest timer
 through a simulated locked screen, building an exercise, importing, taking and
-restoring snapshots, undoing a reset. It finds Chrome or Edge on its own; set
-`CHROME_PATH` to point it elsewhere. With no browser available it skips
-rather than fails.
+restoring snapshots, undoing a reset, the nutrition and maintenance cards, and
+signing in to sync through the real screens against the fake server. It finds
+Chrome or Edge on its own; set `CHROME_PATH` to point it elsewhere. With no
+browser available it skips rather than fails.
 
-Both run on every push to GitHub (`.github/workflows/test.yml`).
+All of them run on every push to GitHub (`.github/workflows/test.yml`).
 
 ## Running it locally
 
@@ -416,12 +436,13 @@ Otherwise phones will keep serving the old copy. Your saved workouts are in
 
 ## Keeping your data
 
-Three layers, and it matters which one protects against what:
+Four layers, and it matters which one protects against what:
 
 | | Protects against | Doesn't protect against |
 |---|---|---|
 | **Persistent storage** | The browser evicting the app's data to free up space | Clearing site data, losing the phone |
 | **Snapshots** | A mistaken Reset, restoring the wrong file, a bad import | Clearing site data, losing the phone |
+| **Sync** | Losing the phone, clearing site data, a second device | Deleting the data on purpose everywhere |
 | **Exporting a copy** | Everything | Only as fresh as your last export |
 
 **Persistent storage.** On launch the app asks the browser to mark its storage
@@ -436,16 +457,74 @@ a **Restore** button in **Log → Snapshots**, and restoring snapshots the
 current state first, so a rollback can itself be rolled back. They live on the
 same device as the thing they back up: they are an undo button, not a backup.
 
-**Exporting** is the only layer that survives losing the phone, so the Data
-panel tracks when a copy last left the device and says so plainly once it has
-been a month or more.
+**Sync and exporting** are the layers that survive losing the phone, so the
+Data panel tracks when a copy last left the device — by sync or by export —
+and says so plainly once it has been a month or more.
+
+## Sync across devices
+
+**Log → Sync.** Sign in with your email and the whole log — training, plan,
+weigh-ins, food, your own exercises — is on every device you sign in on.
+Nothing about using the app changes: it all still works offline, and each
+device catches up when it's back.
+
+**Signing in is by code.** Type your email, and a code arrives by email; type
+that into the app. It's a code rather than a link because on an iPhone an app
+added to the home screen doesn't share storage with Safari — a link would sign
+Safari in, not the app. (A link still works on a computer, where it opens in
+the same browser.)
+
+**How it behaves:**
+
+- Your whole save is one row in the account. A change on this device goes up
+  a couple of seconds after you make it — logging three sets in a row is one
+  upload — and anything waiting goes up the moment you switch away from the app.
+- Coming back to the app checks whether another device changed anything, and
+  takes it if this device had nothing new of its own. Only the revision number
+  is fetched to check; the data itself only when there's something to take.
+- **If both devices changed things offline, the newer copy wins, and the other
+  is kept as a snapshot** on the device that lost — so a clash never throws
+  anything away. The app tells you when it happens.
+- **The first time a device with its own training meets an account with
+  different training, it asks** which to keep, rather than silently overwriting
+  either. Identical copies, or an empty side, never ask.
+- Taking the account's copy always snapshots this device's first. If the other
+  device had just been reset by mistake, that snapshot is what gets it back.
+- Signing out keeps everything on the device. Sign back in to the same account
+  and it carries on; changes made while signed out go up.
+
+**Security.** The app talks to Supabase directly from the browser using the
+project's *publishable* key, which is public by design. What keeps the data
+private is on the server, in `supabase/schema.sql`: the table is granted to
+signed-in users only, and row-level security lets each account read and write
+exactly one row — its own. The server, not the device, numbers every write and
+stamps its time, which is how two devices writing at once are caught.
+
+### Setting it up (once)
+
+1. **Run `supabase/schema.sql`** in the Supabase dashboard: SQL Editor → New
+   query → paste the whole file → Run. It's safe to run again.
+2. **Put the code in the sign-in emails.** In Authentication, open the email
+   templates and add `{{ .Token }}` to both the **Magic link** and **Confirm
+   signup** templates — a first-time address gets the second one. For example:
+
+   ```html
+   <h2>Your Iron Ledger sign-in code</h2>
+   <p>Type this into the app:</p>
+   <p style="font-size:28px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
+   <p>Or, on a computer, <a href="{{ .ConfirmationURL }}">sign in with this link</a>.</p>
+   ```
+
+3. **Set the Site URL** (Authentication → URL Configuration) to where the app
+   is hosted, so the link in the email comes back to it.
+
+Supabase's built-in email sender only sends a few emails an hour — plenty for
+one person; if you hit it, the app says so, and it clears in a few minutes.
 
 ## Getting your data off the phone
 
-There's no cloud copy yet — clearing site data or losing the phone loses the
-log and its snapshots — so **Your data** at the bottom of the Log tab exists
-to get a copy out. Nothing is uploaded anywhere; the files are built on the
-device and handed to you.
+Sync keeps a copy on your account; **Your data** at the bottom of the Log tab
+gets you a copy of your own, as files built on the device and handed to you.
 
 | | |
 |---|---|

@@ -144,6 +144,7 @@ p{margin:0}
 
 textarea,
 input[type="text"],
+input[type="email"],
 input[type="number"]{
   width:100%;
   background:var(--surface);
@@ -1198,3 +1199,52 @@ textarea.tall{
 .suggest b{font-family:var(--font-m);font-size:15px;font-weight:600}
 .suggest small{font-family:var(--font-m);font-size:10.5px;color:var(--ink-3)}
 .suggest button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+
+
+/* ==========================================================================
+   Sync
+   ========================================================================== */
+
+.syncrow{display:flex;align-items:center;gap:10px;margin:4px 0 10px}
+.syncrow .k{min-width:0}
+.syncrow b{display:block;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.syncrow small{display:block;margin-top:1px;font-size:12px;line-height:1.4;color:var(--ink-3)}
+
+/* A status, so status colours — and never alone: the words beside it say
+   the same thing. */
+.syncdot{
+  flex:none;width:10px;height:10px;border-radius:50%;
+  background:var(--ink-3);
+}
+.syncdot[data-state="idle"]{background:var(--good)}
+.syncdot[data-state="syncing"],
+.syncdot[data-state="choose"]{background:var(--accent)}
+.syncdot[data-state="error"]{background:var(--danger)}
+
+/* A quiet secondary action under a pair of buttons. */
+.linkish{
+  display:block;margin:10px auto 0;padding:6px 10px;
+  font-family:var(--font-m);font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-3);
+  text-decoration:underline;text-underline-offset:3px;
+}
+
+/* The two sides of "which data to keep?". */
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.choice{
+  padding:11px 12px;
+  border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);
+}
+.choice small{display:block;margin-top:3px;font-size:11.5px;line-height:1.4;color:var(--ink-3)}
+.rowbtns button[data-keep]{min-height:52px;line-height:1.2}
+.choice ul{margin:6px 0 0;padding:0;list-style:none;font-size:13px;line-height:1.6;color:var(--ink-2)}
+.choice ul b{font-family:var(--font-m);font-weight:600;color:var(--ink)}
+
+/* The sync box sits inside the panel as one child, so it needs the panel's
+   spacing restated inside it or its label, field and button touch. */
+#syncBox{display:flex;flex-direction:column;gap:12px}
+#syncBox:empty{display:none}
+#syncBox .field{margin:0}
+#syncBox .syncrow{margin:0}
+#syncBox .linkish{margin-top:0}

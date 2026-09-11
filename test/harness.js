@@ -650,6 +650,160 @@ step(function(){
   click("#sheetClose");
 });
 
+/* ----------------------------------------------------------------- sync
+
+   Driven through the real screens, against test/fake-supabase.js standing in
+   for Supabase inside the page. Last in the run, so live syncing can't
+   disturb anything above. */
+
+var fake = new window.FakeSupabase({ url: IL.sync.config.url, key: IL.sync.config.key });
+var realFetch = window.fetch.bind(window);
+window.fetch = function(u, init){
+  return String(u).indexOf(fake.url) === 0 ? fake.fetch(u, init) : realFetch(u, init);
+};
+IL.sync.config.pushDelay = 30;
+IL.sync.config.checkEvery = 0;
+
+var EMAIL = "caleb@example.com";
+function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+function uidOf(email){ return fake.userId(email); }
+
+step(function(){
+  head("sync: signed out");
+  click("#tabLog");
+  ok("the sync box is on the Log tab", !!$("syncBox"));
+  ok("asking for an email", !!$("syEmail") && !!$("sySend"));
+  ok("the email field is 16px, so focusing it can't zoom the phone",
+     parseFloat(getComputedStyle($("syEmail")).fontSize) >= 16, getComputedStyle($("syEmail")).fontSize);
+  ok("the old 'nowhere to upload it to' promise is gone", !/nowhere/.test($("view").textContent));
+});
+
+step(function(){
+  head("sync: sending a code");
+  $("syEmail").value = "not an email";
+  click("#sySend");
+  ok("a bad address is caught before sending", /doesn't look like an email/.test($("syErr").textContent),
+     $("syErr") && $("syErr").textContent);
+  eq("and nothing was sent", fake.requests.length, 0);
+
+  $("syEmail").value = EMAIL;
+  click("#sySend");
+  return wait(80).then(function(){
+    ok("a code was requested", !!fake.codeFor(EMAIL));
+    ok("the form moved on to the code", !!$("syCode"));
+    ok("naming where it went", $("syncBox").textContent.indexOf(EMAIL) >= 0);
+    eq("the code field hints the phone to offer the code from the email",
+       $("syCode").getAttribute("autocomplete"), "one-time-code");
+  });
+});
+
+step(function(){
+  head("sync: a wrong code");
+  $("syCode").value = "000000";
+  click("#syVerify");
+  return wait(120).then(function(){
+    ok("refused in plain words", /didn't work/.test(($("syErr") || {}).textContent || ""),
+       $("syErr") && $("syErr").textContent);
+    eq("the code is left in place to fix", $("syCode").value, "000000");
+    eq("still signed out", IL.sync.info().signedIn, false);
+  });
+});
+
+step(function(){
+  head("sync: signing in");
+  $("syCode").value = fake.codeFor(EMAIL);
+  click("#syVerify");
+  return wait(300).then(function(){
+    ok("signed in", IL.sync.info().signedIn);
+    ok("the box shows who", !!q(".syncrow") && q(".syncrow").textContent.indexOf(EMAIL) >= 0);
+    ok("and says it synced", /Synced/.test($("syStatus").textContent), $("syStatus").textContent);
+    ok("the toast says what happened", /Signed in/.test($("toast").textContent), $("toast").textContent);
+    var row = fake.row(uidOf(EMAIL));
+    ok("this device's data became the account's", !!row && IL.sync.sameData(row.data, IL.store.state));
+    ok("a synced account counts as a copy off the device",
+       !!q(".hint.good") && /Synced to your account/.test(q(".hint.good").textContent),
+       q(".hint.good") && q(".hint.good").textContent);
+    ok("so there's no nag to export", !q(".nudge"));
+  });
+});
+
+step(function(){
+  head("sync: a change goes up on its own");
+  var rev = fake.row(uidOf(EMAIL)).rev;
+  IL.store.addBodyweight(171.3, dayAgo(40));
+  return wait(250).then(function(){
+    eq("the account moved on", fake.row(uidOf(EMAIL)).rev, rev + 1);
+    ok("carrying the change", fake.row(uidOf(EMAIL)).data.body.some(function(b){ return b.w === 171.3; }));
+  });
+});
+
+step(function(){
+  head("sync: a change from another device comes in");
+  var copy = JSON.parse(JSON.stringify(fake.row(uidOf(EMAIL)).data));
+  copy.body.push({ at: IL.store.fromDayKey(dayAgo(45)), w: 172.2 });
+  fake.writeAs(uidOf(EMAIL), copy, "iPhone");
+  document.dispatchEvent(new Event("visibilitychange"));      /* coming back to the app */
+  return wait(300).then(function(){
+    ok("it arrived", IL.store.state.body.some(function(b){ return b.w === 172.2; }));
+    ok("and the app said where from", /Updated from iPhone/.test($("toast").textContent), $("toast").textContent);
+    return IL.vault.list();
+  }).then(function(rows){
+    ok("with a snapshot taken first", rows.some(function(r){ return /before taking changes from iPhone/.test(r.reason); }),
+       rows.slice(0, 3).map(function(r){ return r.reason; }).join(" / "));
+  });
+});
+
+step(function(){
+  head("sync: a second account with its own data asks first");
+  click("#tabLog");
+  click("#syOut");
+  ok("signed out", !IL.sync.info().signedIn);
+  ok("with the data all still here", IL.store.state.body.length > 0);
+
+  /* An account that already holds different training. */
+  var other = JSON.parse(IL.store.toBackup());
+  other.body = [{ at: IL.store.fromDayKey(dayAgo(90)), w: 150 }];
+  other.history = [];
+  fake.users["second@example.com"] = { id: "user-second", email: "second@example.com" };
+  fake.rows["user-second"] = {
+    user_id: "user-second", data: other, rev: 4, device: "iPad",
+    updated_at: new Date().toISOString()
+  };
+
+  $("syEmail").value = "second@example.com";
+  click("#sySend");
+  return wait(80).then(function(){
+    $("syCode").value = fake.codeFor("second@example.com");
+    click("#syVerify");
+    return wait(300);
+  }).then(function(){
+    eq("it asks", $("sheet").dataset.mode, "syncchoice");
+    eq("showing both sides", qa(".choice").length, 2);
+    ok("naming the other device", /iPad/.test(q(".choices").textContent));
+    eq("with a button for each", qa("[data-keep]").length, 2);
+    eq("the account is untouched while it waits", fake.row("user-second").rev, 4);
+    click('[data-keep="local"]');
+    return wait(250);
+  }).then(function(){
+    ok("keeping this device's pushed it", fake.row("user-second").rev === 5 &&
+       IL.sync.sameData(fake.row("user-second").data, IL.store.state));
+    ok("and said the other copy is kept", /kept in Snapshots/.test($("toast").textContent), $("toast").textContent);
+    return IL.vault.list();
+  }).then(function(rows){
+    ok("in a snapshot", rows.some(function(r){ return /account data from iPad/.test(r.reason); }),
+       rows.slice(0, 3).map(function(r){ return r.reason; }).join(" / "));
+  });
+});
+
+step(function(){
+  head("sync: signing out");
+  click("#tabLog");
+  var before = IL.store.state.body.length;
+  click("#syOut");
+  ok("back to the email form", !!$("syEmail"));
+  eq("nothing on this device was touched", IL.store.state.body.length, before);
+});
+
 /* ------------------------------------------------------------------ run */
 
 /* Each step may return a promise; the runner waits for it, then gives the

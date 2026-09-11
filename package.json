@@ -8,7 +8,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "test": "node build.mjs && node test/logic.mjs && node test/browser.mjs",
+    "test": "node build.mjs && node test/logic.mjs && node test/sync.mjs && node test/browser.mjs",
+    "test:sync": "node test/sync.mjs",
     "test:logic": "node test/logic.mjs",
     "test:browser": "node test/browser.mjs"
   }
