@@ -1,13 +1,14 @@
 /* Offline cache for the app shell.
    Bump CACHE whenever you change any file below, or phones will keep
    serving the old copy. */
-var CACHE = "iron-ledger-v4";
+var CACHE = "iron-ledger-v7";
 
 var SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./js/data.js",
+  "./js/vault.js",
   "./js/store.js",
   "./js/plan.js",
   "./js/chart.js",

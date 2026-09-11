@@ -395,14 +395,44 @@ function settingsPanel(){
 /* Getting the log off the phone. Everything here is generated on the device
    and handed to you — nothing is uploaded anywhere, because there is nowhere
    to upload it to. */
+/* How long since a copy actually left the device. Snapshots don't count —
+   they sit in the same origin as the thing they're backing up, so a wiped
+   phone takes both. */
+function exportAge(){
+  var history = store.state.history.length;
+  if(!history) return null;
+
+  var days = store.daysSinceExport();
+  if(days === null){
+    return { stale:true, text:"You have never taken a copy off this device." };
+  }
+  if(days >= 30){
+    return { stale:true, text:"Last copy off this device: " + days + " days ago." };
+  }
+  return {
+    stale: false,
+    text: days === 0 ? "Copied off this device today."
+        : days === 1 ? "Copied off this device yesterday."
+        : "Copied off this device " + days + " days ago."
+  };
+}
+
 function dataPanel(){
   var canShare = !!(navigator.share && navigator.canShare);
+  var age = exportAge();
 
   return '<div class="settings">' +
     '<h3 class="set-title">Your data</h3>' +
     '<p class="hint">' + store.state.history.length + ' entries and ' +
-      store.state.body.length + ' weigh-ins are saved on this device only. ' +
-      'Send yourself a copy whenever you want one off it.</p>' +
+      store.state.body.length + ' weigh-ins, saved on this device.</p>' +
+
+    (age
+      ? (age.stale
+          ? '<p class="nudge">' + esc(age.text) + ' Clearing your browser data ' +
+              'or losing the phone would take all of it. Send yourself a backup.</p>'
+          : '<p class="hint good">' + esc(age.text) + '</p>')
+      : '') +
+
     '<div class="datarow">' +
       '<button class="add-btn" id="expCSV">Spreadsheet (CSV)</button>' +
       '<button class="add-btn" id="expJSON">Full backup</button>' +
@@ -417,7 +447,82 @@ function dataPanel(){
     '<input id="impFile" type="file" accept=".json,application/json" hidden>' +
     '<p class="hint">The CSV has one row per weight you lifted, so a drop set ' +
       'stays two rows. The backup restores everything exactly, on any device.</p>' +
+
+    '<h3 class="set-title">Snapshots</h3>' +
+    '<p class="hint" id="storeStat">Checking storage…</p>' +
+    '<div id="snapList"></div>' +
+    '<button class="add-btn" id="snapNow">+ Snapshot right now</button>' +
+    '<p class="hint">Taken automatically after every session and before ' +
+      'anything that overwrites your log, so a mistaken reset or a bad import ' +
+      'is one tap to undo. They live on this device — they are an undo button, ' +
+      'not a backup.</p>' +
   '</div>';
+}
+
+/* --------------------------------------------------------------------------
+   The asynchronous half of the Data panel
+
+   Snapshots and the storage estimate both come from promises, so they are
+   filled in after the panel is on screen rather than holding up the render.
+   -------------------------------------------------------------------------- */
+
+/* Non-breaking space between number and unit, so "13 kB" never wraps into
+   "13" on one line and "kB" on the next. */
+function formatBytes(n){
+  var MB = 1024 * 1024;
+  if(!n) return "0 kB";
+  if(n < MB) return Math.max(1, Math.round(n / 1024)) + " kB";
+  if(n < 1024 * MB) return (n / MB).toFixed(1).replace(/\.0$/, "") + " MB";
+  return Math.round(n / 1024 / MB) + " GB";
+}
+
+function formatStamp(ts){
+  var d = new Date(ts);
+  return formatDay(ts) + " · " +
+         d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+}
+
+function snapshotRow(row){
+  return '<div class="snaprow">' +
+    '<div class="snapwhen">' +
+      '<b>' + esc(row.reason) + '</b>' +
+      '<small>' + esc(formatStamp(row.at)) + ' · ' + row.sessions +
+        ' session' + (row.sessions === 1 ? "" : "s") +
+        ' · ' + esc(formatBytes(row.bytes)) + '</small>' +
+    '</div>' +
+    '<button class="snapgo" data-snaprestore="' + row.id + '">Restore</button>' +
+    '<button class="segdel" data-snapdel="' + row.id + '">Delete</button>' +
+  '</div>';
+}
+
+function paintDataPanel(){
+  var listEl = $("snapList");
+  var statEl = $("storeStat");
+  if(!listEl || !statEl || !IL.vault) return;
+
+  IL.vault.status().then(function(st){
+    if(!$("storeStat")) return;
+
+    var bits = [];
+    if(st.persisted === true)       bits.push("Storage is marked persistent — the browser won't evict it to reclaim space.");
+    else if(st.persisted === false) bits.push("The browser has this as best-effort storage, so it could be evicted under pressure. Keep exporting.");
+    else                            bits.push("This browser doesn't say whether it will keep the data. Keep exporting.");
+
+    if(st.estimate && st.estimate.usage){
+      bits.push("Using " + formatBytes(st.estimate.usage) +
+                (st.estimate.quota ? " of " + formatBytes(st.estimate.quota) : "") + ".");
+    }
+    $("storeStat").textContent = bits.join(" ");
+  });
+
+  IL.vault.list().then(function(rows){
+    if(!$("snapList")) return;
+
+    $("snapList").innerHTML = rows.length
+      ? rows.map(snapshotRow).join("")
+      : '<p class="hint">No snapshots yet. One is taken the next time you ' +
+        'finish a session.</p>';
+  });
 }
 
 function renderLog(openId){
@@ -456,6 +561,7 @@ function renderLog(openId){
 
   $("actionbar").hidden = true;
   renderRail("log");
+  paintDataPanel();
 }
 
 /* --------------------------------------------------------------------------
@@ -538,23 +644,304 @@ function calendarHTML(){
     '</div>';
 }
 
+/* --------------------------------------------------------------------------
+   Nutrition
+
+   Over and under are a DIRECTION, never a verdict: over is the goal on a
+   bulk and the thing to avoid on a cut, so the colours stay put whatever
+   the phase and the words carry the meaning. Text is always ink; the colour
+   lives on a swatch or a mark beside it.
+   -------------------------------------------------------------------------- */
+
+var FOOD_WINDOW = 14;         /* days on the over/under chart */
+var FOOD_AVG = 7;             /* days behind the averages */
+
+function kcal(n){ return Math.round(n).toLocaleString(); }
+
+/* Grams keep a decimal only when there is one. */
+function grams(n){ return (Math.round(n * 10) / 10).toLocaleString() + " g"; }
+
+/* A real minus sign, not a hyphen — it lines up with the plus. */
+function signed(n){
+  if(n > 0) return "+" + kcal(n);
+  if(n < 0) return "−" + kcal(-n);
+  return "0";
+}
+
+function diffWords(d){
+  if(d === null || d === undefined) return "";
+  if(d === 0) return "right on target";
+  return kcal(Math.abs(d)) + (d > 0 ? " over" : " under");
+}
+
+function dirOf(d){ return d > 0 ? "over" : d < 0 ? "under" : "on"; }
+
+function swatch(d){
+  return d === null || d === 0 ? "" : '<i class="sw" data-dir="' + dirOf(d) + '"></i>';
+}
+
+function phaseBadge(phase){
+  return store.PHASES[phase]
+    ? '<span class="phase">' + esc(store.PHASES[phase]) + '</span>'
+    : "";
+}
+
+/* Today against the target, as a meter.
+
+   One bar, split at the target. Everything up to the target is the under
+   colour on a lighter track of the same hue; anything past it runs on in
+   the over colour. The scale stretches to fit a day that went over, so going
+   over reads as a bar that ran long rather than as a bar that's merely full. */
+function meterHTML(eaten, target){
+  var scale = Math.max(target, eaten) || 1;
+  var toTarget = Math.min(eaten, target) / scale * 100;
+  var mark = target / scale * 100;
+  var past = eaten > target ? (eaten - target) / scale * 100 : 0;
+
+  return '<div class="meter" role="img" aria-label="' +
+      esc(kcal(eaten) + " of " + kcal(target) + " kilocalories") + '">' +
+    '<i class="meter-in" style="width:' + toTarget.toFixed(2) + '%"></i>' +
+    (past
+      ? '<i class="meter-over" style="left:' + mark.toFixed(2) + '%;width:' + past.toFixed(2) + '%"></i>' +
+        '<i class="meter-mark" style="left:' + mark.toFixed(2) + '%"></i>'
+      : '') +
+  '</div>';
+}
+
+function macro(label, v){
+  return '<div class="macro">' +
+    '<span class="lab">' + esc(label) + '</span>' +
+    (v === null || v === undefined ? '<i>not logged</i>' : '<b>' + esc(grams(v)) + '</b>') +
+  '</div>';
+}
+
+/* The card you use every day: what today looks like, and what you're aiming at. */
+function nutritionCard(){
+  var today = store.dayKey(Date.now());
+  var food = store.nutritionOn(today);
+  var goal = store.currentGoal();
+  var eaten = food ? food.kcal : null;
+  var top;
+
+  if(eaten !== null && goal){
+    var d = eaten - goal.kcal;
+    top =
+      '<div class="food-today">' +
+        '<div class="food-num"><b>' + kcal(eaten) + '</b>' +
+          '<span>of ' + kcal(goal.kcal) + ' kcal today</span></div>' +
+        '<span class="food-diff">' + swatch(d) + esc(diffWords(d)) + '</span>' +
+      '</div>' +
+      meterHTML(eaten, goal.kcal);
+  }else if(eaten !== null){
+    top =
+      '<div class="food-today">' +
+        '<div class="food-num"><b>' + kcal(eaten) + '</b><span>kcal today</span></div>' +
+      '</div>';
+  }else{
+    top = '<p class="hint food-none">Nothing logged today' +
+      (goal ? ' — ' + kcal(goal.kcal) + ' kcal to work with.' : '.') + '</p>';
+  }
+
+  var goalRow = goal
+    ? '<div class="food-goal">' +
+        '<div class="k">' +
+          '<span class="lab">Daily target</span>' +
+          '<b>' + kcal(goal.kcal) + ' kcal</b>' + phaseBadge(goal.phase) +
+          '<small>since ' + esc(formatDay(store.fromDayKey(goal.from))) + '</small>' +
+        '</div>' +
+        '<button class="edit" id="editGoal">Change</button>' +
+      '</div>'
+    : '<div class="food-goal">' +
+        '<div class="k">' +
+          '<span class="lab">Daily target</span>' +
+          '<small>Set one and every day shows how far over or under it you were.</small>' +
+        '</div>' +
+        '<button class="edit" id="editGoal">Set target</button>' +
+      '</div>';
+
+  return '<section class="card">' +
+    '<div class="card-head">' +
+      '<h3>Nutrition</h3>' +
+      '<button class="edit" id="logFood">' + (food ? "Edit today" : "Log food") + '</button>' +
+    '</div>' +
+    top +
+    (food ? '<div class="food-macros">' + macro("Protein", food.protein) + macro("Fiber", food.fiber) + '</div>' : '') +
+    goalRow +
+  '</section>';
+}
+
+/* An average and how many days it's made of — "172 g" means something
+   different over seven days than over two. `note` is an optional line above
+   the day count, for the calorie tile's over/under. */
+function avgTile(label, a, fmt, note){
+  return '<div class="food-avg-tile">' +
+    '<span class="lab">' + esc(label) + '</span>' +
+    (a.days ? '<b>' + esc(fmt(a.value)) + '</b>' : '<b class="none">—</b>') +
+    (note ? '<small>' + esc(note) + '</small>' : '') +
+    '<small>' + esc(a.days ? a.days + " of " + FOOD_AVG + " days" : "not logged") + '</small>' +
+  '</div>';
+}
+
+/* An average is an estimate, and "165.2 g" claims a precision it hasn't got. */
+function wholeGrams(n){ return Math.round(n).toLocaleString() + " g"; }
+
+/* How many recent days the list shows before "show all". The rest are one
+   tap away, and any older day is reachable from the date field in the food
+   sheet — the list is for glancing, not archaeology. */
+var FOOD_LIST = 7;
+
+/* The history: the chart for the shape, the averages for the gist, and the
+   list of days — the exact numbers, and the way into editing a past day. */
+function calorieCard(){
+  var avg = store.nutritionAverages(FOOD_AVG);
+  var keys = store.nutritionKeys().slice(0, FOOD_WINDOW);
+
+  var kcalNote = avg.diff.days ? diffWords(Math.round(avg.diff.value)) : "";
+
+  var rows = keys.map(function(key, n){
+    var food = store.nutritionOn(key);
+    var goal = store.goalOn(key);
+    var d = (food.kcal !== null && goal) ? food.kcal - goal.kcal : null;
+    var bits = [];
+    if(food.protein !== null) bits.push("P " + grams(food.protein));
+    if(food.fiber !== null) bits.push("F " + grams(food.fiber));
+
+    return '<button class="food-row" data-food="' + esc(key) + '"' +
+             (n >= FOOD_LIST ? ' data-more hidden' : '') + '>' +
+      '<span class="d">' + esc(formatWeekday(store.fromDayKey(key))) + '</span>' +
+      '<b>' + (food.kcal !== null ? kcal(food.kcal) : "—") + '</b>' +
+      '<span class="diff">' + (d !== null ? swatch(d) + esc(signed(d)) : "") + '</span>' +
+      '<small>' + esc(bits.join(" · ")) + '</small>' +
+    '</button>';
+  }).join("");
+
+  return '<section class="card">' +
+    '<h3>Calories vs target</h3>' +
+    '<div class="chart-key">' +
+      '<span><i class="sw" data-dir="over"></i>Over target</span>' +
+      '<span><i class="sw" data-dir="under"></i>Under target</span>' +
+    '</div>' +
+    '<div class="chart-host" id="chFood"></div>' +
+    '<span class="lab food-avg-head">Last ' + FOOD_AVG + ' days, averaged</span>' +
+    '<div class="food-avg">' +
+      avgTile("Calories", avg.kcal, function(v){ return kcal(v); }, kcalNote) +
+      avgTile("Protein", avg.protein, wholeGrams) +
+      avgTile("Fiber", avg.fiber, wholeGrams) +
+    '</div>' +
+    (rows
+      ? '<div class="food-list"><span class="lab">Recent days — tap one to edit it</span>' + rows +
+          (keys.length > FOOD_LIST
+            ? '<button class="add-btn" id="foodMore">Show all ' + keys.length + ' days</button>'
+            : '') +
+        '</div>'
+      : '') +
+  '</section>';
+}
+
+/* --------------------------------------------------------------------------
+   Weight: the 7-day average leads, the single reading is the footnote
+   -------------------------------------------------------------------------- */
+
+function weightFmt(n){ return (Math.round(n * 10) / 10).toFixed(1); }
+
+function signedWeight(n){
+  if(n > 0) return "+" + weightFmt(n);
+  if(n < 0) return "−" + weightFmt(-n);
+  return "0.0";
+}
+
+/* The tile. Three honest states: an average this week; no weigh-in this
+   week, so the last reading with its date; nothing at all. */
+function weightTile(){
+  var t = store.weightTrend();
+
+  if(t.now){
+    var sub = t.change === null
+      ? t.now.count + (t.now.count === 1 ? " weigh-in" : " weigh-ins") + " this week"
+      : t.change === 0
+        ? "level with last week"
+        : signedWeight(t.change) + " vs last week";
+    return statTile("Weight · 7-day avg", weightFmt(t.now.value) + " " + unit(), sub);
+  }
+  if(t.latest){
+    return statTile("Bodyweight", weightFmt(t.latest.w) + " " + unit(),
+                    "none this week · last " + formatDay(t.latest.at));
+  }
+  return statTile("Bodyweight", "—", "add a weigh-in");
+}
+
+/* --------------------------------------------------------------------------
+   Maintenance
+
+   The estimate, what it's made of, and what it means for the target you've
+   set. Before there's enough to go on it says exactly what's missing rather
+   than showing a number it can't stand behind.
+   -------------------------------------------------------------------------- */
+
+function rateWords(perWeek){
+  if(Math.abs(perWeek) < 0.05) return "holding steady";
+  return (perWeek < 0 ? "losing " : "gaining ") + Math.abs(perWeek).toFixed(1) +
+         " " + unit() + " a week";
+}
+
+function maintenanceCard(){
+  var t = store.tdee();
+  var est = t.now;
+  var head = '<div class="card-head"><h3>Maintenance</h3><span class="tag">estimated</span></div>';
+
+  if(!est.ready){
+    var need = [];
+    if(est.need.kcalDays) need.push(est.need.kcalDays + " more day" + (est.need.kcalDays === 1 ? "" : "s") + " with calories logged");
+    if(est.need.weighIns) need.push(est.need.weighIns + " more weigh-in" + (est.need.weighIns === 1 ? "" : "s"));
+    if(est.need.span)     need.push("weigh-ins spread over " + est.need.span + " more day" + (est.need.span === 1 ? "" : "s"));
+
+    return '<section class="card">' + head +
+      '<div class="tdee"><div class="tdee-num"><b class="none">—</b><span>not enough to go on yet</span></div></div>' +
+      '<p class="tdee-why">Worked out from your own intake and weight trend over three weeks. Still to go:</p>' +
+      '<ul class="tdee-need">' + need.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join("") + '</ul>' +
+      '<p class="hint">It looks at the ' + est.window + ' days through yesterday and needs at least ' +
+        store.TDEE_NEEDS.kcalDays + ' of them with calories and ' + store.TDEE_NEEDS.weighIns +
+        ' weigh-ins across ' + store.TDEE_NEEDS.span + '+ days. Until then an online calculator is the better guess.</p>' +
+    '</section>';
+  }
+
+  var goal = store.currentGoal();
+  var goalLine = "";
+  if(goal){
+    var gap = goal.kcal - est.tdee;
+    var weekly = gap * 7 / store.energyPerUnit();
+    goalLine = '<p class="tdee-goal">Your ' + kcal(goal.kcal) + ' target is ' +
+      (gap === 0 ? 'right at maintenance' :
+        '<b>' + kcal(Math.abs(gap)) + (gap < 0 ? ' below' : ' above') + '</b> it — roughly ' +
+        rateWords(weekly) + ' if you hit it') + '.</p>';
+  }
+
+  return '<section class="card">' + head +
+    '<div class="tdee">' +
+      '<div class="tdee-num"><b>' + kcal(est.tdee) + '</b><span>kcal a day</span></div>' +
+      '<span class="tdee-band">± ' + kcal(est.band) + '</span>' +
+    '</div>' +
+    '<p class="tdee-why">Averaging <b>' + kcal(est.intake) + ' kcal</b> while ' +
+      '<b>' + esc(rateWords(est.perWeek)) + '</b>.' +
+      (t.change !== null && Math.abs(t.change) >= 10
+        ? ' ' + (t.change > 0 ? 'Up ' : 'Down ') + kcal(Math.abs(t.change)) + ' from a week ago.'
+        : '') +
+    '</p>' +
+    goalLine +
+    '<p class="hint">From ' + est.kcalDays + ' of the last ' + est.window + ' days of food and ' +
+      est.weighIns + ' weigh-ins, through ' + esc(formatDay(store.fromDayKey(est.to))) + '. ' +
+      'The ± is how far the scale wanders from its trend; it narrows the more you weigh in. ' +
+      'A consistent miscount of your food cancels out — the answer comes back in your own counting.</p>' +
+  '</section>';
+}
+
 function renderProgress(){
   var s = store.summary();
   var view = strengthView();
-  var bw = store.latestBodyweight();
 
   var sub = s.since
     ? "Week " + s.weeks + " · training since " + formatDay(s.since)
     : "Nothing logged yet";
-
-  /* One weigh-in is a number with nothing to compare it to, which is not the
-     same as having none — say what's actually missing. */
-  var bwSub;
-  if(!bw)                            bwSub = "add a weigh-in";
-  else if(store.state.body.length < 2) bwSub = "log another to see the trend";
-  else if(s.bodyweightDelta)         bwSub = (s.bodyweightDelta > 0 ? "+" : "") +
-                                             s.bodyweightDelta + " since the start";
-  else                               bwSub = "level since the start";
 
   var picker = view
     ? '<select id="exPick" aria-label="Which exercise to chart">' +
@@ -593,8 +980,15 @@ function renderProgress(){
         statTile("Sessions", String(s.sessions), s.weeks ? s.weeks + " weeks in" : "") +
         statTile("Last 30 days", String(s.last30), s.missed30 ? s.missed30 + " missed" : "none missed") +
         statTile("Total volume", compact(s.volume) + " " + unit(), "everything lifted") +
-        statTile("Bodyweight", bw ? bw.w + " " + unit() : "—", bwSub) +
+        weightTile() +
       '</div>' +
+
+      /* Near the top on purpose: it's the one card on this tab you'll touch
+         every day, not just read. Maintenance sits between today and the
+         history because it's what the target should be set from. */
+      nutritionCard() +
+      maintenanceCard() +
+      calorieCard() +
 
       '<section class="card">' +
         '<div class="card-head">' +
@@ -610,7 +1004,15 @@ function renderProgress(){
           '<h3>Bodyweight</h3>' +
           '<button class="edit" id="logWeight">Log weight</button>' +
         '</div>' +
+        '<div class="chart-key">' +
+          '<span><i class="sw line"></i>7-day average</span>' +
+          '<span><i class="sw raw"></i>Daily weigh-in</span>' +
+        '</div>' +
         '<div class="chart-host" id="chBody"></div>' +
+        (store.state.body.length > 1
+          ? '<p class="hint">Water moves a single reading by a pound or three — ' +
+              'the line is what’s actually changing.</p>'
+          : '') +
       '</section>' +
 
       '<section class="card">' +
@@ -648,13 +1050,19 @@ function paintCharts(){
     empty: "Log the same exercise on two different days and its trend line appears here."
   });
 
+  /* The line is the 7-day average as of each weigh-in; the readings sit
+     underneath as faint dots, so the noise is visible but can't steal the eye. */
+  var body = store.bodyTrendSeries();
   IL.chart.draw($("chBody"), {
     kind: "line",
-    points: store.bodySeries(),
+    points: body,
+    raw: body.map(function(p){ return { x:p.x, y:p.raw }; }),
     fmtY: function(v){ return Math.round(v); },
-    fmtV: function(v){ return v + " " + unit(); },
+    fmtV: function(v, p){
+      return weightFmt(v) + " " + unit() + " avg · weighed " + weightFmt(p.raw);
+    },
     fmtX: formatDay,
-    label: "bodyweight over time",
+    label: "bodyweight, seven-day average over time",
     empty: "Two weigh-ins draw a line. Log the first one with the button above."
   });
 
@@ -666,6 +1074,29 @@ function paintCharts(){
     fmtX: formatDay,
     label: "volume per session",
     empty: "Finish a session and its volume lands here."
+  });
+
+  /* Every one of the last fortnight's days gets a slot, logged or not, so a
+     gap in the chart is a gap in the diary. Each bar is measured against the
+     target in force that day, which is why a phase change moves the zero
+     line's meaning but never redraws the past. */
+  IL.chart.draw($("chFood"), {
+    kind: "diverging",
+    points: store.nutritionSeries(FOOD_WINDOW).map(function(r){
+      return { x:r.at, y:r.diff, row:r };
+    }),
+    fmtY: signed,
+    fmtV: function(v, p){
+      var r = p.row;
+      if(r.kcal === null) return "Not logged";
+      if(r.target === null) return kcal(r.kcal) + " kcal · no target";
+      return diffWords(v) + " · " + kcal(r.kcal) + " of " + kcal(r.target);
+    },
+    fmtX: formatDay,
+    label: "calories over or under target, last " + FOOD_WINDOW + " days",
+    empty: store.currentGoal() || store.state.nutrition.goals.length
+      ? "Log a day's calories and it shows up here against your target."
+      : "Set a daily target and every day you log shows up here as over or under it."
   });
 }
 
@@ -937,6 +1368,160 @@ function weightSheet(){
       '<button class="primary" id="saveWeight">Save</button>' +
     '</div>',
   "weight");
+}
+
+/* --------------------------------------------------------------------------
+   Logging food
+
+   Daily totals, not meals — the number you'd read off at the end of the day.
+   `draft` carries half-typed values across a change of date, so noticing
+   "this was yesterday's" after typing doesn't cost you the typing.
+   -------------------------------------------------------------------------- */
+
+function goalHint(key){
+  var goal = store.goalOn(key);
+  if(!goal) return "No target set for this day.";
+  return "Target this day: " + kcal(goal.kcal) + " kcal" +
+    (store.PHASES[goal.phase] ? " · " + store.PHASES[goal.phase] : "") + ".";
+}
+
+function numField(id, label, value, placeholder, mode){
+  return '<div class="field">' +
+    '<label class="lab" for="' + id + '">' + esc(label) + '</label>' +
+    '<input id="' + id + '" type="number" inputmode="' + mode + '" min="0" step="any"' +
+      ' value="' + (value === null || value === undefined ? "" : value) + '"' +
+      ' placeholder="' + esc(placeholder) + '">' +
+  '</div>';
+}
+
+function foodSheet(key, draft){
+  var today = store.dayKey(Date.now());
+  var day = key || today;
+  var saved = store.nutritionOn(day);
+  var vals = saved || draft || {};
+
+  openSheet("Food",
+    '<p class="sheet-sub">Daily totals. Fill in whatever you tracked — every field is optional.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="fdDate">Date</label>' +
+      '<input id="fdDate" type="date" value="' + esc(day) + '" max="' + today + '">' +
+    '</div>' +
+
+    numField("fdKcal", "Calories", vals.kcal, "kcal", "numeric") +
+    '<p class="hint" id="fdGoal">' + esc(goalHint(day)) + '</p>' +
+
+    '<div class="seggrid">' +
+      numField("fdProt", "Protein (g)", vals.protein, "optional", "decimal") +
+      numField("fdFib", "Fiber (g)", vals.fiber, "optional", "decimal") +
+    '</div>' +
+
+    '<div class="rowbtns ' + (saved ? "two" : "one") + '">' +
+      '<button class="primary" id="saveFood">Save</button>' +
+      (saved ? '<button class="danger" id="clearFood">Clear this day</button>' : '') +
+    '</div>',
+  "food");
+}
+
+/* --------------------------------------------------------------------------
+   The calorie target
+
+   Set once per phase, with a start date. Starting today leaves every earlier
+   day judged against what it was judged against before; backdating the start
+   is how you say "the cut actually began last Monday".
+   -------------------------------------------------------------------------- */
+
+/* Starting points worked out from your own maintenance, when there is one.
+
+   −500 a day is the classic steady cut and +250 a slow, lean gain. They're
+   suggestions and nothing more: a tap fills the field and picks the phase,
+   and the number is yours to change before saving. */
+var CUT = 500;
+var BULK = 250;
+
+function suggestionsHTML(){
+  var est = store.tdee().now;
+  if(!est.ready) return "";
+
+  var perUnit = store.energyPerUnit();
+  var cutRate = (Math.round(CUT * 7 / perUnit * 10) / 10) + " " + unit();
+  var bulkRate = (Math.round(BULK * 7 / perUnit * 10) / 10) + " " + unit();
+  var opts = [
+    ["cut", "Cut", est.tdee - CUT, "−" + CUT],
+    ["maintain", "Maintain", est.tdee, "±0"],
+    ["bulk", "Bulk", est.tdee + BULK, "+" + BULK]
+  ];
+
+  return '<div class="field">' +
+    '<span class="lab">From your maintenance, ≈' + kcal(est.tdee) + '</span>' +
+    '<div class="suggest">' + opts.map(function(o){
+      return '<button data-suggest="' + o[2] + '" data-sphase="' + o[0] + '">' +
+        '<span>' + esc(o[1]) + '</span>' +
+        '<b>' + kcal(o[2]) + '</b>' +
+        '<small>' + esc(o[3]) + '</small>' +
+      '</button>';
+    }).join("") + '</div>' +
+    '<p class="hint">Starting points: −' + CUT + ' a day is about ' + cutRate +
+      ' a week down, +' + BULK + ' about ' + bulkRate + ' a week up. Tap one, then adjust.</p>' +
+  '</div>';
+}
+
+function goalSheet(){
+  var today = store.dayKey(Date.now());
+  var goal = store.currentGoal();
+  var phase = goal ? goal.phase : "";
+  var past = store.state.nutrition.goals.slice().reverse();
+  var phases = [["", "None"], ["cut", "Cut"], ["maintain", "Maintain"], ["bulk", "Bulk"]];
+
+  /* A CHANGE of target is a new phase, so it starts today. The FIRST target
+     is different: starting it today would leave every day you'd already
+     logged with nothing to be measured against, so it reaches back to the
+     earliest one instead. Either way the date is right there to change. */
+  var logged = store.nutritionKeys();
+  var from = (!store.state.nutrition.goals.length && logged.length)
+    ? logged[logged.length - 1]
+    : today;
+
+  openSheet("Calorie target",
+    '<p class="sheet-sub">One per phase. Changing it never rewrites the days before it started.</p>' +
+
+    suggestionsHTML() +
+
+    numField("gKcal", "Calories per day", goal ? goal.kcal : null, "2200", "numeric") +
+
+    '<div class="field">' +
+      '<span class="lab">Phase</span>' +
+      '<div class="seg wide">' + phases.map(function(p){
+        return '<button data-gphase="' + p[0] + '" aria-pressed="' + (phase === p[0]) + '">' +
+                 esc(p[1]) + '</button>';
+      }).join("") + '</div>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="gFrom">Starting</label>' +
+      '<input id="gFrom" type="date" value="' + from + '">' +
+      '<p class="hint">Pick an earlier date if the phase really began earlier — ' +
+        'days from then on are re-judged against this target, and nothing before it is.</p>' +
+    '</div>' +
+
+    (past.length
+      ? '<div class="field">' +
+          '<span class="lab">Phases so far</span>' +
+          '<div class="bwlist">' + past.map(function(g){
+            return '<div class="bwrow">' +
+              '<span>From ' + esc(formatDay(store.fromDayKey(g.from))) +
+                (store.PHASES[g.phase] ? ' · ' + esc(store.PHASES[g.phase]) : '') + '</span>' +
+              '<b>' + kcal(g.kcal) + ' kcal</b>' +
+              '<button class="segdel" data-goaldel="' + esc(g.from) + '">Remove</button>' +
+            '</div>';
+          }).join("") + '</div>' +
+        '</div>'
+      : '') +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="saveGoal">Save target</button>' +
+    '</div>',
+  "goal");
 }
 
 /* --------------------------------------------------------------------------
@@ -1247,6 +1832,7 @@ IL.ui = {
   patchExercise: patchExercise,
   setFinishLabel: setFinishLabel,
   renderLog: renderLog,
+  paintDataPanel: paintDataPanel,
   renderProgress: renderProgress,
   paintCharts: paintCharts,
 
@@ -1264,7 +1850,9 @@ IL.ui = {
   previewImport: previewImport,
   get lastImport(){ return lastImport; },
   skipSheet: skipSheet,
-  weightSheet: weightSheet
+  weightSheet: weightSheet,
+  foodSheet: foodSheet,
+  goalSheet: goalSheet
 };
 
 })(window.IL);

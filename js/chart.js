@@ -63,11 +63,34 @@ function axis(min, max, zero){
   if(lo < 0 && min >= 0) lo = 0;               /* never invent negative load */
   if(hi <= lo) hi = lo + step;
 
+  return withTicks(lo, hi, step);
+}
+
+function withTicks(lo, hi, step){
   var ticks = [];
   for(var v = lo; v <= hi + step * 1e-6; v += step){
     ticks.push(Math.round(v * 1e6) / 1e6);
   }
   return { lo:lo, hi:hi, ticks:ticks };
+}
+
+/* Diverging bars hang off zero, and zero is the whole point — it's the
+   target line. So the window always contains it, and always has at least one
+   step of room on BOTH sides: a fortnight that happens to be all under still
+   shows where "over" would have been, rather than pinning the target line to
+   the top edge where it reads as a border. */
+function divergingAxis(min, max){
+  min = Math.min(0, min);
+  max = Math.max(0, max);
+  if(min === max) max = 100;                  /* every day exactly on target */
+
+  var step = niceStep(max - min, 4);
+  var lo = Math.floor(min / step) * step;
+  var hi = Math.ceil(max / step) * step;
+  if(lo === 0) lo = -step;
+  if(hi === 0) hi = step;
+
+  return withTicks(lo, hi, step);
 }
 
 /* --------------------------------------------------------------------------
@@ -119,24 +142,50 @@ function barPath(x, y, w, bottom){
          "V" + bottom + "Z";
 }
 
+/* The same bar hanging DOWN from a baseline: square where it meets the line,
+   rounded at the data end, which is now the bottom. */
+function barPathDown(x, y, w, top){
+  var r = Math.min(4, w / 2, Math.max(0, y - top));
+  return "M" + x + " " + top +
+         "V" + (y - r) +
+         "a" + r + " " + r + " 0 0 0 " + r + " " + r +
+         "h" + (w - r * 2) +
+         "a" + r + " " + r + " 0 0 0 " + r + " " + (-r) +
+         "V" + top + "Z";
+}
+
 /* --------------------------------------------------------------------------
    draw(host, cfg)
 
      cfg.points   [{ x, y }]   x is a timestamp, y the value
-     cfg.kind     "line" | "column"
+     cfg.kind     "line" | "column" | "diverging"
      cfg.fmtY     axis tick     -> string
-     cfg.fmtV     readout value -> string
+     cfg.fmtV     readout value -> string; gets (y, point)
      cfg.fmtX     timestamp     -> string
      cfg.empty    what to say when there isn't enough to plot
+
+   "diverging" is a column chart around zero instead of up from it: positive
+   bars rise in the "over" colour, negative ones hang in the "under" colour.
+   Its points may carry y:null for a slot with nothing in it — the slot keeps
+   its place on the axis and simply has no bar, so a gap reads as a gap.
+
+     cfg.raw      [{ x, y }]   line only: the readings the line summarises,
+                               drawn underneath as faint dots on the same
+                               scale. The line is the signal and the dots are
+                               the context, so the line's own per-point dots
+                               step aside for them.
    -------------------------------------------------------------------------- */
 
 function draw(host, cfg){
   if(!host) return;
 
   var pts = cfg.points || [];
-  var need = cfg.kind === "column" ? 1 : 2;
+  var diverging = cfg.kind === "diverging";
+  var banded = cfg.kind !== "line";
+  var real = pts.filter(function(p){ return p.y !== null && p.y !== undefined; });
+  var need = banded ? 1 : 2;
 
-  if(pts.length < need){
+  if(real.length < need){
     host.innerHTML = '<p class="chart-empty">' + esc(cfg.empty || "Nothing to plot yet.") + '</p>';
     return;
   }
@@ -145,8 +194,15 @@ function draw(host, cfg){
   var pw = w - PAD.l - PAD.r;
   var ph = H - PAD.t - PAD.b;
 
-  var ys = pts.map(function(p){ return p.y; });
-  var a = axis(Math.min.apply(null, ys), Math.max.apply(null, ys), cfg.kind === "column");
+  var raw = (!banded && cfg.raw) ? cfg.raw : [];
+
+  /* The scale has to hold the readings as well as the line through them —
+     the line is an average, so the readings always reach further. */
+  var ys = real.map(function(p){ return p.y; })
+               .concat(raw.map(function(p){ return p.y; }));
+  var lo = Math.min.apply(null, ys);
+  var hi = Math.max.apply(null, ys);
+  var a = diverging ? divergingAxis(lo, hi) : axis(lo, hi, cfg.kind === "column");
   a.fmt = cfg.fmtY;
 
   var Y = function(v){ return PAD.t + ph * (1 - (v - a.lo) / (a.hi - a.lo)); };
@@ -156,15 +212,29 @@ function draw(host, cfg){
   var x0 = pts[0].x;
   var x1 = pts[pts.length - 1].x;
 
-  var X = cfg.kind === "column"
+  var X = banded
     ? function(p, i){ return PAD.l + band * (i + 0.5); }
     : function(p){ return x1 === x0 ? PAD.l + pw / 2 : PAD.l + pw * (p.x - x0) / (x1 - x0); };
 
   var marks;
 
-  if(cfg.kind === "column"){
+  if(diverging){
+    var zero = Y(0);
     marks = pts.map(function(p, i){
-      return '<path class="c-bar" data-hi="0" d="' +
+      if(p.y === null || p.y === undefined || p.y === 0) return "";
+      var left = (X(p, i) - thick / 2).toFixed(1);
+      var over = p.y > 0;
+      return '<path class="c-bar" data-i="' + i + '" data-dir="' + (over ? "over" : "under") +
+        '" data-hi="0" d="' +
+        (over ? barPath(left, Y(p.y).toFixed(1), thick, zero)
+              : barPathDown(left, Y(p.y).toFixed(1), thick, zero)) + '"></path>';
+    }).join("") +
+    /* Drawn over the bars, so the target line reads as one unbroken rule. */
+    '<line class="c-zero" x1="' + PAD.l + '" x2="' + (w - PAD.r) +
+      '" y1="' + zero + '" y2="' + zero + '"></line>';
+  }else if(cfg.kind === "column"){
+    marks = pts.map(function(p, i){
+      return '<path class="c-bar" data-i="' + i + '" data-hi="0" d="' +
         barPath((X(p, i) - thick / 2).toFixed(1), Y(p.y).toFixed(1), thick, Y(a.lo)) + '"></path>';
     }).join("");
   }else{
@@ -173,12 +243,16 @@ function draw(host, cfg){
     var lastX = X(pts[pts.length - 1], pts.length - 1).toFixed(1);
 
     marks =
+      raw.map(function(p){
+        return '<circle class="c-raw" cx="' + X(p).toFixed(1) +
+               '" cy="' + Y(p.y).toFixed(1) + '" r="3"></circle>';
+      }).join("") +
       '<path class="c-area" d="' + d + ' L' + lastX + ' ' + base +
         ' L' + X(pts[0], 0).toFixed(1) + ' ' + base + ' Z"></path>' +
       '<path class="c-line" d="' + d + '"></path>' +
       /* Intermediate dots only while they can still be told apart; past that
          they merge into a caterpillar and the bare line reads better. */
-      (pts.length <= 12 ? pts.map(function(p, i){
+      (pts.length <= 12 && !raw.length ? pts.map(function(p, i){
         return '<circle class="c-dot" cx="' + X(p, i).toFixed(1) +
                '" cy="' + Y(p.y).toFixed(1) + '" r="4"></circle>';
       }).join("") : "") +
@@ -190,7 +264,7 @@ function draw(host, cfg){
 
   host.innerHTML =
     '<div class="chart-read" data-read>' +
-      '<b>' + esc(cfg.fmtV(last.y)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
+      '<b>' + esc(cfg.fmtV(last.y, last)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
     '</div>' +
     '<svg class="chart" width="' + w + '" height="' + H + '" viewBox="0 0 ' + w + ' ' + H +
       '" role="img" aria-label="' + esc(cfg.label || "chart") + '">' +
@@ -220,20 +294,26 @@ function wire(host, pts, X, Y, cfg, band){
   var bars = host.querySelectorAll(".c-bar");
 
   function paintRead(p){
-    read.innerHTML = '<b>' + esc(cfg.fmtV(p.y)) + '</b><span>' + esc(cfg.fmtX(p.x)) + '</span>';
+    read.innerHTML = '<b>' + esc(cfg.fmtV(p.y, p)) + '</b><span>' + esc(cfg.fmtX(p.x)) + '</span>';
   }
 
+  /* Matched on the point index each bar was drawn for, not its position in
+     the list — once some slots have no bar, the nth bar is not the nth day. */
   function highlight(index){
-    for(var b = 0; b < bars.length; b++) bars[b].dataset.hi = (b === index) ? "1" : "0";
+    for(var b = 0; b < bars.length; b++){
+      bars[b].dataset.hi = (Number(bars[b].dataset.i) === index) ? "1" : "0";
+    }
   }
 
   function show(i){
     var p = pts[i];
     var x = X(p, i);
+    var empty = p.y === null || p.y === undefined;
     line.setAttribute("x1", x);
     line.setAttribute("x2", x);
     dot.setAttribute("cx", x);
-    dot.setAttribute("cy", Y(p.y));
+    dot.setAttribute("cy", empty ? 0 : Y(p.y));
+    dot.setAttribute("visibility", empty ? "hidden" : "visible");
     cross.hidden = false;
     paintRead(p);
     highlight(i);
@@ -249,7 +329,7 @@ function wire(host, pts, X, Y, cfg, band){
     var px = ev.clientX - svg.getBoundingClientRect().left;
     var best = 0;
 
-    if(cfg.kind === "column"){
+    if(cfg.kind !== "line"){
       best = Math.max(0, Math.min(pts.length - 1, Math.floor((px - PAD.l) / band)));
     }else{
       var nearest = Infinity;

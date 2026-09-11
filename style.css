@@ -24,6 +24,12 @@
   /* semantic, kept separate from the accent */
   --good:#1C7359;
   --danger:#A03A18;
+  /* calories against target — a warm/cool DIRECTION pair, not good/bad:
+     over is the aim on a bulk and the thing to avoid on a cut. Validated
+     against this surface for colour-blind separation (ΔE 22) and contrast. */
+  --over:#A85F00;
+  --under:#2F6FB3;
+  --under-soft:#DCE7F4;
 
   --shadow:0 1px 2px rgba(16,26,26,.10), 0 12px 28px -12px rgba(16,26,26,.28);
   --r:10px;
@@ -50,6 +56,9 @@
     --accent-soft:#382812;
     --good:#4FC3A1;
     --danger:#E1795A;
+    --over:#C27A18;
+    --under:#4F8ACB;
+    --under-soft:#1C2A38;
     --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
   }
 }
@@ -70,6 +79,9 @@
   --accent-soft:#382812;
   --good:#4FC3A1;
   --danger:#E1795A;
+  --over:#C27A18;
+  --under:#4F8ACB;
+  --under-soft:#1C2A38;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
 }
 
@@ -954,3 +966,235 @@ textarea.tall{
 }
 
 .rowbtns button[disabled]{opacity:.45}
+
+
+/* ==========================================================================
+   Snapshots and the export nudge
+   ========================================================================== */
+
+/* Said once, plainly, and only when it is actually true. A permanent banner
+   is one you stop seeing. */
+.nudge{
+  margin-top:8px;padding:10px 12px;
+  border:1px solid var(--accent);border-radius:var(--r);
+  background:var(--accent-soft);
+  font-size:12.5px;line-height:1.45;color:var(--accent);
+}
+.hint.good{color:var(--good)}
+
+.snaprow{
+  display:flex;align-items:center;gap:8px;
+  padding:9px 0;border-bottom:1px solid var(--line-soft);
+}
+.snaprow:last-child{border-bottom:0}
+.snapwhen{flex:1;min-width:0}
+.snapwhen b{
+  display:block;font-family:var(--font-d);font-size:14px;font-weight:600;
+  letter-spacing:.02em;overflow-wrap:anywhere;
+}
+.snapwhen small{
+  display:block;font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.snapgo{
+  flex:none;padding:8px 11px;
+  border:1px solid var(--line);border-radius:8px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-2);
+}
+
+
+/* ==========================================================================
+   Nutrition
+
+   Over and under are a direction, not a verdict, so the colour only ever
+   sits on a mark — a bar, a meter segment, a swatch. The numbers and words
+   beside them stay in ink.
+   ========================================================================== */
+
+/* Today, against the target. */
+.food-today{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+  margin-top:12px;
+}
+.food-num b{
+  display:block;
+  font-family:var(--font-d);font-size:34px;font-weight:600;
+  letter-spacing:.02em;line-height:1;
+}
+.food-num span{
+  display:block;margin-top:4px;
+  font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+}
+.food-diff{
+  display:flex;align-items:center;gap:6px;flex:none;
+  font-family:var(--font-m);font-size:12.5px;font-weight:600;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+.food-none{margin-top:10px}
+
+/* The meter. The track is a lighter step of the under hue so the whole bar
+   reads as one scale; the part past the target is the over hue, set off
+   from the rest by a 2px gap and a tick in ink at the target itself. */
+.meter{
+  position:relative;height:10px;margin-top:10px;
+  border-radius:5px;background:var(--under-soft);overflow:hidden;
+}
+.meter i{position:absolute;top:0;bottom:0;left:0;display:block}
+.meter-in{background:var(--under);border-radius:5px 0 0 5px}
+.meter-over{background:var(--over);border-left:2px solid var(--surface)}
+.meter-mark{width:2px;margin-left:-1px;background:var(--ink)}
+
+.food-macros{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  margin-top:12px;
+}
+.macro .lab{margin-bottom:2px}
+.macro b{
+  font-family:var(--font-m);font-size:15px;font-weight:600;
+}
+.macro i{font-style:normal;font-size:13px;color:var(--ink-3)}
+
+/* The target, and the way to change it. */
+.food-goal{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);
+}
+.food-goal .k{min-width:0}
+.food-goal .lab{margin-bottom:2px}
+.food-goal b{font-family:var(--font-m);font-size:15px;font-weight:600}
+.food-goal small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3)}
+.food-goal .edit{flex:none}
+
+/* A phase is a label, not a state — plain ink, outlined. */
+.phase{
+  display:inline-block;margin-left:7px;padding:1px 6px;vertical-align:2px;
+  border:1px solid var(--line);border-radius:5px;
+  font-family:var(--font-m);font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-2);
+}
+
+/* Swatches carry the colour so the text beside them doesn't have to. */
+.sw{
+  display:inline-block;flex:none;width:9px;height:9px;border-radius:2px;
+  vertical-align:0;
+}
+.sw[data-dir="over"]{background:var(--over)}
+.sw[data-dir="under"]{background:var(--under)}
+
+.chart-key{
+  display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;
+  font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+}
+.chart-key span{display:flex;align-items:center;gap:6px}
+
+/* The chart marks. The zero line is the target, so it's one step stronger
+   than the grid — present, but still recessive next to the bars. */
+.c-bar[data-dir="over"]{fill:var(--over)}
+.c-bar[data-dir="under"]{fill:var(--under)}
+.c-zero{stroke:var(--ink-3);stroke-width:1}
+
+/* Averages, each with how many days it stands on. */
+.food-avg{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:12px;
+  background:var(--line);
+  border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+}
+.food-avg-tile{background:var(--surface);padding:9px 10px;min-width:0}
+.food-avg-tile .lab{margin-bottom:2px}
+.food-avg-tile b{
+  display:block;
+  font-family:var(--font-d);font-size:20px;font-weight:600;line-height:1.15;
+}
+.food-avg-tile b.none{color:var(--ink-3)}
+.food-avg-tile small{display:block;font-size:10.5px;line-height:1.35;color:var(--ink-3)}
+.food-avg-head{margin:14px 0 6px}
+.food-avg{margin-top:0}
+#foodMore{margin-top:10px;min-height:40px;font-size:13px}
+
+/* The table view: every logged day, exact numbers, one tap to edit. */
+.food-list{margin-top:14px}
+.food-list > .lab{margin-bottom:4px}
+.food-row{
+  display:grid;grid-template-columns:1fr auto 64px;
+  grid-template-areas:"d n x" "m m m";
+  align-items:baseline;column-gap:10px;
+  width:100%;padding:9px 0;text-align:left;
+  border-bottom:1px solid var(--line-soft);
+}
+.food-row:last-child{border-bottom:0}
+.food-row .d{grid-area:d;font-size:13px;color:var(--ink-2)}
+.food-row b{
+  grid-area:n;text-align:right;
+  font-family:var(--font-m);font-size:13.5px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.food-row .diff{
+  grid-area:x;display:flex;align-items:center;justify-content:flex-end;gap:5px;
+  font-family:var(--font-m);font-size:12px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+.food-row small{
+  grid-area:m;font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+}
+.food-row small:empty{display:none}
+
+
+/* ==========================================================================
+   Weight trend and maintenance
+   ========================================================================== */
+
+/* The readings under the average line: context, not signal. Muted ink at
+   low opacity, so the eye goes to the line and the scatter shows the noise. */
+.c-raw{fill:var(--ink-3);fill-opacity:.45}
+
+.sw.line{width:14px;height:2px;border-radius:1px;background:var(--accent)}
+.sw.raw{width:7px;height:7px;border-radius:50%;background:var(--ink-3);opacity:.7}
+
+/* "estimated", beside the card title — a label, so plain ink, outlined. */
+.tag{
+  padding:2px 7px;
+  border:1px solid var(--line);border-radius:5px;
+  font-family:var(--font-m);font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+
+.tdee{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+  margin-top:12px;
+}
+.tdee-num b{
+  display:block;
+  font-family:var(--font-d);font-size:34px;font-weight:600;
+  letter-spacing:.02em;line-height:1;
+}
+.tdee-num b.none{color:var(--ink-3)}
+.tdee-num span{
+  display:block;margin-top:4px;
+  font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+}
+.tdee-band{
+  flex:none;
+  font-family:var(--font-m);font-size:13px;font-weight:600;color:var(--ink-2);
+}
+.tdee-why,
+.tdee-goal{margin-top:10px;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+.tdee-goal{margin-top:6px}
+.tdee-why b,
+.tdee-goal b{font-weight:600;color:var(--ink)}
+.tdee-need{margin:6px 0 0;padding-left:20px;font-size:13px;line-height:1.6;color:var(--ink-2)}
+
+/* Suggested targets in the target sheet. */
+.suggest{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.suggest button{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:9px 4px;
+  border:1px solid var(--line);border-radius:var(--r);
+}
+.suggest span{
+  font-family:var(--font-d);font-size:13px;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);
+}
+.suggest b{font-family:var(--font-m);font-size:15px;font-weight:600}
+.suggest small{font-family:var(--font-m);font-size:10.5px;color:var(--ink-3)}
+.suggest button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}

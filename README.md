@@ -53,19 +53,103 @@ The third tab turns the log into four things worth looking at.
 
 - **Strength trend** — an estimated one-rep max (Epley, from your best set
   that day) for whichever movement you pick. For pull-ups and dips your
-  bodyweight at the time is added in, because a chin-up at 150lb and the same
-  rep at 190lb are not the same lift. Anything you've never logged with a
-  load charts your best set's *reps* instead, where that IS the progress.
-- **× body** — the same trend divided by what you weighed that week. It only
-  rises when you get stronger faster than you get heavier, which is the
-  question a changing bodyweight makes impossible to answer from load alone.
-  Log a weigh-in or two and the toggle appears.
-- **Bodyweight** — one reading per day, entered from **Log weight**.
+  bodyweight at the time (the 7-day average) is added in, because a chin-up at
+  150lb and the same rep at 190lb are not the same lift. Anything you've never
+  logged with a load charts your best set's *reps* instead, where that IS the
+  progress.
+- **× body** — the same trend divided by your 7-day average weight that week,
+  so one heavy morning can't knock a point off it. It only rises when you get
+  stronger faster than you get heavier, which is the question a changing
+  bodyweight makes impossible to answer from load alone. Log a weigh-in or two
+  and the toggle appears.
+- **Bodyweight** — log daily from **Log weight**; the app leads with the
+  **7-day average**, not the day's reading. Water, salt, carbs and a hard leg
+  day move a single reading by a pound or three; averaging a week of them
+  cancels most of that. The tile shows this week's average against last
+  week's, and the chart draws the average as its line with each day's reading
+  as a faint dot underneath — the noise stays visible without stealing the eye.
+  No weigh-in in the last seven days and the tile shows your last reading with
+  its date instead, rather than an average of nothing.
 - **Volume per session** and a **consistency grid** of the last ten weeks:
   amber for a day you trained (darker with more volume), a grey ring for a
   rest day, a red one for a missed day.
 
 Tap or drag across any chart to read off a specific day.
+
+## Nutrition
+
+At the top of the Progress tab. **Log food** takes the day's totals —
+calories, protein, fiber — and **every field is optional**: a day with only
+calories is a day with only calories, not a day of zero protein. A blank field
+is "not logged"; a typed 0 is a real zero.
+
+**The calorie target is a phase, not a number.** Each target has a start date
+and an optional label (Cut, Maintain, Bulk) and holds until the next one
+begins. Every day is judged against the target that was in force *on that
+day*, so switching from a bulk at 3,000 to a cut at 2,200 changes nothing
+about how your bulk days read. Change it with **Change** on the card; it
+starts today by default, or backdate it if the phase really began earlier.
+Your very first target reaches back to your earliest logged day, so days you
+logged before setting one aren't left with nothing to compare against.
+
+What you see:
+
+- **Today** as a meter against the target — the part past the target runs on
+  in the "over" colour — with the difference in words.
+- **Calories vs target**: the last 14 days as bars above or below the target
+  line. Days you didn't log are gaps, not zeros. Tap a bar for the numbers.
+- **7-day averages** for calories, protein and fiber, each over only the days
+  that field was actually logged, with the count shown ("165 g · 6 of 7 days").
+- **Recent days** with exact numbers. Tap one to edit or clear it; for anything
+  older, change the date in the food sheet.
+
+Over and under are a *direction*, not a verdict — over is the aim on a bulk and
+the thing to avoid on a cut — so the colours never change with the phase, and
+the numbers always sit next to a word or a sign rather than relying on colour.
+The two colours are checked for colour-blind separation in both themes.
+
+### Maintenance, worked out from your own numbers
+
+The **Maintenance** card estimates what you actually burn from what you ate and
+what the scale did:
+
+> maintenance ≈ average daily calories − (weight trend per day × 3,500 kcal/lb)
+
+Averaging 2,300 kcal while losing half a pound a week (250 kcal a day of
+deficit) puts maintenance around 2,550. It uses the **21 days through
+yesterday** — today's food isn't finished, and a breakfast-only today would
+drag the average down every morning.
+
+How it avoids the usual traps:
+
+- **Weight change is the slope of a line fitted through every weigh-in** in
+  the window, not the last reading minus the first. Two single days are mostly
+  water; a line through twenty isn't.
+- **Calories average only the days you logged.** An unlogged day is unknown,
+  not zero.
+- **It shows nothing until it has enough**: at least 10 days with calories and
+  6 weigh-ins spread over 10+ days. Until then it lists exactly what it's still
+  missing. In the meantime an online calculator is the better guess.
+- **It tells you how sure it is.** The ± is one standard error of the fitted
+  slope in kilocalories — how far the scale wanders from its trend. More
+  weigh-ins and a steadier scale narrow it; weighing in every third day
+  roughly doubles it.
+- **kg works too**: the factor becomes 7,700 kcal per kilo.
+
+The number that matters most, though, is that **a consistent miscount cancels
+out**. If you always undercount by 10%, the estimate comes back in your own
+counting — which is exactly the unit your target needs, and something no
+calculator can know. What it *can't* survive is inconsistency: skipping the
+logging on big days makes intake look low, so maintenance reads low too. And a
+sudden change — starting a cut, a new training block, a swing in carbs or salt
+— moves water for a week or so; the estimate lags until the window rolls past
+it.
+
+The card also says how it compares week to week, and what it means for the
+target you've set ("your 2,100 target is 380 below it — roughly losing 0.8 lb a
+week if you hit it"). Once it's ready, the target sheet offers **Cut / Maintain
+/ Bulk** starting points from it — maintenance −500, as is, and +250 — which
+fill in the number and phase for you to adjust before saving.
 
 ## The plan moves on its own
 
@@ -173,6 +257,7 @@ demand.
 index.html            markup only
 style.css             all styling; the colour tokens are at the top
 js/data.js            THE PROGRAM — exercise library and the four day templates
+js/vault.js           snapshots in IndexedDB, and asking for persistent storage
 js/store.js           state shape, localStorage, and the domain logic
 js/plan.js            progressive overload, auto-rotation, and the importer
 js/chart.js           the SVG charts on the Progress tab; no library
@@ -182,6 +267,11 @@ manifest.webmanifest  makes it installable as a home-screen app
 sw.js                 offline cache, so a dead gym signal doesn't matter
 icon.svg              app icon
 build.mjs             optional: bundles everything into one file (see below)
+package.json          npm scripts only — there are no dependencies
+test/logic.mjs        the rules, run in Node with no browser
+test/browser.mjs      serves the app and drives it in headless Chrome/Edge
+test/harness.js       the in-page half of the browser tests
+.github/workflows/    runs both suites on every push
 ```
 
 The scripts are plain `<script>` tags rather than ES modules, so the app also
@@ -207,6 +297,38 @@ down on purpose:
 
 The steppers in the set logger update in place rather than rebuilding the
 sheet, so holding down **+** keeps up with you.
+
+**The rest timer survives a locked screen.** Phones suspend timers in the
+background, so a countdown that works by ticking down once a second is wrong
+the moment you pocket the phone. The timer stores when the rest *ends* and
+derives the display from the clock, and it rechecks the moment you come back
+to the app. A rest that ran out while you were away stops; if it ran out in
+the last ninety seconds it also tells you so.
+
+## Tests
+
+```
+npm test               build, then both suites
+npm run test:logic     just the rules — fast, needs only Node
+npm run test:browser   the real app in headless Chrome or Edge
+```
+
+There is nothing to install; Node 22 or newer is the only requirement.
+
+**test/logic.mjs** loads the data, store, plan and vault files into a bare
+Node context and checks the arithmetic: progression, rotation, the import
+parser, migrations from older saves, and that the vault degrades quietly when
+there is no IndexedDB at all.
+
+**test/browser.mjs** serves the repository over http — so IndexedDB, storage
+and the service worker behave the way they do once deployed — and drives it in
+a headless browser over the DevTools protocol: logging sets, the rest timer
+through a simulated locked screen, building an exercise, importing, taking and
+restoring snapshots, undoing a reset. It finds Chrome or Edge on its own; set
+`CHROME_PATH` to point it elsewhere. With no browser available it skips
+rather than fails.
+
+Both run on every push to GitHub (`.github/workflows/test.yml`).
 
 ## Running it locally
 
@@ -292,16 +414,42 @@ var CACHE = "iron-ledger-v4";   // was v3
 Otherwise phones will keep serving the old copy. Your saved workouts are in
 `localStorage` and are untouched by this.
 
+## Keeping your data
+
+Three layers, and it matters which one protects against what:
+
+| | Protects against | Doesn't protect against |
+|---|---|---|
+| **Persistent storage** | The browser evicting the app's data to free up space | Clearing site data, losing the phone |
+| **Snapshots** | A mistaken Reset, restoring the wrong file, a bad import | Clearing site data, losing the phone |
+| **Exporting a copy** | Everything | Only as fresh as your last export |
+
+**Persistent storage.** On launch the app asks the browser to mark its storage
+as persistent. The browser decides whether to grant it — an app installed to
+the home screen is the likeliest to get a yes — and the Data panel tells you
+which answer you got. Worth checking once on your actual phone.
+
+**Snapshots.** A whole copy of the save is kept in IndexedDB after every
+finished session, and *before* anything that overwrites your log — reset,
+restoring a backup, importing, rolling back. The last 20 are kept. Each one is
+a **Restore** button in **Log → Snapshots**, and restoring snapshots the
+current state first, so a rollback can itself be rolled back. They live on the
+same device as the thing they back up: they are an undo button, not a backup.
+
+**Exporting** is the only layer that survives losing the phone, so the Data
+panel tracks when a copy last left the device and says so plainly once it has
+been a month or more.
+
 ## Getting your data off the phone
 
-There's still no cloud copy — clearing site data or losing the phone loses
-the log — so **Your data** at the bottom of the Log tab exists to get a copy
-out. Nothing is uploaded anywhere; the files are built on the device and
-handed to you.
+There's no cloud copy yet — clearing site data or losing the phone loses the
+log and its snapshots — so **Your data** at the bottom of the Log tab exists
+to get a copy out. Nothing is uploaded anywhere; the files are built on the
+device and handed to you.
 
 | | |
 |---|---|
-| **Spreadsheet (CSV)** | One row per weight you lifted, so a drop set stays two rows. Opens in Excel, Numbers or Sheets. Weigh-ins and days off are in the same file. |
+| **Spreadsheet (CSV)** | One row per weight you lifted, so a drop set stays two rows. Opens in Excel, Numbers or Sheets. Weigh-ins, days off and food are in the same file — each food row carries the calorie target that was in force that day. |
 | **Full backup** | The entire save as JSON. This is the one that restores. |
 | **Send it to myself…** | Opens the phone's share sheet with both files attached — mail them to yourself, drop them in Files, whatever. Only appears where the browser supports it, which in practice means your phone. |
 | **Copy CSV** | Straight to the clipboard, for pasting into a spreadsheet on a desktop. |

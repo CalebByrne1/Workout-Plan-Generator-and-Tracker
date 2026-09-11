@@ -40,6 +40,12 @@
   /* semantic, kept separate from the accent */
   --good:#1C7359;
   --danger:#A03A18;
+  /* calories against target — a warm/cool DIRECTION pair, not good/bad:
+     over is the aim on a bulk and the thing to avoid on a cut. Validated
+     against this surface for colour-blind separation (ΔE 22) and contrast. */
+  --over:#A85F00;
+  --under:#2F6FB3;
+  --under-soft:#DCE7F4;
 
   --shadow:0 1px 2px rgba(16,26,26,.10), 0 12px 28px -12px rgba(16,26,26,.28);
   --r:10px;
@@ -66,6 +72,9 @@
     --accent-soft:#382812;
     --good:#4FC3A1;
     --danger:#E1795A;
+    --over:#C27A18;
+    --under:#4F8ACB;
+    --under-soft:#1C2A38;
     --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
   }
 }
@@ -86,6 +95,9 @@
   --accent-soft:#382812;
   --good:#4FC3A1;
   --danger:#E1795A;
+  --over:#C27A18;
+  --under:#4F8ACB;
+  --under-soft:#1C2A38;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
 }
 
@@ -971,6 +983,238 @@ textarea.tall{
 
 .rowbtns button[disabled]{opacity:.45}
 
+
+/* ==========================================================================
+   Snapshots and the export nudge
+   ========================================================================== */
+
+/* Said once, plainly, and only when it is actually true. A permanent banner
+   is one you stop seeing. */
+.nudge{
+  margin-top:8px;padding:10px 12px;
+  border:1px solid var(--accent);border-radius:var(--r);
+  background:var(--accent-soft);
+  font-size:12.5px;line-height:1.45;color:var(--accent);
+}
+.hint.good{color:var(--good)}
+
+.snaprow{
+  display:flex;align-items:center;gap:8px;
+  padding:9px 0;border-bottom:1px solid var(--line-soft);
+}
+.snaprow:last-child{border-bottom:0}
+.snapwhen{flex:1;min-width:0}
+.snapwhen b{
+  display:block;font-family:var(--font-d);font-size:14px;font-weight:600;
+  letter-spacing:.02em;overflow-wrap:anywhere;
+}
+.snapwhen small{
+  display:block;font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.snapgo{
+  flex:none;padding:8px 11px;
+  border:1px solid var(--line);border-radius:8px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-2);
+}
+
+
+/* ==========================================================================
+   Nutrition
+
+   Over and under are a direction, not a verdict, so the colour only ever
+   sits on a mark — a bar, a meter segment, a swatch. The numbers and words
+   beside them stay in ink.
+   ========================================================================== */
+
+/* Today, against the target. */
+.food-today{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+  margin-top:12px;
+}
+.food-num b{
+  display:block;
+  font-family:var(--font-d);font-size:34px;font-weight:600;
+  letter-spacing:.02em;line-height:1;
+}
+.food-num span{
+  display:block;margin-top:4px;
+  font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+}
+.food-diff{
+  display:flex;align-items:center;gap:6px;flex:none;
+  font-family:var(--font-m);font-size:12.5px;font-weight:600;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+.food-none{margin-top:10px}
+
+/* The meter. The track is a lighter step of the under hue so the whole bar
+   reads as one scale; the part past the target is the over hue, set off
+   from the rest by a 2px gap and a tick in ink at the target itself. */
+.meter{
+  position:relative;height:10px;margin-top:10px;
+  border-radius:5px;background:var(--under-soft);overflow:hidden;
+}
+.meter i{position:absolute;top:0;bottom:0;left:0;display:block}
+.meter-in{background:var(--under);border-radius:5px 0 0 5px}
+.meter-over{background:var(--over);border-left:2px solid var(--surface)}
+.meter-mark{width:2px;margin-left:-1px;background:var(--ink)}
+
+.food-macros{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  margin-top:12px;
+}
+.macro .lab{margin-bottom:2px}
+.macro b{
+  font-family:var(--font-m);font-size:15px;font-weight:600;
+}
+.macro i{font-style:normal;font-size:13px;color:var(--ink-3)}
+
+/* The target, and the way to change it. */
+.food-goal{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);
+}
+.food-goal .k{min-width:0}
+.food-goal .lab{margin-bottom:2px}
+.food-goal b{font-family:var(--font-m);font-size:15px;font-weight:600}
+.food-goal small{display:block;margin-top:2px;font-size:11.5px;color:var(--ink-3)}
+.food-goal .edit{flex:none}
+
+/* A phase is a label, not a state — plain ink, outlined. */
+.phase{
+  display:inline-block;margin-left:7px;padding:1px 6px;vertical-align:2px;
+  border:1px solid var(--line);border-radius:5px;
+  font-family:var(--font-m);font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-2);
+}
+
+/* Swatches carry the colour so the text beside them doesn't have to. */
+.sw{
+  display:inline-block;flex:none;width:9px;height:9px;border-radius:2px;
+  vertical-align:0;
+}
+.sw[data-dir="over"]{background:var(--over)}
+.sw[data-dir="under"]{background:var(--under)}
+
+.chart-key{
+  display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;
+  font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+}
+.chart-key span{display:flex;align-items:center;gap:6px}
+
+/* The chart marks. The zero line is the target, so it's one step stronger
+   than the grid — present, but still recessive next to the bars. */
+.c-bar[data-dir="over"]{fill:var(--over)}
+.c-bar[data-dir="under"]{fill:var(--under)}
+.c-zero{stroke:var(--ink-3);stroke-width:1}
+
+/* Averages, each with how many days it stands on. */
+.food-avg{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:12px;
+  background:var(--line);
+  border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+}
+.food-avg-tile{background:var(--surface);padding:9px 10px;min-width:0}
+.food-avg-tile .lab{margin-bottom:2px}
+.food-avg-tile b{
+  display:block;
+  font-family:var(--font-d);font-size:20px;font-weight:600;line-height:1.15;
+}
+.food-avg-tile b.none{color:var(--ink-3)}
+.food-avg-tile small{display:block;font-size:10.5px;line-height:1.35;color:var(--ink-3)}
+.food-avg-head{margin:14px 0 6px}
+.food-avg{margin-top:0}
+#foodMore{margin-top:10px;min-height:40px;font-size:13px}
+
+/* The table view: every logged day, exact numbers, one tap to edit. */
+.food-list{margin-top:14px}
+.food-list > .lab{margin-bottom:4px}
+.food-row{
+  display:grid;grid-template-columns:1fr auto 64px;
+  grid-template-areas:"d n x" "m m m";
+  align-items:baseline;column-gap:10px;
+  width:100%;padding:9px 0;text-align:left;
+  border-bottom:1px solid var(--line-soft);
+}
+.food-row:last-child{border-bottom:0}
+.food-row .d{grid-area:d;font-size:13px;color:var(--ink-2)}
+.food-row b{
+  grid-area:n;text-align:right;
+  font-family:var(--font-m);font-size:13.5px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.food-row .diff{
+  grid-area:x;display:flex;align-items:center;justify-content:flex-end;gap:5px;
+  font-family:var(--font-m);font-size:12px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+.food-row small{
+  grid-area:m;font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+}
+.food-row small:empty{display:none}
+
+
+/* ==========================================================================
+   Weight trend and maintenance
+   ========================================================================== */
+
+/* The readings under the average line: context, not signal. Muted ink at
+   low opacity, so the eye goes to the line and the scatter shows the noise. */
+.c-raw{fill:var(--ink-3);fill-opacity:.45}
+
+.sw.line{width:14px;height:2px;border-radius:1px;background:var(--accent)}
+.sw.raw{width:7px;height:7px;border-radius:50%;background:var(--ink-3);opacity:.7}
+
+/* "estimated", beside the card title — a label, so plain ink, outlined. */
+.tag{
+  padding:2px 7px;
+  border:1px solid var(--line);border-radius:5px;
+  font-family:var(--font-m);font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+
+.tdee{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+  margin-top:12px;
+}
+.tdee-num b{
+  display:block;
+  font-family:var(--font-d);font-size:34px;font-weight:600;
+  letter-spacing:.02em;line-height:1;
+}
+.tdee-num b.none{color:var(--ink-3)}
+.tdee-num span{
+  display:block;margin-top:4px;
+  font-family:var(--font-m);font-size:11px;color:var(--ink-3);
+}
+.tdee-band{
+  flex:none;
+  font-family:var(--font-m);font-size:13px;font-weight:600;color:var(--ink-2);
+}
+.tdee-why,
+.tdee-goal{margin-top:10px;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+.tdee-goal{margin-top:6px}
+.tdee-why b,
+.tdee-goal b{font-weight:600;color:var(--ink)}
+.tdee-need{margin:6px 0 0;padding-left:20px;font-size:13px;line-height:1.6;color:var(--ink-2)}
+
+/* Suggested targets in the target sheet. */
+.suggest{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.suggest button{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:9px 4px;
+  border:1px solid var(--line);border-radius:var(--r);
+}
+.suggest span{
+  font-family:var(--font-d);font-size:13px;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);
+}
+.suggest b{font-family:var(--font-m);font-size:15px;font-weight:600}
+.suggest small{font-family:var(--font-m);font-size:10.5px;color:var(--ink-3)}
+.suggest button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+
 </style>
 </head>
 <body>
@@ -1345,6 +1589,301 @@ IL.data = {
 
 
 /* ==========================================================================
+   vault.js — snapshots, and asking the browser not to throw them away.
+
+   The plan and the log live in localStorage, which is one string and one
+   mistake away from gone. This adds two things around it:
+
+     persist()    asks the browser to mark this origin's storage as
+                  persistent, so it isn't evicted to reclaim space
+     snapshots    a rolling set of whole-state copies in IndexedDB, taken
+                  automatically before anything destructive and after every
+                  finished session
+
+   BE CLEAR ABOUT WHAT THIS PROTECTS AGAINST. Snapshots live in the same
+   origin as the thing they back up, so "clear site data", a wiped phone or
+   a lost one takes them too. What they undo is the damage you do from
+   inside the app — a mistaken Reset, a restore from the wrong file, an
+   import that turned out to be nonsense. Getting a copy OFF the device is
+   still the export button, and eventually the sync.
+
+   Everything here is best-effort and asynchronous. IndexedDB is missing in
+   private windows on some browsers and blocked on file:// in others, so
+   every call resolves to something harmless rather than throwing, and the
+   app works exactly as before when it isn't there.
+   ========================================================================== */
+
+window.IL = window.IL || {};
+
+(function(IL){
+"use strict";
+
+var DB_NAME = "ironLedger";
+var STORE = "snapshots";
+var VERSION = 1;
+
+/* How many to keep. A snapshot is the whole save file, so this grows with
+   your history — twenty of them a year in is a few megabytes, which is
+   nothing to IndexedDB and would not have fit in localStorage. */
+var KEEP = 20;
+
+var dbPromise = null;
+var broken = false;
+
+function open(){
+  if(broken) return Promise.reject(new Error("unavailable"));
+  if(dbPromise) return dbPromise;
+
+  dbPromise = new Promise(function(resolve, reject){
+    if(!window.indexedDB){
+      reject(new Error("no indexedDB"));
+      return;
+    }
+
+    var req;
+    try{
+      req = indexedDB.open(DB_NAME, VERSION);
+    }catch(err){
+      reject(err);            /* file:// in some browsers throws right here */
+      return;
+    }
+
+    req.onupgradeneeded = function(){
+      var db = req.result;
+      if(!db.objectStoreNames.contains(STORE)){
+        db.createObjectStore(STORE, { keyPath:"id", autoIncrement:true })
+          .createIndex("at", "at");
+      }
+    };
+    req.onsuccess = function(){ resolve(req.result); };
+    req.onerror = function(){ reject(req.error || new Error("open failed")); };
+    req.onblocked = function(){ reject(new Error("blocked")); };
+  });
+
+  dbPromise.catch(function(){
+    /* Remember the failure so every later call fails fast and silently
+       rather than re-prompting a browser that has already said no. */
+    broken = true;
+    dbPromise = null;
+  });
+
+  return dbPromise;
+}
+
+/* Run one transaction. `fn` gets the object store and returns a request;
+   the promise settles on the transaction, not the request, so the write is
+   actually durable by the time it resolves. */
+function tx(mode, fn){
+  return open().then(function(db){
+    return new Promise(function(resolve, reject){
+      var t = db.transaction(STORE, mode);
+      var store = t.objectStore(STORE);
+      var out;
+
+      try{
+        out = fn(store);
+      }catch(err){
+        reject(err);
+        return;
+      }
+
+      if(out && "onsuccess" in out){
+        out.onsuccess = function(){ resolve(out.result); };
+        out.onerror = function(){ /* the transaction's own error handles it */ };
+      }else{
+        t.oncomplete = function(){ resolve(out); };
+      }
+
+      t.onerror = function(){ reject(t.error || new Error("transaction failed")); };
+      t.onabort = function(){ reject(t.error || new Error("transaction aborted")); };
+    });
+  });
+}
+
+function available(){
+  return open().then(function(){ return true; }, function(){ return false; });
+}
+
+/* --------------------------------------------------------------------------
+   Durability
+
+   persist() is the one call that actually reduces the odds of losing
+   everything. Browsers decide for themselves whether to grant it — an
+   installed app is the likeliest to get a yes — and a browser without the
+   API has no answer to give, which is why the result is three-valued rather
+   than a boolean.
+   -------------------------------------------------------------------------- */
+function persist(){
+  if(!navigator.storage || !navigator.storage.persist){
+    return Promise.resolve(null);            /* browser has no opinion */
+  }
+  return navigator.storage.persisted()
+    .then(function(already){
+      return already ? true : navigator.storage.persist();
+    })
+    .catch(function(){ return null; });
+}
+
+function estimate(){
+  if(!navigator.storage || !navigator.storage.estimate) return Promise.resolve(null);
+  return navigator.storage.estimate().catch(function(){ return null; });
+}
+
+/* Everything the Data panel wants to say about storage, in one call. */
+function status(){
+  return Promise.all([
+    persist().catch(function(){ return null; }),
+    estimate(),
+    count().catch(function(){ return 0; })
+  ]).then(function(all){
+    return { persisted:all[0], estimate:all[1], snapshots:all[2] };
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Snapshots
+   -------------------------------------------------------------------------- */
+
+/* The summary shown in the list. Read off the JSON rather than stored
+   separately so an older snapshot can never disagree with its own contents. */
+function describe(json){
+  try{
+    var s = JSON.parse(json);
+    var sessions = (s.history || []).filter(function(h){ return h.kind !== "skip"; });
+    return {
+      sessions: sessions.length,
+      entries: (s.history || []).length,
+      weighIns: (s.body || []).length,
+      cycle: s.cycle || 1
+    };
+  }catch(err){
+    return { sessions:0, entries:0, weighIns:0, cycle:1 };
+  }
+}
+
+/* Take a copy. `json` is store.toBackup() — a string, already serialised, so
+   nothing here can be caught half-written by a later edit.
+
+   An identical snapshot is normally not taken twice, so a double-tap on the
+   button doesn't push a real checkpoint out of the window.
+
+   `always` overrides that, and every guard before a destructive action
+   passes it. Deduping there saves nothing worth having and costs the one
+   thing that matters afterwards: finding a snapshot labelled "before reset"
+   when you go looking for it, rather than an identical copy filed under
+   some other name from a minute earlier. */
+function snapshot(json, reason, always){
+  if(typeof json !== "string" || !json) return Promise.resolve(null);
+  if(always) return write(json, reason);
+
+  return list().then(function(rows){
+    if(rows.length && rows[0].bytes === json.length){
+      return read(rows[0].id).then(function(prev){
+        return prev === json ? null : write(json, reason);
+      });
+    }
+    return write(json, reason);
+  }).catch(function(){ return null; });
+}
+
+function write(json, reason){
+  var meta = describe(json);
+
+  return tx("readwrite", function(store){
+    return store.add({
+      at: Date.now(),
+      reason: String(reason || "snapshot"),
+      bytes: json.length,
+      sessions: meta.sessions,
+      weighIns: meta.weighIns,
+      json: json
+    });
+  }).then(function(id){
+    prune();                        /* fire and forget; never blocks a save */
+    return id;
+  }).catch(function(){ return null; });
+}
+
+/* Newest first, without the payloads — the list view doesn't need megabytes
+   of JSON to draw a dozen rows. */
+function list(){
+  return tx("readonly", function(store){
+    return store.getAll();
+  }).then(function(rows){
+    return (rows || []).map(function(r){
+      return {
+        id: r.id,
+        at: r.at,
+        reason: r.reason,
+        bytes: r.bytes,
+        sessions: r.sessions,
+        weighIns: r.weighIns
+      };
+    }).sort(function(a, b){ return b.at - a.at; });
+  }).catch(function(){ return []; });
+}
+
+function count(){
+  return tx("readonly", function(store){
+    return store.count();
+  }).catch(function(){ return 0; });
+}
+
+function read(id){
+  return tx("readonly", function(store){
+    return store.get(id);
+  }).then(function(row){
+    return row ? row.json : null;
+  }).catch(function(){ return null; });
+}
+
+function remove(id){
+  return tx("readwrite", function(store){
+    return store.delete(id);
+  }).then(function(){ return true; }, function(){ return false; });
+}
+
+/* Keep the most recent KEEP. Deliberately not clever: an "important ones
+   live longer" policy is one more thing that can decide wrong, and the
+   thing you want back is nearly always the one from just before now. */
+function prune(keep){
+  var max = keep || KEEP;
+
+  return list().then(function(rows){
+    var doomed = rows.slice(max);
+    if(!doomed.length) return 0;
+
+    return Promise.all(doomed.map(function(r){ return remove(r.id); }))
+      .then(function(){ return doomed.length; });
+  }).catch(function(){ return 0; });
+}
+
+function clear(){
+  return tx("readwrite", function(store){
+    return store.clear();
+  }).then(function(){ return true; }, function(){ return false; });
+}
+
+IL.vault = {
+  KEEP: KEEP,
+  available: available,
+  persist: persist,
+  estimate: estimate,
+  status: status,
+  snapshot: snapshot,
+  list: list,
+  count: count,
+  read: read,
+  remove: remove,
+  prune: prune,
+  clear: clear,
+  describe: describe
+};
+
+})(window.IL);
+
+
+/* ==========================================================================
    store.js — state, persistence, and the domain questions asked of it.
 
    The whole app is one plain object saved to localStorage on every change.
@@ -1358,9 +1897,13 @@ IL.data = {
        history: [ session | skip ]        always sorted oldest → newest
        body:    [ { at, w } ]             bodyweight log, one entry per day
        custom:  [ libEntry ]              exercises you added on the phone
+       nutrition: { days:{ "YYYY-MM-DD": food }, goals:[ goal ] }
        prefs:   { unit, step, autoRest, restCompound, restOther,
-                  autoProgress, variety }
+                  autoProgress, variety, lastExport }
      }
+
+     food = { kcal, protein, fiber }      each a number or null (not logged)
+     goal = { from:"YYYY-MM-DD", kcal, phase:"cut"|"maintain"|"bulk"|"" }
 
      exercise = { uid, name, sets, reps, weight, note, log,
                   pin, rotAge, progress }
@@ -1391,7 +1934,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 4;
+var SCHEMA = 5;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -1659,9 +2202,11 @@ function seed(){
     history: [],
     body: [],
     custom: [],
+    nutrition: { days:{}, goals:[] },
     prefs: {
       unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
-      autoProgress:true, variety:"medium"
+      autoProgress:true, variety:"medium",
+      lastExport:0
     }
   };
 }
@@ -1723,6 +2268,13 @@ function migrateToV4(saved){
   return saved;
 }
 
+/* schema 4 had no nutrition log. Nothing to convert — it starts empty. */
+function migrateToV5(saved){
+  saved.nutrition = saved.nutrition || { days:{}, goals:[] };
+  saved.schema = 5;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
@@ -1737,6 +2289,17 @@ function normalize(saved){
   if(!saved.schema || saved.schema < 2) migrateToV2(saved);
   if(saved.schema < 3) migrateToV3(saved);
   if(saved.schema < 4) migrateToV4(saved);
+  if(saved.schema < 5) migrateToV5(saved);
+
+  /* Whatever arrived, leave nutrition in exactly one shape: days as a map,
+     goals as a list in date order. A hand-edited backup can't break it. */
+  var food = saved.nutrition || {};
+  saved.nutrition = {
+    days: (food.days && typeof food.days === "object" && !Array.isArray(food.days))
+      ? food.days : {},
+    goals: Array.isArray(food.goals) ? food.goals : []
+  };
+  saved.nutrition.goals.sort(function(a, b){ return a.from < b.from ? -1 : a.from > b.from ? 1 : 0; });
 
   saved.days.forEach(function(d){
     d.ex.forEach(function(e){
@@ -1994,6 +2557,344 @@ function bodyweightAt(ts){
 }
 
 /* --------------------------------------------------------------------------
+   Nutrition
+
+   One entry per calendar day, keyed by the day itself ("2026-09-10") — food
+   has no time of day worth keeping. Every field is optional, and a day with
+   nothing left in it is removed rather than kept as an empty shell.
+
+   TARGETS ARE PHASES, NOT A NUMBER. Each target starts on a date and holds
+   until the next one begins, and a day is always judged against the target
+   that was in force ON THAT DAY. Keep a single number instead and moving
+   from a bulk to a cut would re-grade every bulk day as a day you blew it.
+   -------------------------------------------------------------------------- */
+
+var PHASES = { cut:"Cut", maintain:"Maintain", bulk:"Bulk" };
+
+/* Blank means "not logged". A typed 0 is kept — a day with no fibre is a
+   real day, and so is a fast. Negative or unreadable is treated as blank. */
+function amount(v, places){
+  if(v === null || v === undefined || String(v).trim() === "") return null;
+  var n = parseFloat(v);
+  if(!isFinite(n) || n < 0) return null;
+  var f = Math.pow(10, places || 0);
+  return Math.round(n * f) / f;
+}
+
+function nutritionOn(key){
+  return state.nutrition.days[key] || null;
+}
+
+function setNutrition(key, vals){
+  var entry = {
+    kcal: amount(vals.kcal, 0),
+    protein: amount(vals.protein, 1),
+    fiber: amount(vals.fiber, 1)
+  };
+
+  if(entry.kcal === null && entry.protein === null && entry.fiber === null){
+    delete state.nutrition.days[key];
+    save();
+    return null;
+  }
+
+  state.nutrition.days[key] = entry;
+  save();
+  return entry;
+}
+
+function clearNutrition(key){
+  delete state.nutrition.days[key];
+  save();
+}
+
+/* Every day with anything logged, newest first. */
+function nutritionKeys(){
+  return Object.keys(state.nutrition.days).sort().reverse();
+}
+
+function goalOn(key){
+  var found = null;
+  state.nutrition.goals.forEach(function(g){ if(g.from <= key) found = g; });
+  return found;
+}
+
+function currentGoal(){ return goalOn(dayKey(Date.now())); }
+
+/* A new target starting on `from`. One per start date — setting a second
+   target for the same day corrects the first rather than stacking on it. */
+function setGoal(spec){
+  var kcal = amount(spec.kcal, 0);
+  if(!kcal) return null;
+
+  var goal = {
+    from: spec.from || dayKey(Date.now()),
+    kcal: kcal,
+    phase: PHASES[spec.phase] ? spec.phase : ""
+  };
+
+  state.nutrition.goals = state.nutrition.goals.filter(function(g){
+    return g.from !== goal.from;
+  });
+  state.nutrition.goals.push(goal);
+  state.nutrition.goals.sort(function(a, b){ return a.from < b.from ? -1 : a.from > b.from ? 1 : 0; });
+  save();
+  return goal;
+}
+
+function removeGoal(from){
+  state.nutrition.goals = state.nutrition.goals.filter(function(g){ return g.from !== from; });
+  save();
+}
+
+/* The last `count` days, oldest first, INCLUDING the ones with nothing
+   logged. The chart needs honest gaps: a missed Wednesday should look like
+   a missing Wednesday, not close up so Thursday sits where it would be. */
+function nutritionSeries(count){
+  var out = [];
+  var cursor = new Date(startOfDay(Date.now()));
+  cursor.setDate(cursor.getDate() - (count - 1));
+
+  for(var i = 0; i < count; i++){
+    var key = dayKey(cursor.getTime());
+    var food = nutritionOn(key);
+    var goal = goalOn(key);
+    var kcal = food ? food.kcal : null;
+
+    out.push({
+      key: key,
+      at: fromDayKey(key),
+      kcal: kcal,
+      protein: food ? food.protein : null,
+      fiber: food ? food.fiber : null,
+      target: goal ? goal.kcal : null,
+      phase: goal ? goal.phase : "",
+      diff: (kcal !== null && goal) ? kcal - goal.kcal : null
+    });
+
+    cursor.setDate(cursor.getDate() + 1);      /* setDate walks DST cleanly */
+  }
+  return out;
+}
+
+/* Averages over a window, each one over ONLY the days that field was logged.
+   A day you didn't write fibre down is not a day you ate none, so it can't
+   be allowed to drag the average toward zero. */
+function nutritionAverages(count){
+  var rows = nutritionSeries(count);
+
+  function avg(field){
+    var vals = rows.map(function(r){ return r[field]; })
+                   .filter(function(v){ return v !== null; });
+    if(!vals.length) return { value:null, days:0 };
+    var total = vals.reduce(function(n, v){ return n + v; }, 0);
+    return { value: total / vals.length, days: vals.length };
+  }
+
+  return {
+    window: count,
+    kcal: avg("kcal"),
+    diff: avg("diff"),
+    protein: avg("protein"),
+    fiber: avg("fiber")
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Weight trend
+
+   One weigh-in is mostly water — salt, carbs, a hard leg day, the time you
+   went to bed. Averaging the last seven days of readings cancels most of
+   that, which is why the 7-day average is the number the app leads with and
+   a single reading is the footnote.
+   -------------------------------------------------------------------------- */
+
+var TREND_DAYS = 7;
+
+/* A day key moved by n calendar days. Built from the date's parts so a DST
+   change can't knock it a day sideways. */
+function shiftKey(key, n){
+  var b = String(key).split("-");
+  return dayKey(new Date(+b[0], +b[1] - 1, +b[2] + n, 12).getTime());
+}
+
+function round1(n){ return Math.round(n * 10) / 10; }
+
+/* The mean of every weigh-in in the 7 days ending on `key`, inclusive, and
+   how many readings it's made of. null when there are none — one reading in
+   the window is an average of one, and the count says so. */
+function weekAverage(key){
+  var from = shiftKey(key, -(TREND_DAYS - 1));
+  var vals = [];
+
+  state.body.forEach(function(b){
+    var k = dayKey(b.at);
+    if(k >= from && k <= key) vals.push(b.w);
+  });
+  if(!vals.length) return null;
+
+  var total = vals.reduce(function(n, v){ return n + v; }, 0);
+  return { value: round1(total / vals.length), count: vals.length, from: from, to: key };
+}
+
+/* What the Bodyweight tile says: this week's average against last week's.
+   Week on week is the number that tells a cut or a bulk how it's going;
+   "since the start" is what the chart is for. */
+function weightTrend(){
+  var today = dayKey(Date.now());
+  var now = weekAverage(today);
+  var prev = weekAverage(shiftKey(today, -TREND_DAYS));
+
+  return {
+    now: now,
+    prev: prev,
+    change: (now && prev) ? round1(now.value - prev.value) : null,
+    latest: latestBodyweight()
+  };
+}
+
+/* The trend as of each weigh-in, with the reading itself alongside — the
+   chart draws the average as its line and the readings as faint dots. */
+function bodyTrendSeries(){
+  return state.body.map(function(b){
+    var avg = weekAverage(dayKey(b.at));
+    return { x: b.at, y: avg.value, raw: b.w, count: avg.count };
+  });
+}
+
+/* Bodyweight "at the time" for anything that divides by it. The 7-day
+   average where there is one, so a single heavy morning doesn't knock a
+   point off your relative strength; the nearest reading otherwise. */
+function trendWeightAt(ts){
+  var avg = weekAverage(dayKey(ts));
+  return avg ? avg.value : bodyweightAt(ts);
+}
+
+/* --------------------------------------------------------------------------
+   Maintenance, from your own numbers
+
+   Over a few weeks, what you ate and what the scale did pin down what you
+   burn:
+
+     maintenance = average intake − (weight change per day × energy per unit)
+
+   Lose half a pound a week on 2,300 and you're burning about 2,550.
+
+   Three details decide whether that's useful or misleading:
+
+   · The weight change is the SLOPE of a line fitted through every weigh-in
+     in the window, not the last reading minus the first. Two single days
+     are mostly water; a fitted line through twenty isn't.
+   · Intake averages only the days you logged. Unlogged days are unknown,
+     not zero.
+   · Nothing is shown until there's enough to stand on. A confident wrong
+     number is worse than "not yet".
+
+   The ± that comes with it is one standard error of the slope, turned into
+   kilocalories: how much the weigh-ins disagree with the line they sit on.
+   It shrinks with more weigh-ins and a steadier scale. It says nothing about
+   how carefully the food was counted — but a consistent miscount cancels
+   out, because the answer comes back in your own counting. That is exactly
+   what a target needs, and exactly what no online calculator can give you.
+
+   The window runs through YESTERDAY. Today's food isn't finished, and a
+   breakfast-only today would drag the average down every morning.
+   -------------------------------------------------------------------------- */
+
+var TDEE_WINDOW = 21;
+var TDEE_NEEDS = { kcalDays: 10, weighIns: 6, span: 10 };
+
+/* The usual approximation for body tissue: 3,500 kcal a pound, 7,700 a kilo.
+   Weights are stored in whatever unit the app is set to, so this follows. */
+function energyPerUnit(){ return state.prefs.unit === "kg" ? 7700 : 3500; }
+
+/* Ordinary least squares, plus the standard error of the slope. */
+function fitLine(pts){
+  var n = pts.length;
+  var mx = 0, my = 0;
+  pts.forEach(function(p){ mx += p.x; my += p.y; });
+  mx /= n; my /= n;
+
+  var sxx = 0, sxy = 0;
+  pts.forEach(function(p){ sxx += (p.x - mx) * (p.x - mx); sxy += (p.x - mx) * (p.y - my); });
+
+  var slope = sxx ? sxy / sxx : 0;
+  var sse = 0;
+  pts.forEach(function(p){
+    var e = p.y - (my + slope * (p.x - mx));
+    sse += e * e;
+  });
+
+  var se = (n > 2 && sxx) ? Math.sqrt(sse / (n - 2)) / Math.sqrt(sxx) : 0;
+  return { slope: slope, se: se };
+}
+
+/* The estimate for the 21 days ending on `endKey`. Always says what it had
+   to work with, and — when it isn't ready — exactly what it's still missing. */
+function tdeeFor(endKey){
+  var startKey = shiftKey(endKey, -(TDEE_WINDOW - 1));
+  var kcals = [];
+  var key = startKey;
+
+  for(var i = 0; i < TDEE_WINDOW; i++){
+    var food = nutritionOn(key);
+    if(food && food.kcal !== null) kcals.push(food.kcal);
+    key = shiftKey(key, 1);
+  }
+
+  var pts = [];
+  state.body.forEach(function(b){
+    var k = dayKey(b.at);
+    if(k >= startKey && k <= endKey){
+      pts.push({ x: daysBetween(fromDayKey(startKey), b.at), y: b.w });
+    }
+  });
+  var span = pts.length ? pts[pts.length - 1].x - pts[0].x : 0;
+
+  var out = {
+    from: startKey,
+    to: endKey,
+    window: TDEE_WINDOW,
+    kcalDays: kcals.length,
+    weighIns: pts.length,
+    span: span,
+    need: {
+      kcalDays: Math.max(0, TDEE_NEEDS.kcalDays - kcals.length),
+      weighIns: Math.max(0, TDEE_NEEDS.weighIns - pts.length),
+      span: Math.max(0, TDEE_NEEDS.span - span)
+    },
+    ready: false
+  };
+
+  if(out.need.kcalDays || out.need.weighIns || out.need.span) return out;
+
+  var intake = kcals.reduce(function(n, v){ return n + v; }, 0) / kcals.length;
+  var fit = fitLine(pts);
+  var perUnit = energyPerUnit();
+
+  out.ready = true;
+  out.intake = Math.round(intake);
+  out.perWeek = Math.round(fit.slope * 7 * 100) / 100;       /* unit per week */
+  out.unit = state.prefs.unit;
+  out.tdee = Math.round((intake - fit.slope * perUnit) / 10) * 10;
+  out.band = Math.max(10, Math.round(fit.se * perUnit / 10) * 10);
+  return out;
+}
+
+/* Now, and a week ago — so the card can say whether it's drifting. */
+function tdee(){
+  var today = dayKey(Date.now());
+  var now = tdeeFor(shiftKey(today, -1));
+  var weekAgo = tdeeFor(shiftKey(today, -1 - TREND_DAYS));
+
+  return {
+    now: now,
+    weekAgo: weekAgo.ready ? weekAgo : null,
+    change: (now.ready && weekAgo.ready) ? now.tdee - weekAgo.tdee : null
+  };
+}
+
+/* --------------------------------------------------------------------------
    Progress — turning the log into something plottable
    -------------------------------------------------------------------------- */
 
@@ -2022,8 +2923,8 @@ function loggedExercises(){
 /* The strength trend for one movement.
 
    metric "load" is an estimated 1RM, and for pull-ups and dips your
-   bodyweight at the time is added in — a chin-up at 150lb and the same rep
-   at 190lb are not the same lift. metric "reps" is the fallback for anything
+   bodyweight at the time (the 7-day average) is added in — a chin-up at
+   150lb and the same rep at 190lb are not the same lift. metric "reps" is the fallback for anything
    never logged with a load (and no bodyweight on file to supply one), where
    more reps IS the progress. */
 function exerciseSeries(name){
@@ -2034,7 +2935,7 @@ function exerciseSeries(name){
     h.entries.forEach(function(en){
       if(en.name !== name || !en.completed) return;
 
-      var bw = bodyweightAt(h.at);
+      var bw = trendWeightAt(h.at);
       var carried = data.BODYWEIGHT[name] ? bw : 0;
       var best = 0;
       var reps = 0;
@@ -2081,10 +2982,6 @@ function volumeSeries(){
   return sessionsOnly().map(function(h){
     return { x:h.at, y:h.volume || 0 };
   });
-}
-
-function bodySeries(){
-  return state.body.map(function(b){ return { x:b.at, y:b.w }; });
 }
 
 /* One row per calendar day for the consistency grid, oldest first, always
@@ -2147,18 +3044,15 @@ function summary(){
     return h.skipType === "missed" && h.at >= monthAgo;
   });
 
-  var bw = latestBodyweight();
-  var firstBw = state.body.length ? state.body[0] : null;
-
+  /* Bodyweight isn't summarised here any more — it has its own trend (see
+     weightTrend), because a single reading makes a poor headline. */
   return {
     sessions: sessions.length,
     weeks: since,
     since: first,
     last30: recent.length,
     missed30: missed.length,
-    volume: sessions.reduce(function(n, h){ return n + (h.volume || 0); }, 0),
-    bodyweight: bw ? bw.w : 0,
-    bodyweightDelta: (bw && firstBw && bw !== firstBw) ? Math.round((bw.w - firstBw.w) * 10) / 10 : 0
+    volume: sessions.reduce(function(n, h){ return n + (h.volume || 0); }, 0)
   };
 }
 
@@ -2311,10 +3205,12 @@ function csvCell(v){
    set number, so nothing is averaged away before it reaches a spreadsheet.
    Skipped days get a row of their own so the gaps are explicit. */
 function toCSV(){
-  var rows = [[
+  var header = [
     "date","time","day","type","exercise","set","segment",
-    "weight","reps","unit","volume","bodyweight","notes"
-  ]];
+    "weight","reps","unit","volume","bodyweight","notes",
+    "calories","calorie_target","protein_g","fiber_g"
+  ];
+  var rows = [header];
 
   state.history.forEach(function(h){
     var d = new Date(h.at);
@@ -2358,6 +3254,18 @@ function toCSV(){
                state.prefs.unit, "", b.w, ""]);
   });
 
+  /* And so does food, with the target that was in force that day — the
+     spreadsheet can do its own over/under without knowing about phases. */
+  nutritionKeys().slice().reverse().forEach(function(key){
+    var food = nutritionOn(key);
+    var goal = goalOn(key);
+    rows.push([key, "", "", "nutrition", "", "", "", "", "", "", "", "", "",
+               food.kcal, goal ? goal.kcal : "", food.protein, food.fiber]);
+  });
+
+  /* Rows written before the nutrition columns existed just end early. */
+  rows.forEach(function(r){ while(r.length < header.length) r.push(""); });
+
   return rows.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n");
 }
 
@@ -2373,6 +3281,20 @@ function restore(text){
   state = normalize(incoming);
   save();
   return state;
+}
+
+/* Stamped whenever a copy actually leaves the device, so the Data panel can
+   say how long it has been. Snapshots do NOT count — they live in the same
+   origin as the thing they are backing up. */
+function markExported(){
+  state.prefs.lastExport = Date.now();
+  save();
+  return state.prefs.lastExport;
+}
+
+function daysSinceExport(){
+  if(!state.prefs.lastExport) return null;
+  return daysBetween(state.prefs.lastExport, Date.now());
 }
 
 function exportName(ext){
@@ -2445,6 +3367,18 @@ IL.store = {
   setEntryDate: setEntryDate,
   addSkip: addSkip,
 
+  PHASES: PHASES,
+  nutritionOn: nutritionOn,
+  setNutrition: setNutrition,
+  clearNutrition: clearNutrition,
+  nutritionKeys: nutritionKeys,
+  goalOn: goalOn,
+  currentGoal: currentGoal,
+  setGoal: setGoal,
+  removeGoal: removeGoal,
+  nutritionSeries: nutritionSeries,
+  nutritionAverages: nutritionAverages,
+
   addBodyweight: addBodyweight,
   removeBodyweight: removeBodyweight,
   latestBodyweight: latestBodyweight,
@@ -2455,10 +3389,22 @@ IL.store = {
   exerciseSeries: exerciseSeries,
   relativeSeries: relativeSeries,
   volumeSeries: volumeSeries,
-  bodySeries: bodySeries,
+  TREND_DAYS: TREND_DAYS,
+  TDEE_NEEDS: TDEE_NEEDS,
+  shiftKey: shiftKey,
+  weekAverage: weekAverage,
+  weightTrend: weightTrend,
+  bodyTrendSeries: bodyTrendSeries,
+  trendWeightAt: trendWeightAt,
+  energyPerUnit: energyPerUnit,
+  fitLine: fitLine,
+  tdeeFor: tdeeFor,
+  tdee: tdee,
   calendar: calendar,
   summary: summary,
 
+  markExported: markExported,
+  daysSinceExport: daysSinceExport,
   toCSV: toCSV,
   toBackup: toBackup,
   restore: restore,
@@ -3151,11 +4097,34 @@ function axis(min, max, zero){
   if(lo < 0 && min >= 0) lo = 0;               /* never invent negative load */
   if(hi <= lo) hi = lo + step;
 
+  return withTicks(lo, hi, step);
+}
+
+function withTicks(lo, hi, step){
   var ticks = [];
   for(var v = lo; v <= hi + step * 1e-6; v += step){
     ticks.push(Math.round(v * 1e6) / 1e6);
   }
   return { lo:lo, hi:hi, ticks:ticks };
+}
+
+/* Diverging bars hang off zero, and zero is the whole point — it's the
+   target line. So the window always contains it, and always has at least one
+   step of room on BOTH sides: a fortnight that happens to be all under still
+   shows where "over" would have been, rather than pinning the target line to
+   the top edge where it reads as a border. */
+function divergingAxis(min, max){
+  min = Math.min(0, min);
+  max = Math.max(0, max);
+  if(min === max) max = 100;                  /* every day exactly on target */
+
+  var step = niceStep(max - min, 4);
+  var lo = Math.floor(min / step) * step;
+  var hi = Math.ceil(max / step) * step;
+  if(lo === 0) lo = -step;
+  if(hi === 0) hi = step;
+
+  return withTicks(lo, hi, step);
 }
 
 /* --------------------------------------------------------------------------
@@ -3207,24 +4176,50 @@ function barPath(x, y, w, bottom){
          "V" + bottom + "Z";
 }
 
+/* The same bar hanging DOWN from a baseline: square where it meets the line,
+   rounded at the data end, which is now the bottom. */
+function barPathDown(x, y, w, top){
+  var r = Math.min(4, w / 2, Math.max(0, y - top));
+  return "M" + x + " " + top +
+         "V" + (y - r) +
+         "a" + r + " " + r + " 0 0 0 " + r + " " + r +
+         "h" + (w - r * 2) +
+         "a" + r + " " + r + " 0 0 0 " + r + " " + (-r) +
+         "V" + top + "Z";
+}
+
 /* --------------------------------------------------------------------------
    draw(host, cfg)
 
      cfg.points   [{ x, y }]   x is a timestamp, y the value
-     cfg.kind     "line" | "column"
+     cfg.kind     "line" | "column" | "diverging"
      cfg.fmtY     axis tick     -> string
-     cfg.fmtV     readout value -> string
+     cfg.fmtV     readout value -> string; gets (y, point)
      cfg.fmtX     timestamp     -> string
      cfg.empty    what to say when there isn't enough to plot
+
+   "diverging" is a column chart around zero instead of up from it: positive
+   bars rise in the "over" colour, negative ones hang in the "under" colour.
+   Its points may carry y:null for a slot with nothing in it — the slot keeps
+   its place on the axis and simply has no bar, so a gap reads as a gap.
+
+     cfg.raw      [{ x, y }]   line only: the readings the line summarises,
+                               drawn underneath as faint dots on the same
+                               scale. The line is the signal and the dots are
+                               the context, so the line's own per-point dots
+                               step aside for them.
    -------------------------------------------------------------------------- */
 
 function draw(host, cfg){
   if(!host) return;
 
   var pts = cfg.points || [];
-  var need = cfg.kind === "column" ? 1 : 2;
+  var diverging = cfg.kind === "diverging";
+  var banded = cfg.kind !== "line";
+  var real = pts.filter(function(p){ return p.y !== null && p.y !== undefined; });
+  var need = banded ? 1 : 2;
 
-  if(pts.length < need){
+  if(real.length < need){
     host.innerHTML = '<p class="chart-empty">' + esc(cfg.empty || "Nothing to plot yet.") + '</p>';
     return;
   }
@@ -3233,8 +4228,15 @@ function draw(host, cfg){
   var pw = w - PAD.l - PAD.r;
   var ph = H - PAD.t - PAD.b;
 
-  var ys = pts.map(function(p){ return p.y; });
-  var a = axis(Math.min.apply(null, ys), Math.max.apply(null, ys), cfg.kind === "column");
+  var raw = (!banded && cfg.raw) ? cfg.raw : [];
+
+  /* The scale has to hold the readings as well as the line through them —
+     the line is an average, so the readings always reach further. */
+  var ys = real.map(function(p){ return p.y; })
+               .concat(raw.map(function(p){ return p.y; }));
+  var lo = Math.min.apply(null, ys);
+  var hi = Math.max.apply(null, ys);
+  var a = diverging ? divergingAxis(lo, hi) : axis(lo, hi, cfg.kind === "column");
   a.fmt = cfg.fmtY;
 
   var Y = function(v){ return PAD.t + ph * (1 - (v - a.lo) / (a.hi - a.lo)); };
@@ -3244,15 +4246,29 @@ function draw(host, cfg){
   var x0 = pts[0].x;
   var x1 = pts[pts.length - 1].x;
 
-  var X = cfg.kind === "column"
+  var X = banded
     ? function(p, i){ return PAD.l + band * (i + 0.5); }
     : function(p){ return x1 === x0 ? PAD.l + pw / 2 : PAD.l + pw * (p.x - x0) / (x1 - x0); };
 
   var marks;
 
-  if(cfg.kind === "column"){
+  if(diverging){
+    var zero = Y(0);
     marks = pts.map(function(p, i){
-      return '<path class="c-bar" data-hi="0" d="' +
+      if(p.y === null || p.y === undefined || p.y === 0) return "";
+      var left = (X(p, i) - thick / 2).toFixed(1);
+      var over = p.y > 0;
+      return '<path class="c-bar" data-i="' + i + '" data-dir="' + (over ? "over" : "under") +
+        '" data-hi="0" d="' +
+        (over ? barPath(left, Y(p.y).toFixed(1), thick, zero)
+              : barPathDown(left, Y(p.y).toFixed(1), thick, zero)) + '"></path>';
+    }).join("") +
+    /* Drawn over the bars, so the target line reads as one unbroken rule. */
+    '<line class="c-zero" x1="' + PAD.l + '" x2="' + (w - PAD.r) +
+      '" y1="' + zero + '" y2="' + zero + '"></line>';
+  }else if(cfg.kind === "column"){
+    marks = pts.map(function(p, i){
+      return '<path class="c-bar" data-i="' + i + '" data-hi="0" d="' +
         barPath((X(p, i) - thick / 2).toFixed(1), Y(p.y).toFixed(1), thick, Y(a.lo)) + '"></path>';
     }).join("");
   }else{
@@ -3261,12 +4277,16 @@ function draw(host, cfg){
     var lastX = X(pts[pts.length - 1], pts.length - 1).toFixed(1);
 
     marks =
+      raw.map(function(p){
+        return '<circle class="c-raw" cx="' + X(p).toFixed(1) +
+               '" cy="' + Y(p.y).toFixed(1) + '" r="3"></circle>';
+      }).join("") +
       '<path class="c-area" d="' + d + ' L' + lastX + ' ' + base +
         ' L' + X(pts[0], 0).toFixed(1) + ' ' + base + ' Z"></path>' +
       '<path class="c-line" d="' + d + '"></path>' +
       /* Intermediate dots only while they can still be told apart; past that
          they merge into a caterpillar and the bare line reads better. */
-      (pts.length <= 12 ? pts.map(function(p, i){
+      (pts.length <= 12 && !raw.length ? pts.map(function(p, i){
         return '<circle class="c-dot" cx="' + X(p, i).toFixed(1) +
                '" cy="' + Y(p.y).toFixed(1) + '" r="4"></circle>';
       }).join("") : "") +
@@ -3278,7 +4298,7 @@ function draw(host, cfg){
 
   host.innerHTML =
     '<div class="chart-read" data-read>' +
-      '<b>' + esc(cfg.fmtV(last.y)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
+      '<b>' + esc(cfg.fmtV(last.y, last)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
     '</div>' +
     '<svg class="chart" width="' + w + '" height="' + H + '" viewBox="0 0 ' + w + ' ' + H +
       '" role="img" aria-label="' + esc(cfg.label || "chart") + '">' +
@@ -3308,20 +4328,26 @@ function wire(host, pts, X, Y, cfg, band){
   var bars = host.querySelectorAll(".c-bar");
 
   function paintRead(p){
-    read.innerHTML = '<b>' + esc(cfg.fmtV(p.y)) + '</b><span>' + esc(cfg.fmtX(p.x)) + '</span>';
+    read.innerHTML = '<b>' + esc(cfg.fmtV(p.y, p)) + '</b><span>' + esc(cfg.fmtX(p.x)) + '</span>';
   }
 
+  /* Matched on the point index each bar was drawn for, not its position in
+     the list — once some slots have no bar, the nth bar is not the nth day. */
   function highlight(index){
-    for(var b = 0; b < bars.length; b++) bars[b].dataset.hi = (b === index) ? "1" : "0";
+    for(var b = 0; b < bars.length; b++){
+      bars[b].dataset.hi = (Number(bars[b].dataset.i) === index) ? "1" : "0";
+    }
   }
 
   function show(i){
     var p = pts[i];
     var x = X(p, i);
+    var empty = p.y === null || p.y === undefined;
     line.setAttribute("x1", x);
     line.setAttribute("x2", x);
     dot.setAttribute("cx", x);
-    dot.setAttribute("cy", Y(p.y));
+    dot.setAttribute("cy", empty ? 0 : Y(p.y));
+    dot.setAttribute("visibility", empty ? "hidden" : "visible");
     cross.hidden = false;
     paintRead(p);
     highlight(i);
@@ -3337,7 +4363,7 @@ function wire(host, pts, X, Y, cfg, band){
     var px = ev.clientX - svg.getBoundingClientRect().left;
     var best = 0;
 
-    if(cfg.kind === "column"){
+    if(cfg.kind !== "line"){
       best = Math.max(0, Math.min(pts.length - 1, Math.floor((px - PAD.l) / band)));
     }else{
       var nearest = Infinity;
@@ -3756,14 +4782,44 @@ function settingsPanel(){
 /* Getting the log off the phone. Everything here is generated on the device
    and handed to you — nothing is uploaded anywhere, because there is nowhere
    to upload it to. */
+/* How long since a copy actually left the device. Snapshots don't count —
+   they sit in the same origin as the thing they're backing up, so a wiped
+   phone takes both. */
+function exportAge(){
+  var history = store.state.history.length;
+  if(!history) return null;
+
+  var days = store.daysSinceExport();
+  if(days === null){
+    return { stale:true, text:"You have never taken a copy off this device." };
+  }
+  if(days >= 30){
+    return { stale:true, text:"Last copy off this device: " + days + " days ago." };
+  }
+  return {
+    stale: false,
+    text: days === 0 ? "Copied off this device today."
+        : days === 1 ? "Copied off this device yesterday."
+        : "Copied off this device " + days + " days ago."
+  };
+}
+
 function dataPanel(){
   var canShare = !!(navigator.share && navigator.canShare);
+  var age = exportAge();
 
   return '<div class="settings">' +
     '<h3 class="set-title">Your data</h3>' +
     '<p class="hint">' + store.state.history.length + ' entries and ' +
-      store.state.body.length + ' weigh-ins are saved on this device only. ' +
-      'Send yourself a copy whenever you want one off it.</p>' +
+      store.state.body.length + ' weigh-ins, saved on this device.</p>' +
+
+    (age
+      ? (age.stale
+          ? '<p class="nudge">' + esc(age.text) + ' Clearing your browser data ' +
+              'or losing the phone would take all of it. Send yourself a backup.</p>'
+          : '<p class="hint good">' + esc(age.text) + '</p>')
+      : '') +
+
     '<div class="datarow">' +
       '<button class="add-btn" id="expCSV">Spreadsheet (CSV)</button>' +
       '<button class="add-btn" id="expJSON">Full backup</button>' +
@@ -3778,7 +4834,82 @@ function dataPanel(){
     '<input id="impFile" type="file" accept=".json,application/json" hidden>' +
     '<p class="hint">The CSV has one row per weight you lifted, so a drop set ' +
       'stays two rows. The backup restores everything exactly, on any device.</p>' +
+
+    '<h3 class="set-title">Snapshots</h3>' +
+    '<p class="hint" id="storeStat">Checking storage…</p>' +
+    '<div id="snapList"></div>' +
+    '<button class="add-btn" id="snapNow">+ Snapshot right now</button>' +
+    '<p class="hint">Taken automatically after every session and before ' +
+      'anything that overwrites your log, so a mistaken reset or a bad import ' +
+      'is one tap to undo. They live on this device — they are an undo button, ' +
+      'not a backup.</p>' +
   '</div>';
+}
+
+/* --------------------------------------------------------------------------
+   The asynchronous half of the Data panel
+
+   Snapshots and the storage estimate both come from promises, so they are
+   filled in after the panel is on screen rather than holding up the render.
+   -------------------------------------------------------------------------- */
+
+/* Non-breaking space between number and unit, so "13 kB" never wraps into
+   "13" on one line and "kB" on the next. */
+function formatBytes(n){
+  var MB = 1024 * 1024;
+  if(!n) return "0 kB";
+  if(n < MB) return Math.max(1, Math.round(n / 1024)) + " kB";
+  if(n < 1024 * MB) return (n / MB).toFixed(1).replace(/\.0$/, "") + " MB";
+  return Math.round(n / 1024 / MB) + " GB";
+}
+
+function formatStamp(ts){
+  var d = new Date(ts);
+  return formatDay(ts) + " · " +
+         d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+}
+
+function snapshotRow(row){
+  return '<div class="snaprow">' +
+    '<div class="snapwhen">' +
+      '<b>' + esc(row.reason) + '</b>' +
+      '<small>' + esc(formatStamp(row.at)) + ' · ' + row.sessions +
+        ' session' + (row.sessions === 1 ? "" : "s") +
+        ' · ' + esc(formatBytes(row.bytes)) + '</small>' +
+    '</div>' +
+    '<button class="snapgo" data-snaprestore="' + row.id + '">Restore</button>' +
+    '<button class="segdel" data-snapdel="' + row.id + '">Delete</button>' +
+  '</div>';
+}
+
+function paintDataPanel(){
+  var listEl = $("snapList");
+  var statEl = $("storeStat");
+  if(!listEl || !statEl || !IL.vault) return;
+
+  IL.vault.status().then(function(st){
+    if(!$("storeStat")) return;
+
+    var bits = [];
+    if(st.persisted === true)       bits.push("Storage is marked persistent — the browser won't evict it to reclaim space.");
+    else if(st.persisted === false) bits.push("The browser has this as best-effort storage, so it could be evicted under pressure. Keep exporting.");
+    else                            bits.push("This browser doesn't say whether it will keep the data. Keep exporting.");
+
+    if(st.estimate && st.estimate.usage){
+      bits.push("Using " + formatBytes(st.estimate.usage) +
+                (st.estimate.quota ? " of " + formatBytes(st.estimate.quota) : "") + ".");
+    }
+    $("storeStat").textContent = bits.join(" ");
+  });
+
+  IL.vault.list().then(function(rows){
+    if(!$("snapList")) return;
+
+    $("snapList").innerHTML = rows.length
+      ? rows.map(snapshotRow).join("")
+      : '<p class="hint">No snapshots yet. One is taken the next time you ' +
+        'finish a session.</p>';
+  });
 }
 
 function renderLog(openId){
@@ -3817,6 +4948,7 @@ function renderLog(openId){
 
   $("actionbar").hidden = true;
   renderRail("log");
+  paintDataPanel();
 }
 
 /* --------------------------------------------------------------------------
@@ -3899,23 +5031,304 @@ function calendarHTML(){
     '</div>';
 }
 
+/* --------------------------------------------------------------------------
+   Nutrition
+
+   Over and under are a DIRECTION, never a verdict: over is the goal on a
+   bulk and the thing to avoid on a cut, so the colours stay put whatever
+   the phase and the words carry the meaning. Text is always ink; the colour
+   lives on a swatch or a mark beside it.
+   -------------------------------------------------------------------------- */
+
+var FOOD_WINDOW = 14;         /* days on the over/under chart */
+var FOOD_AVG = 7;             /* days behind the averages */
+
+function kcal(n){ return Math.round(n).toLocaleString(); }
+
+/* Grams keep a decimal only when there is one. */
+function grams(n){ return (Math.round(n * 10) / 10).toLocaleString() + " g"; }
+
+/* A real minus sign, not a hyphen — it lines up with the plus. */
+function signed(n){
+  if(n > 0) return "+" + kcal(n);
+  if(n < 0) return "−" + kcal(-n);
+  return "0";
+}
+
+function diffWords(d){
+  if(d === null || d === undefined) return "";
+  if(d === 0) return "right on target";
+  return kcal(Math.abs(d)) + (d > 0 ? " over" : " under");
+}
+
+function dirOf(d){ return d > 0 ? "over" : d < 0 ? "under" : "on"; }
+
+function swatch(d){
+  return d === null || d === 0 ? "" : '<i class="sw" data-dir="' + dirOf(d) + '"></i>';
+}
+
+function phaseBadge(phase){
+  return store.PHASES[phase]
+    ? '<span class="phase">' + esc(store.PHASES[phase]) + '</span>'
+    : "";
+}
+
+/* Today against the target, as a meter.
+
+   One bar, split at the target. Everything up to the target is the under
+   colour on a lighter track of the same hue; anything past it runs on in
+   the over colour. The scale stretches to fit a day that went over, so going
+   over reads as a bar that ran long rather than as a bar that's merely full. */
+function meterHTML(eaten, target){
+  var scale = Math.max(target, eaten) || 1;
+  var toTarget = Math.min(eaten, target) / scale * 100;
+  var mark = target / scale * 100;
+  var past = eaten > target ? (eaten - target) / scale * 100 : 0;
+
+  return '<div class="meter" role="img" aria-label="' +
+      esc(kcal(eaten) + " of " + kcal(target) + " kilocalories") + '">' +
+    '<i class="meter-in" style="width:' + toTarget.toFixed(2) + '%"></i>' +
+    (past
+      ? '<i class="meter-over" style="left:' + mark.toFixed(2) + '%;width:' + past.toFixed(2) + '%"></i>' +
+        '<i class="meter-mark" style="left:' + mark.toFixed(2) + '%"></i>'
+      : '') +
+  '</div>';
+}
+
+function macro(label, v){
+  return '<div class="macro">' +
+    '<span class="lab">' + esc(label) + '</span>' +
+    (v === null || v === undefined ? '<i>not logged</i>' : '<b>' + esc(grams(v)) + '</b>') +
+  '</div>';
+}
+
+/* The card you use every day: what today looks like, and what you're aiming at. */
+function nutritionCard(){
+  var today = store.dayKey(Date.now());
+  var food = store.nutritionOn(today);
+  var goal = store.currentGoal();
+  var eaten = food ? food.kcal : null;
+  var top;
+
+  if(eaten !== null && goal){
+    var d = eaten - goal.kcal;
+    top =
+      '<div class="food-today">' +
+        '<div class="food-num"><b>' + kcal(eaten) + '</b>' +
+          '<span>of ' + kcal(goal.kcal) + ' kcal today</span></div>' +
+        '<span class="food-diff">' + swatch(d) + esc(diffWords(d)) + '</span>' +
+      '</div>' +
+      meterHTML(eaten, goal.kcal);
+  }else if(eaten !== null){
+    top =
+      '<div class="food-today">' +
+        '<div class="food-num"><b>' + kcal(eaten) + '</b><span>kcal today</span></div>' +
+      '</div>';
+  }else{
+    top = '<p class="hint food-none">Nothing logged today' +
+      (goal ? ' — ' + kcal(goal.kcal) + ' kcal to work with.' : '.') + '</p>';
+  }
+
+  var goalRow = goal
+    ? '<div class="food-goal">' +
+        '<div class="k">' +
+          '<span class="lab">Daily target</span>' +
+          '<b>' + kcal(goal.kcal) + ' kcal</b>' + phaseBadge(goal.phase) +
+          '<small>since ' + esc(formatDay(store.fromDayKey(goal.from))) + '</small>' +
+        '</div>' +
+        '<button class="edit" id="editGoal">Change</button>' +
+      '</div>'
+    : '<div class="food-goal">' +
+        '<div class="k">' +
+          '<span class="lab">Daily target</span>' +
+          '<small>Set one and every day shows how far over or under it you were.</small>' +
+        '</div>' +
+        '<button class="edit" id="editGoal">Set target</button>' +
+      '</div>';
+
+  return '<section class="card">' +
+    '<div class="card-head">' +
+      '<h3>Nutrition</h3>' +
+      '<button class="edit" id="logFood">' + (food ? "Edit today" : "Log food") + '</button>' +
+    '</div>' +
+    top +
+    (food ? '<div class="food-macros">' + macro("Protein", food.protein) + macro("Fiber", food.fiber) + '</div>' : '') +
+    goalRow +
+  '</section>';
+}
+
+/* An average and how many days it's made of — "172 g" means something
+   different over seven days than over two. `note` is an optional line above
+   the day count, for the calorie tile's over/under. */
+function avgTile(label, a, fmt, note){
+  return '<div class="food-avg-tile">' +
+    '<span class="lab">' + esc(label) + '</span>' +
+    (a.days ? '<b>' + esc(fmt(a.value)) + '</b>' : '<b class="none">—</b>') +
+    (note ? '<small>' + esc(note) + '</small>' : '') +
+    '<small>' + esc(a.days ? a.days + " of " + FOOD_AVG + " days" : "not logged") + '</small>' +
+  '</div>';
+}
+
+/* An average is an estimate, and "165.2 g" claims a precision it hasn't got. */
+function wholeGrams(n){ return Math.round(n).toLocaleString() + " g"; }
+
+/* How many recent days the list shows before "show all". The rest are one
+   tap away, and any older day is reachable from the date field in the food
+   sheet — the list is for glancing, not archaeology. */
+var FOOD_LIST = 7;
+
+/* The history: the chart for the shape, the averages for the gist, and the
+   list of days — the exact numbers, and the way into editing a past day. */
+function calorieCard(){
+  var avg = store.nutritionAverages(FOOD_AVG);
+  var keys = store.nutritionKeys().slice(0, FOOD_WINDOW);
+
+  var kcalNote = avg.diff.days ? diffWords(Math.round(avg.diff.value)) : "";
+
+  var rows = keys.map(function(key, n){
+    var food = store.nutritionOn(key);
+    var goal = store.goalOn(key);
+    var d = (food.kcal !== null && goal) ? food.kcal - goal.kcal : null;
+    var bits = [];
+    if(food.protein !== null) bits.push("P " + grams(food.protein));
+    if(food.fiber !== null) bits.push("F " + grams(food.fiber));
+
+    return '<button class="food-row" data-food="' + esc(key) + '"' +
+             (n >= FOOD_LIST ? ' data-more hidden' : '') + '>' +
+      '<span class="d">' + esc(formatWeekday(store.fromDayKey(key))) + '</span>' +
+      '<b>' + (food.kcal !== null ? kcal(food.kcal) : "—") + '</b>' +
+      '<span class="diff">' + (d !== null ? swatch(d) + esc(signed(d)) : "") + '</span>' +
+      '<small>' + esc(bits.join(" · ")) + '</small>' +
+    '</button>';
+  }).join("");
+
+  return '<section class="card">' +
+    '<h3>Calories vs target</h3>' +
+    '<div class="chart-key">' +
+      '<span><i class="sw" data-dir="over"></i>Over target</span>' +
+      '<span><i class="sw" data-dir="under"></i>Under target</span>' +
+    '</div>' +
+    '<div class="chart-host" id="chFood"></div>' +
+    '<span class="lab food-avg-head">Last ' + FOOD_AVG + ' days, averaged</span>' +
+    '<div class="food-avg">' +
+      avgTile("Calories", avg.kcal, function(v){ return kcal(v); }, kcalNote) +
+      avgTile("Protein", avg.protein, wholeGrams) +
+      avgTile("Fiber", avg.fiber, wholeGrams) +
+    '</div>' +
+    (rows
+      ? '<div class="food-list"><span class="lab">Recent days — tap one to edit it</span>' + rows +
+          (keys.length > FOOD_LIST
+            ? '<button class="add-btn" id="foodMore">Show all ' + keys.length + ' days</button>'
+            : '') +
+        '</div>'
+      : '') +
+  '</section>';
+}
+
+/* --------------------------------------------------------------------------
+   Weight: the 7-day average leads, the single reading is the footnote
+   -------------------------------------------------------------------------- */
+
+function weightFmt(n){ return (Math.round(n * 10) / 10).toFixed(1); }
+
+function signedWeight(n){
+  if(n > 0) return "+" + weightFmt(n);
+  if(n < 0) return "−" + weightFmt(-n);
+  return "0.0";
+}
+
+/* The tile. Three honest states: an average this week; no weigh-in this
+   week, so the last reading with its date; nothing at all. */
+function weightTile(){
+  var t = store.weightTrend();
+
+  if(t.now){
+    var sub = t.change === null
+      ? t.now.count + (t.now.count === 1 ? " weigh-in" : " weigh-ins") + " this week"
+      : t.change === 0
+        ? "level with last week"
+        : signedWeight(t.change) + " vs last week";
+    return statTile("Weight · 7-day avg", weightFmt(t.now.value) + " " + unit(), sub);
+  }
+  if(t.latest){
+    return statTile("Bodyweight", weightFmt(t.latest.w) + " " + unit(),
+                    "none this week · last " + formatDay(t.latest.at));
+  }
+  return statTile("Bodyweight", "—", "add a weigh-in");
+}
+
+/* --------------------------------------------------------------------------
+   Maintenance
+
+   The estimate, what it's made of, and what it means for the target you've
+   set. Before there's enough to go on it says exactly what's missing rather
+   than showing a number it can't stand behind.
+   -------------------------------------------------------------------------- */
+
+function rateWords(perWeek){
+  if(Math.abs(perWeek) < 0.05) return "holding steady";
+  return (perWeek < 0 ? "losing " : "gaining ") + Math.abs(perWeek).toFixed(1) +
+         " " + unit() + " a week";
+}
+
+function maintenanceCard(){
+  var t = store.tdee();
+  var est = t.now;
+  var head = '<div class="card-head"><h3>Maintenance</h3><span class="tag">estimated</span></div>';
+
+  if(!est.ready){
+    var need = [];
+    if(est.need.kcalDays) need.push(est.need.kcalDays + " more day" + (est.need.kcalDays === 1 ? "" : "s") + " with calories logged");
+    if(est.need.weighIns) need.push(est.need.weighIns + " more weigh-in" + (est.need.weighIns === 1 ? "" : "s"));
+    if(est.need.span)     need.push("weigh-ins spread over " + est.need.span + " more day" + (est.need.span === 1 ? "" : "s"));
+
+    return '<section class="card">' + head +
+      '<div class="tdee"><div class="tdee-num"><b class="none">—</b><span>not enough to go on yet</span></div></div>' +
+      '<p class="tdee-why">Worked out from your own intake and weight trend over three weeks. Still to go:</p>' +
+      '<ul class="tdee-need">' + need.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join("") + '</ul>' +
+      '<p class="hint">It looks at the ' + est.window + ' days through yesterday and needs at least ' +
+        store.TDEE_NEEDS.kcalDays + ' of them with calories and ' + store.TDEE_NEEDS.weighIns +
+        ' weigh-ins across ' + store.TDEE_NEEDS.span + '+ days. Until then an online calculator is the better guess.</p>' +
+    '</section>';
+  }
+
+  var goal = store.currentGoal();
+  var goalLine = "";
+  if(goal){
+    var gap = goal.kcal - est.tdee;
+    var weekly = gap * 7 / store.energyPerUnit();
+    goalLine = '<p class="tdee-goal">Your ' + kcal(goal.kcal) + ' target is ' +
+      (gap === 0 ? 'right at maintenance' :
+        '<b>' + kcal(Math.abs(gap)) + (gap < 0 ? ' below' : ' above') + '</b> it — roughly ' +
+        rateWords(weekly) + ' if you hit it') + '.</p>';
+  }
+
+  return '<section class="card">' + head +
+    '<div class="tdee">' +
+      '<div class="tdee-num"><b>' + kcal(est.tdee) + '</b><span>kcal a day</span></div>' +
+      '<span class="tdee-band">± ' + kcal(est.band) + '</span>' +
+    '</div>' +
+    '<p class="tdee-why">Averaging <b>' + kcal(est.intake) + ' kcal</b> while ' +
+      '<b>' + esc(rateWords(est.perWeek)) + '</b>.' +
+      (t.change !== null && Math.abs(t.change) >= 10
+        ? ' ' + (t.change > 0 ? 'Up ' : 'Down ') + kcal(Math.abs(t.change)) + ' from a week ago.'
+        : '') +
+    '</p>' +
+    goalLine +
+    '<p class="hint">From ' + est.kcalDays + ' of the last ' + est.window + ' days of food and ' +
+      est.weighIns + ' weigh-ins, through ' + esc(formatDay(store.fromDayKey(est.to))) + '. ' +
+      'The ± is how far the scale wanders from its trend; it narrows the more you weigh in. ' +
+      'A consistent miscount of your food cancels out — the answer comes back in your own counting.</p>' +
+  '</section>';
+}
+
 function renderProgress(){
   var s = store.summary();
   var view = strengthView();
-  var bw = store.latestBodyweight();
 
   var sub = s.since
     ? "Week " + s.weeks + " · training since " + formatDay(s.since)
     : "Nothing logged yet";
-
-  /* One weigh-in is a number with nothing to compare it to, which is not the
-     same as having none — say what's actually missing. */
-  var bwSub;
-  if(!bw)                            bwSub = "add a weigh-in";
-  else if(store.state.body.length < 2) bwSub = "log another to see the trend";
-  else if(s.bodyweightDelta)         bwSub = (s.bodyweightDelta > 0 ? "+" : "") +
-                                             s.bodyweightDelta + " since the start";
-  else                               bwSub = "level since the start";
 
   var picker = view
     ? '<select id="exPick" aria-label="Which exercise to chart">' +
@@ -3954,8 +5367,15 @@ function renderProgress(){
         statTile("Sessions", String(s.sessions), s.weeks ? s.weeks + " weeks in" : "") +
         statTile("Last 30 days", String(s.last30), s.missed30 ? s.missed30 + " missed" : "none missed") +
         statTile("Total volume", compact(s.volume) + " " + unit(), "everything lifted") +
-        statTile("Bodyweight", bw ? bw.w + " " + unit() : "—", bwSub) +
+        weightTile() +
       '</div>' +
+
+      /* Near the top on purpose: it's the one card on this tab you'll touch
+         every day, not just read. Maintenance sits between today and the
+         history because it's what the target should be set from. */
+      nutritionCard() +
+      maintenanceCard() +
+      calorieCard() +
 
       '<section class="card">' +
         '<div class="card-head">' +
@@ -3971,7 +5391,15 @@ function renderProgress(){
           '<h3>Bodyweight</h3>' +
           '<button class="edit" id="logWeight">Log weight</button>' +
         '</div>' +
+        '<div class="chart-key">' +
+          '<span><i class="sw line"></i>7-day average</span>' +
+          '<span><i class="sw raw"></i>Daily weigh-in</span>' +
+        '</div>' +
         '<div class="chart-host" id="chBody"></div>' +
+        (store.state.body.length > 1
+          ? '<p class="hint">Water moves a single reading by a pound or three — ' +
+              'the line is what’s actually changing.</p>'
+          : '') +
       '</section>' +
 
       '<section class="card">' +
@@ -4009,13 +5437,19 @@ function paintCharts(){
     empty: "Log the same exercise on two different days and its trend line appears here."
   });
 
+  /* The line is the 7-day average as of each weigh-in; the readings sit
+     underneath as faint dots, so the noise is visible but can't steal the eye. */
+  var body = store.bodyTrendSeries();
   IL.chart.draw($("chBody"), {
     kind: "line",
-    points: store.bodySeries(),
+    points: body,
+    raw: body.map(function(p){ return { x:p.x, y:p.raw }; }),
     fmtY: function(v){ return Math.round(v); },
-    fmtV: function(v){ return v + " " + unit(); },
+    fmtV: function(v, p){
+      return weightFmt(v) + " " + unit() + " avg · weighed " + weightFmt(p.raw);
+    },
     fmtX: formatDay,
-    label: "bodyweight over time",
+    label: "bodyweight, seven-day average over time",
     empty: "Two weigh-ins draw a line. Log the first one with the button above."
   });
 
@@ -4027,6 +5461,29 @@ function paintCharts(){
     fmtX: formatDay,
     label: "volume per session",
     empty: "Finish a session and its volume lands here."
+  });
+
+  /* Every one of the last fortnight's days gets a slot, logged or not, so a
+     gap in the chart is a gap in the diary. Each bar is measured against the
+     target in force that day, which is why a phase change moves the zero
+     line's meaning but never redraws the past. */
+  IL.chart.draw($("chFood"), {
+    kind: "diverging",
+    points: store.nutritionSeries(FOOD_WINDOW).map(function(r){
+      return { x:r.at, y:r.diff, row:r };
+    }),
+    fmtY: signed,
+    fmtV: function(v, p){
+      var r = p.row;
+      if(r.kcal === null) return "Not logged";
+      if(r.target === null) return kcal(r.kcal) + " kcal · no target";
+      return diffWords(v) + " · " + kcal(r.kcal) + " of " + kcal(r.target);
+    },
+    fmtX: formatDay,
+    label: "calories over or under target, last " + FOOD_WINDOW + " days",
+    empty: store.currentGoal() || store.state.nutrition.goals.length
+      ? "Log a day's calories and it shows up here against your target."
+      : "Set a daily target and every day you log shows up here as over or under it."
   });
 }
 
@@ -4298,6 +5755,160 @@ function weightSheet(){
       '<button class="primary" id="saveWeight">Save</button>' +
     '</div>',
   "weight");
+}
+
+/* --------------------------------------------------------------------------
+   Logging food
+
+   Daily totals, not meals — the number you'd read off at the end of the day.
+   `draft` carries half-typed values across a change of date, so noticing
+   "this was yesterday's" after typing doesn't cost you the typing.
+   -------------------------------------------------------------------------- */
+
+function goalHint(key){
+  var goal = store.goalOn(key);
+  if(!goal) return "No target set for this day.";
+  return "Target this day: " + kcal(goal.kcal) + " kcal" +
+    (store.PHASES[goal.phase] ? " · " + store.PHASES[goal.phase] : "") + ".";
+}
+
+function numField(id, label, value, placeholder, mode){
+  return '<div class="field">' +
+    '<label class="lab" for="' + id + '">' + esc(label) + '</label>' +
+    '<input id="' + id + '" type="number" inputmode="' + mode + '" min="0" step="any"' +
+      ' value="' + (value === null || value === undefined ? "" : value) + '"' +
+      ' placeholder="' + esc(placeholder) + '">' +
+  '</div>';
+}
+
+function foodSheet(key, draft){
+  var today = store.dayKey(Date.now());
+  var day = key || today;
+  var saved = store.nutritionOn(day);
+  var vals = saved || draft || {};
+
+  openSheet("Food",
+    '<p class="sheet-sub">Daily totals. Fill in whatever you tracked — every field is optional.</p>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="fdDate">Date</label>' +
+      '<input id="fdDate" type="date" value="' + esc(day) + '" max="' + today + '">' +
+    '</div>' +
+
+    numField("fdKcal", "Calories", vals.kcal, "kcal", "numeric") +
+    '<p class="hint" id="fdGoal">' + esc(goalHint(day)) + '</p>' +
+
+    '<div class="seggrid">' +
+      numField("fdProt", "Protein (g)", vals.protein, "optional", "decimal") +
+      numField("fdFib", "Fiber (g)", vals.fiber, "optional", "decimal") +
+    '</div>' +
+
+    '<div class="rowbtns ' + (saved ? "two" : "one") + '">' +
+      '<button class="primary" id="saveFood">Save</button>' +
+      (saved ? '<button class="danger" id="clearFood">Clear this day</button>' : '') +
+    '</div>',
+  "food");
+}
+
+/* --------------------------------------------------------------------------
+   The calorie target
+
+   Set once per phase, with a start date. Starting today leaves every earlier
+   day judged against what it was judged against before; backdating the start
+   is how you say "the cut actually began last Monday".
+   -------------------------------------------------------------------------- */
+
+/* Starting points worked out from your own maintenance, when there is one.
+
+   −500 a day is the classic steady cut and +250 a slow, lean gain. They're
+   suggestions and nothing more: a tap fills the field and picks the phase,
+   and the number is yours to change before saving. */
+var CUT = 500;
+var BULK = 250;
+
+function suggestionsHTML(){
+  var est = store.tdee().now;
+  if(!est.ready) return "";
+
+  var perUnit = store.energyPerUnit();
+  var cutRate = (Math.round(CUT * 7 / perUnit * 10) / 10) + " " + unit();
+  var bulkRate = (Math.round(BULK * 7 / perUnit * 10) / 10) + " " + unit();
+  var opts = [
+    ["cut", "Cut", est.tdee - CUT, "−" + CUT],
+    ["maintain", "Maintain", est.tdee, "±0"],
+    ["bulk", "Bulk", est.tdee + BULK, "+" + BULK]
+  ];
+
+  return '<div class="field">' +
+    '<span class="lab">From your maintenance, ≈' + kcal(est.tdee) + '</span>' +
+    '<div class="suggest">' + opts.map(function(o){
+      return '<button data-suggest="' + o[2] + '" data-sphase="' + o[0] + '">' +
+        '<span>' + esc(o[1]) + '</span>' +
+        '<b>' + kcal(o[2]) + '</b>' +
+        '<small>' + esc(o[3]) + '</small>' +
+      '</button>';
+    }).join("") + '</div>' +
+    '<p class="hint">Starting points: −' + CUT + ' a day is about ' + cutRate +
+      ' a week down, +' + BULK + ' about ' + bulkRate + ' a week up. Tap one, then adjust.</p>' +
+  '</div>';
+}
+
+function goalSheet(){
+  var today = store.dayKey(Date.now());
+  var goal = store.currentGoal();
+  var phase = goal ? goal.phase : "";
+  var past = store.state.nutrition.goals.slice().reverse();
+  var phases = [["", "None"], ["cut", "Cut"], ["maintain", "Maintain"], ["bulk", "Bulk"]];
+
+  /* A CHANGE of target is a new phase, so it starts today. The FIRST target
+     is different: starting it today would leave every day you'd already
+     logged with nothing to be measured against, so it reaches back to the
+     earliest one instead. Either way the date is right there to change. */
+  var logged = store.nutritionKeys();
+  var from = (!store.state.nutrition.goals.length && logged.length)
+    ? logged[logged.length - 1]
+    : today;
+
+  openSheet("Calorie target",
+    '<p class="sheet-sub">One per phase. Changing it never rewrites the days before it started.</p>' +
+
+    suggestionsHTML() +
+
+    numField("gKcal", "Calories per day", goal ? goal.kcal : null, "2200", "numeric") +
+
+    '<div class="field">' +
+      '<span class="lab">Phase</span>' +
+      '<div class="seg wide">' + phases.map(function(p){
+        return '<button data-gphase="' + p[0] + '" aria-pressed="' + (phase === p[0]) + '">' +
+                 esc(p[1]) + '</button>';
+      }).join("") + '</div>' +
+    '</div>' +
+
+    '<div class="field">' +
+      '<label class="lab" for="gFrom">Starting</label>' +
+      '<input id="gFrom" type="date" value="' + from + '">' +
+      '<p class="hint">Pick an earlier date if the phase really began earlier — ' +
+        'days from then on are re-judged against this target, and nothing before it is.</p>' +
+    '</div>' +
+
+    (past.length
+      ? '<div class="field">' +
+          '<span class="lab">Phases so far</span>' +
+          '<div class="bwlist">' + past.map(function(g){
+            return '<div class="bwrow">' +
+              '<span>From ' + esc(formatDay(store.fromDayKey(g.from))) +
+                (store.PHASES[g.phase] ? ' · ' + esc(store.PHASES[g.phase]) : '') + '</span>' +
+              '<b>' + kcal(g.kcal) + ' kcal</b>' +
+              '<button class="segdel" data-goaldel="' + esc(g.from) + '">Remove</button>' +
+            '</div>';
+          }).join("") + '</div>' +
+        '</div>'
+      : '') +
+
+    '<div class="rowbtns one">' +
+      '<button class="primary" id="saveGoal">Save target</button>' +
+    '</div>',
+  "goal");
 }
 
 /* --------------------------------------------------------------------------
@@ -4608,6 +6219,7 @@ IL.ui = {
   patchExercise: patchExercise,
   setFinishLabel: setFinishLabel,
   renderLog: renderLog,
+  paintDataPanel: paintDataPanel,
   renderProgress: renderProgress,
   paintCharts: paintCharts,
 
@@ -4625,7 +6237,9 @@ IL.ui = {
   previewImport: previewImport,
   get lastImport(){ return lastImport; },
   skipSheet: skipSheet,
-  weightSheet: weightSheet
+  weightSheet: weightSheet,
+  foodSheet: foodSheet,
+  goalSheet: goalSheet
 };
 
 })(window.IL);
@@ -4735,36 +6349,69 @@ function applyPick(name, mode){
    Rest timer
    -------------------------------------------------------------------------- */
 
-var rest = { left:0, id:null };
+/* The deadline, not a count of ticks.
+
+   A phone suspends timers behind a locked screen, so anything that counts
+   down by decrementing on an interval is simply wrong when you come back —
+   ninety seconds in your pocket might be ten ticks. Storing WHEN the rest
+   ends and subtracting the clock makes the number right no matter what the
+   browser did with the interval in between. */
+var rest = { endsAt:0, id:null };
+
+function restLeft(){
+  if(!rest.endsAt) return 0;
+  return Math.max(0, Math.ceil((rest.endsAt - Date.now()) / 1000));
+}
 
 function startRest(seconds){
-  rest.left = seconds;
+  rest.endsAt = Date.now() + seconds * 1000;
   if(rest.id) clearInterval(rest.id);
-  rest.id = setInterval(tickRest, 1000);
+  /* Twice a second, so the digit shown is never more than half a second
+     behind the clock it is derived from. */
+  rest.id = setInterval(tickRest, 500);
   paintTimer();
 }
 
 function stopRest(){
   if(rest.id) clearInterval(rest.id);
   rest.id = null;
-  rest.left = 0;
+  rest.endsAt = 0;
   paintTimer();
+}
+
+function endRest(){
+  stopRest();
+  ui.toast("Rest is up — next set.");
+  if(navigator.vibrate) navigator.vibrate([90, 60, 90]);
 }
 
 function tickRest(){
-  rest.left--;
-  if(rest.left <= 0){
-    stopRest();
-    ui.toast("Rest is up — next set.");
-    if(navigator.vibrate) navigator.vibrate([90, 60, 90]);
+  if(restLeft() > 0){
+    paintTimer();
     return;
   }
-  paintTimer();
+  endRest();
 }
+
+/* Back from a locked screen or another app. The interval may not have run
+   at all, so the state is recomputed here rather than trusted. */
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden || !rest.id) return;
+
+  if(restLeft() > 0){
+    paintTimer();
+    return;
+  }
+
+  /* It ran out while you were away. Say so if you have only just come back;
+     a rest that ended ten minutes ago is not news, it's just noise. */
+  if(Date.now() - rest.endsAt < 90000) endRest();
+  else stopRest();
+});
 
 function paintTimer(){
   var running = rest.id !== null;
-  var seconds = running ? rest.left : store.state.prefs.restCompound;
+  var seconds = running ? restLeft() : store.state.prefs.restCompound;
   $("timerT").textContent = ui.formatClock(seconds);
   $("timerL").textContent = running ? "Tap to stop" : "Rest";
   $("timer").dataset.run = running ? "1" : "0";
@@ -4841,12 +6488,14 @@ function shareFiles(files){
 
 function exportCSV(){
   saveFile(store.exportName("csv"), store.toCSV(), "text/csv");
+  store.markExported();
   ui.toast("CSV saved.");
 }
 
 function exportBackup(){
   saveFile("iron-ledger-backup-" + store.dayKey(Date.now()) + ".json",
            store.toBackup(), "application/json");
+  store.markExported();
   ui.toast("Backup saved.");
 }
 
@@ -4864,8 +6513,8 @@ function exportShare(){
 
   /* Some targets refuse a multi-file share — fall back to the readable one,
      then to a plain download. */
-  if(files.length && shareFiles(files)) return;
-  if(files.length && shareFiles([files[0]])) return;
+  if(files.length && shareFiles(files)){ store.markExported(); return; }
+  if(files.length && shareFiles([files[0]])){ store.markExported(); return; }
   exportCSV();
 }
 
@@ -4874,6 +6523,7 @@ function copyCSV(){
 
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(function(){
+      store.markExported();
       ui.toast("CSV copied — paste it into a spreadsheet.");
     }, function(){
       ui.toast("Couldn't copy. Use the CSV button instead.");
@@ -4883,20 +6533,30 @@ function copyCSV(){
   ui.toast("Couldn't copy. Use the CSV button instead.");
 }
 
+/* Every route that throws the current state away takes a snapshot first and
+   WAITS for it to land. Fire-and-forget would be a race against the very
+   thing the snapshot exists to undo. The `true` means "even if it's a copy
+   of the last one" — see vault.snapshot(). */
+function guard(reason, then){
+  IL.vault.snapshot(store.toBackup(), reason, true).then(then, then);
+}
+
 function restoreFrom(file){
   var reader = new FileReader();
 
   reader.onload = function(){
-    try{
-      store.restore(String(reader.result));
-    }catch(err){
-      ui.toast("That file isn't an Iron Ledger backup.");
-      return;
-    }
-    openSession = null;
-    stopRest();
-    showLog();
-    ui.toast("Backup restored.");
+    guard("before restoring a backup file", function(){
+      try{
+        store.restore(String(reader.result));
+      }catch(err){
+        ui.toast("That file isn't an Iron Ledger backup.");
+        return;
+      }
+      openSession = null;
+      stopRest();
+      showLog();
+      ui.toast("Backup restored.");
+    });
   };
 
   reader.onerror = function(){ ui.toast("Couldn't read that file."); };
@@ -5015,6 +6675,32 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  if(t.closest("#logFood")){
+    ui.foodSheet();
+    return;
+  }
+
+  /* Unfolded in place rather than re-rendered, so the page doesn't jump. */
+  hit = t.closest("#foodMore");
+  if(hit){
+    var more = document.querySelectorAll(".food-row[data-more]");
+    for(var m = 0; m < more.length; m++) more[m].hidden = false;
+    hit.remove();
+    return;
+  }
+
+  /* A row in the recent-days list — straight into editing that day. */
+  hit = t.closest("[data-food]");
+  if(hit){
+    ui.foodSheet(hit.dataset.food);
+    return;
+  }
+
+  if(t.closest("#editGoal")){
+    ui.goalSheet();
+    return;
+  }
+
   hit = t.closest("[data-unit]");
   if(hit){
     store.state.prefs.unit = hit.dataset.unit;
@@ -5064,13 +6750,66 @@ $("view").addEventListener("click", function(ev){
   }
 
   if(t.closest("#resetAll")){
-    if(confirm("Reset everything? Your plan, history and settings will be erased.")){
-      store.reset();
-      openSession = null;
-      stopRest();
-      showTrain();
-      ui.toast("Back to the starting plan.");
+    if(confirm("Reset everything? Your plan, history and settings will be erased.\n\n" +
+               "A snapshot is taken first, so this can be undone from Snapshots " +
+               "further down this tab.")){
+      guard("before reset", function(){
+        store.reset();
+        openSession = null;
+        stopRest();
+        showTrain();
+        ui.toast("Back to the starting plan — undo it from Snapshots.");
+      });
     }
+    return;
+  }
+
+  /* --- snapshots -------------------------------------------------------- */
+
+  if(t.closest("#snapNow")){
+    IL.vault.snapshot(store.toBackup(), "saved by hand").then(function(id){
+      ui.toast(id ? "Snapshot saved." : "Nothing changed since the last one.");
+      ui.paintDataPanel();
+    });
+    return;
+  }
+
+  hit = t.closest("[data-snaprestore]");
+  if(hit){
+    var snapId = parseInt(hit.dataset.snaprestore, 10);
+    if(!confirm("Roll back to this snapshot? Everything in the app now is " +
+                "replaced by what it held.\n\nThe current state is snapshotted " +
+                "first, so this is reversible too.")){
+      return;
+    }
+
+    guard("before rolling back", function(){
+      IL.vault.read(snapId).then(function(json){
+        if(!json){
+          ui.toast("That snapshot couldn't be read.");
+          return;
+        }
+        try{
+          store.restore(json);
+        }catch(err){
+          ui.toast("That snapshot is unreadable.");
+          return;
+        }
+        openSession = null;
+        stopRest();
+        showLog();
+        ui.toast("Rolled back.");
+      });
+    });
+    return;
+  }
+
+  hit = t.closest("[data-snapdel]");
+  if(hit){
+    IL.vault.remove(parseInt(hit.dataset.snapdel, 10)).then(function(){
+      ui.paintDataPanel();
+    });
+    return;
   }
 });
 
@@ -5278,6 +7017,90 @@ $("sheetBody").addEventListener("click", function(ev){
     return;
   }
 
+  /* --- food ------------------------------------------------------------- */
+
+  if(ui.sheetMode() === "food"){
+    var foodDay = $("fdDate").value;
+
+    if(t.closest("#saveFood")){
+      if(!foodDay){
+        ui.toast("Pick a date first.");
+        return;
+      }
+      var had = !!store.nutritionOn(foodDay);
+      var kept = store.setNutrition(foodDay, readFood());
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+
+      /* Saving an empty form is how a day gets cleared, so say which of the
+         two just happened rather than claiming a save of nothing. */
+      if(kept) ui.toast("Saved for " + ui.formatDay(store.fromDayKey(foodDay)) + ".");
+      else ui.toast(had ? "Cleared " + ui.formatDay(store.fromDayKey(foodDay)) + "."
+                        : "Nothing entered, so nothing saved.");
+      return;
+    }
+
+    if(t.closest("#clearFood")){
+      store.clearNutrition(foodDay);
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+      ui.toast("Cleared " + ui.formatDay(store.fromDayKey(foodDay)) + ".");
+    }
+    return;
+  }
+
+  /* --- the calorie target ----------------------------------------------- */
+
+  if(ui.sheetMode() === "goal"){
+    hit = t.closest("[data-gphase]");
+    if(hit){
+      toggleGroup(hit, "gphase");
+      return;
+    }
+
+    /* A suggestion fills the number and picks the phase — nothing is saved
+       until you press Save, so it's a starting point you can still edit. */
+    hit = t.closest("[data-suggest]");
+    if(hit){
+      $("gKcal").value = hit.dataset.suggest;
+      var phaseBtn = $("sheetBody").querySelector('[data-gphase="' + hit.dataset.sphase + '"]');
+      if(phaseBtn) toggleGroup(phaseBtn, "gphase");
+      toggleGroup(hit, "suggest");
+      return;
+    }
+
+    hit = t.closest("[data-goaldel]");
+    if(hit){
+      if(confirm("Remove this target? The days it covered go back to being " +
+                 "judged against the one before it, or against none.")){
+        store.removeGoal(hit.dataset.goaldel);
+        if(view === "progress") ui.renderProgress();
+        ui.goalSheet();
+      }
+      return;
+    }
+
+    if(t.closest("#saveGoal")){
+      var goal = store.setGoal({
+        kcal: $("gKcal").value,
+        phase: pickedValue("gphase"),
+        from: $("gFrom").value || store.dayKey(Date.now())
+      });
+      if(!goal){
+        ui.toast("Enter a calorie target first.");
+        return;
+      }
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+
+      var starts = goal.from === store.dayKey(Date.now())
+        ? "from today"
+        : "from " + ui.formatDay(store.fromDayKey(goal.from));
+      ui.toast("Target set: " + goal.kcal.toLocaleString() + " kcal " + starts + ".");
+    }
+    return;
+  }
+
   /* --- adding training you already did ---------------------------------- */
 
   if(ui.sheetMode() === "import"){
@@ -5288,16 +7111,18 @@ $("sheetBody").addEventListener("click", function(ev){
         return;
       }
 
-      var added = IL.plan.commitImport(parsed);
-      /* The whole reason for importing: the plan now opens at the loads your
-         own history says you have earned. */
-      var reseeded = IL.plan.reseed();
+      guard("before importing " + parsed.sessions.length + " sessions", function(){
+        var added = IL.plan.commitImport(parsed);
+        /* The whole reason for importing: the plan now opens at the loads
+           your own history says you have earned. */
+        var reseeded = IL.plan.reseed();
 
-      ui.closeSheet();
-      showLog();
-      ui.toast(added.sessions + " session" + (added.sessions === 1 ? "" : "s") +
-               " added" +
-               (reseeded ? " · " + reseeded + " working weights updated" : "") + ".");
+        ui.closeSheet();
+        showLog();
+        ui.toast(added.sessions + " session" + (added.sessions === 1 ? "" : "s") +
+                 " added" +
+                 (reseeded ? " · " + reseeded + " working weights updated" : "") + ".");
+      });
     }
     return;
   }
@@ -5457,7 +7282,22 @@ $("sheetBody").addEventListener("input", function(ev){
   ui.patchExercise(editing);
 });
 
+/* What the food sheet currently holds, as typed. */
+function readFood(){
+  return { kcal:$("fdKcal").value, protein:$("fdProt").value, fiber:$("fdFib").value };
+}
+
 $("sheetBody").addEventListener("change", function(ev){
+  /* Moving the food sheet to another date. If that day already has an entry
+     you're now editing it, so its numbers load; if it doesn't, whatever you'd
+     typed comes with you — "oh, that was yesterday" shouldn't cost a retype. */
+  if(ui.sheetMode() === "food" && ev.target.id === "fdDate"){
+    var key = ev.target.value;
+    if(!key) return;
+    ui.foodSheet(key, store.nutritionOn(key) ? null : readFood());
+    return;
+  }
+
   if(ui.sheetMode() !== "edit" || editing < 0) return;
   var e = store.currentDay().ex[editing];
 
@@ -5533,6 +7373,9 @@ $("finish").addEventListener("click", function(){
   editing = -1;
   stopRest();
   render();
+
+  /* The one moment there is definitely something new worth keeping. */
+  IL.vault.snapshot(store.toBackup(), "after " + out.day.name);
   window.scrollTo({ top:0, behavior:"smooth" });
 
   /* Say what the finish decided, not just that it happened — the plan for
@@ -5584,6 +7427,12 @@ store.onSaveError = function(){
 };
 paintTimer();
 render();
+
+/* Ask the browser to treat this origin's storage as persistent rather than
+   as a cache it may reclaim. The browser decides — an installed app is the
+   likeliest to get a yes. Either way it is one call and it costs nothing,
+   and the answer is reported in the Data panel rather than in a popup. */
+IL.vault.persist();
 
 /* Offline support. Only meaningful over http(s); skipped when the file is
    opened straight off the disk. */

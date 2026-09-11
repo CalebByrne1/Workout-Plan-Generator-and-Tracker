@@ -12,9 +12,13 @@
        history: [ session | skip ]        always sorted oldest → newest
        body:    [ { at, w } ]             bodyweight log, one entry per day
        custom:  [ libEntry ]              exercises you added on the phone
+       nutrition: { days:{ "YYYY-MM-DD": food }, goals:[ goal ] }
        prefs:   { unit, step, autoRest, restCompound, restOther,
-                  autoProgress, variety }
+                  autoProgress, variety, lastExport }
      }
+
+     food = { kcal, protein, fiber }      each a number or null (not logged)
+     goal = { from:"YYYY-MM-DD", kcal, phase:"cut"|"maintain"|"bulk"|"" }
 
      exercise = { uid, name, sets, reps, weight, note, log,
                   pin, rotAge, progress }
@@ -45,7 +49,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 4;
+var SCHEMA = 5;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -313,9 +317,11 @@ function seed(){
     history: [],
     body: [],
     custom: [],
+    nutrition: { days:{}, goals:[] },
     prefs: {
       unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
-      autoProgress:true, variety:"medium"
+      autoProgress:true, variety:"medium",
+      lastExport:0
     }
   };
 }
@@ -377,6 +383,13 @@ function migrateToV4(saved){
   return saved;
 }
 
+/* schema 4 had no nutrition log. Nothing to convert — it starts empty. */
+function migrateToV5(saved){
+  saved.nutrition = saved.nutrition || { days:{}, goals:[] };
+  saved.schema = 5;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
@@ -391,6 +404,17 @@ function normalize(saved){
   if(!saved.schema || saved.schema < 2) migrateToV2(saved);
   if(saved.schema < 3) migrateToV3(saved);
   if(saved.schema < 4) migrateToV4(saved);
+  if(saved.schema < 5) migrateToV5(saved);
+
+  /* Whatever arrived, leave nutrition in exactly one shape: days as a map,
+     goals as a list in date order. A hand-edited backup can't break it. */
+  var food = saved.nutrition || {};
+  saved.nutrition = {
+    days: (food.days && typeof food.days === "object" && !Array.isArray(food.days))
+      ? food.days : {},
+    goals: Array.isArray(food.goals) ? food.goals : []
+  };
+  saved.nutrition.goals.sort(function(a, b){ return a.from < b.from ? -1 : a.from > b.from ? 1 : 0; });
 
   saved.days.forEach(function(d){
     d.ex.forEach(function(e){
@@ -648,6 +672,344 @@ function bodyweightAt(ts){
 }
 
 /* --------------------------------------------------------------------------
+   Nutrition
+
+   One entry per calendar day, keyed by the day itself ("2026-09-10") — food
+   has no time of day worth keeping. Every field is optional, and a day with
+   nothing left in it is removed rather than kept as an empty shell.
+
+   TARGETS ARE PHASES, NOT A NUMBER. Each target starts on a date and holds
+   until the next one begins, and a day is always judged against the target
+   that was in force ON THAT DAY. Keep a single number instead and moving
+   from a bulk to a cut would re-grade every bulk day as a day you blew it.
+   -------------------------------------------------------------------------- */
+
+var PHASES = { cut:"Cut", maintain:"Maintain", bulk:"Bulk" };
+
+/* Blank means "not logged". A typed 0 is kept — a day with no fibre is a
+   real day, and so is a fast. Negative or unreadable is treated as blank. */
+function amount(v, places){
+  if(v === null || v === undefined || String(v).trim() === "") return null;
+  var n = parseFloat(v);
+  if(!isFinite(n) || n < 0) return null;
+  var f = Math.pow(10, places || 0);
+  return Math.round(n * f) / f;
+}
+
+function nutritionOn(key){
+  return state.nutrition.days[key] || null;
+}
+
+function setNutrition(key, vals){
+  var entry = {
+    kcal: amount(vals.kcal, 0),
+    protein: amount(vals.protein, 1),
+    fiber: amount(vals.fiber, 1)
+  };
+
+  if(entry.kcal === null && entry.protein === null && entry.fiber === null){
+    delete state.nutrition.days[key];
+    save();
+    return null;
+  }
+
+  state.nutrition.days[key] = entry;
+  save();
+  return entry;
+}
+
+function clearNutrition(key){
+  delete state.nutrition.days[key];
+  save();
+}
+
+/* Every day with anything logged, newest first. */
+function nutritionKeys(){
+  return Object.keys(state.nutrition.days).sort().reverse();
+}
+
+function goalOn(key){
+  var found = null;
+  state.nutrition.goals.forEach(function(g){ if(g.from <= key) found = g; });
+  return found;
+}
+
+function currentGoal(){ return goalOn(dayKey(Date.now())); }
+
+/* A new target starting on `from`. One per start date — setting a second
+   target for the same day corrects the first rather than stacking on it. */
+function setGoal(spec){
+  var kcal = amount(spec.kcal, 0);
+  if(!kcal) return null;
+
+  var goal = {
+    from: spec.from || dayKey(Date.now()),
+    kcal: kcal,
+    phase: PHASES[spec.phase] ? spec.phase : ""
+  };
+
+  state.nutrition.goals = state.nutrition.goals.filter(function(g){
+    return g.from !== goal.from;
+  });
+  state.nutrition.goals.push(goal);
+  state.nutrition.goals.sort(function(a, b){ return a.from < b.from ? -1 : a.from > b.from ? 1 : 0; });
+  save();
+  return goal;
+}
+
+function removeGoal(from){
+  state.nutrition.goals = state.nutrition.goals.filter(function(g){ return g.from !== from; });
+  save();
+}
+
+/* The last `count` days, oldest first, INCLUDING the ones with nothing
+   logged. The chart needs honest gaps: a missed Wednesday should look like
+   a missing Wednesday, not close up so Thursday sits where it would be. */
+function nutritionSeries(count){
+  var out = [];
+  var cursor = new Date(startOfDay(Date.now()));
+  cursor.setDate(cursor.getDate() - (count - 1));
+
+  for(var i = 0; i < count; i++){
+    var key = dayKey(cursor.getTime());
+    var food = nutritionOn(key);
+    var goal = goalOn(key);
+    var kcal = food ? food.kcal : null;
+
+    out.push({
+      key: key,
+      at: fromDayKey(key),
+      kcal: kcal,
+      protein: food ? food.protein : null,
+      fiber: food ? food.fiber : null,
+      target: goal ? goal.kcal : null,
+      phase: goal ? goal.phase : "",
+      diff: (kcal !== null && goal) ? kcal - goal.kcal : null
+    });
+
+    cursor.setDate(cursor.getDate() + 1);      /* setDate walks DST cleanly */
+  }
+  return out;
+}
+
+/* Averages over a window, each one over ONLY the days that field was logged.
+   A day you didn't write fibre down is not a day you ate none, so it can't
+   be allowed to drag the average toward zero. */
+function nutritionAverages(count){
+  var rows = nutritionSeries(count);
+
+  function avg(field){
+    var vals = rows.map(function(r){ return r[field]; })
+                   .filter(function(v){ return v !== null; });
+    if(!vals.length) return { value:null, days:0 };
+    var total = vals.reduce(function(n, v){ return n + v; }, 0);
+    return { value: total / vals.length, days: vals.length };
+  }
+
+  return {
+    window: count,
+    kcal: avg("kcal"),
+    diff: avg("diff"),
+    protein: avg("protein"),
+    fiber: avg("fiber")
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Weight trend
+
+   One weigh-in is mostly water — salt, carbs, a hard leg day, the time you
+   went to bed. Averaging the last seven days of readings cancels most of
+   that, which is why the 7-day average is the number the app leads with and
+   a single reading is the footnote.
+   -------------------------------------------------------------------------- */
+
+var TREND_DAYS = 7;
+
+/* A day key moved by n calendar days. Built from the date's parts so a DST
+   change can't knock it a day sideways. */
+function shiftKey(key, n){
+  var b = String(key).split("-");
+  return dayKey(new Date(+b[0], +b[1] - 1, +b[2] + n, 12).getTime());
+}
+
+function round1(n){ return Math.round(n * 10) / 10; }
+
+/* The mean of every weigh-in in the 7 days ending on `key`, inclusive, and
+   how many readings it's made of. null when there are none — one reading in
+   the window is an average of one, and the count says so. */
+function weekAverage(key){
+  var from = shiftKey(key, -(TREND_DAYS - 1));
+  var vals = [];
+
+  state.body.forEach(function(b){
+    var k = dayKey(b.at);
+    if(k >= from && k <= key) vals.push(b.w);
+  });
+  if(!vals.length) return null;
+
+  var total = vals.reduce(function(n, v){ return n + v; }, 0);
+  return { value: round1(total / vals.length), count: vals.length, from: from, to: key };
+}
+
+/* What the Bodyweight tile says: this week's average against last week's.
+   Week on week is the number that tells a cut or a bulk how it's going;
+   "since the start" is what the chart is for. */
+function weightTrend(){
+  var today = dayKey(Date.now());
+  var now = weekAverage(today);
+  var prev = weekAverage(shiftKey(today, -TREND_DAYS));
+
+  return {
+    now: now,
+    prev: prev,
+    change: (now && prev) ? round1(now.value - prev.value) : null,
+    latest: latestBodyweight()
+  };
+}
+
+/* The trend as of each weigh-in, with the reading itself alongside — the
+   chart draws the average as its line and the readings as faint dots. */
+function bodyTrendSeries(){
+  return state.body.map(function(b){
+    var avg = weekAverage(dayKey(b.at));
+    return { x: b.at, y: avg.value, raw: b.w, count: avg.count };
+  });
+}
+
+/* Bodyweight "at the time" for anything that divides by it. The 7-day
+   average where there is one, so a single heavy morning doesn't knock a
+   point off your relative strength; the nearest reading otherwise. */
+function trendWeightAt(ts){
+  var avg = weekAverage(dayKey(ts));
+  return avg ? avg.value : bodyweightAt(ts);
+}
+
+/* --------------------------------------------------------------------------
+   Maintenance, from your own numbers
+
+   Over a few weeks, what you ate and what the scale did pin down what you
+   burn:
+
+     maintenance = average intake − (weight change per day × energy per unit)
+
+   Lose half a pound a week on 2,300 and you're burning about 2,550.
+
+   Three details decide whether that's useful or misleading:
+
+   · The weight change is the SLOPE of a line fitted through every weigh-in
+     in the window, not the last reading minus the first. Two single days
+     are mostly water; a fitted line through twenty isn't.
+   · Intake averages only the days you logged. Unlogged days are unknown,
+     not zero.
+   · Nothing is shown until there's enough to stand on. A confident wrong
+     number is worse than "not yet".
+
+   The ± that comes with it is one standard error of the slope, turned into
+   kilocalories: how much the weigh-ins disagree with the line they sit on.
+   It shrinks with more weigh-ins and a steadier scale. It says nothing about
+   how carefully the food was counted — but a consistent miscount cancels
+   out, because the answer comes back in your own counting. That is exactly
+   what a target needs, and exactly what no online calculator can give you.
+
+   The window runs through YESTERDAY. Today's food isn't finished, and a
+   breakfast-only today would drag the average down every morning.
+   -------------------------------------------------------------------------- */
+
+var TDEE_WINDOW = 21;
+var TDEE_NEEDS = { kcalDays: 10, weighIns: 6, span: 10 };
+
+/* The usual approximation for body tissue: 3,500 kcal a pound, 7,700 a kilo.
+   Weights are stored in whatever unit the app is set to, so this follows. */
+function energyPerUnit(){ return state.prefs.unit === "kg" ? 7700 : 3500; }
+
+/* Ordinary least squares, plus the standard error of the slope. */
+function fitLine(pts){
+  var n = pts.length;
+  var mx = 0, my = 0;
+  pts.forEach(function(p){ mx += p.x; my += p.y; });
+  mx /= n; my /= n;
+
+  var sxx = 0, sxy = 0;
+  pts.forEach(function(p){ sxx += (p.x - mx) * (p.x - mx); sxy += (p.x - mx) * (p.y - my); });
+
+  var slope = sxx ? sxy / sxx : 0;
+  var sse = 0;
+  pts.forEach(function(p){
+    var e = p.y - (my + slope * (p.x - mx));
+    sse += e * e;
+  });
+
+  var se = (n > 2 && sxx) ? Math.sqrt(sse / (n - 2)) / Math.sqrt(sxx) : 0;
+  return { slope: slope, se: se };
+}
+
+/* The estimate for the 21 days ending on `endKey`. Always says what it had
+   to work with, and — when it isn't ready — exactly what it's still missing. */
+function tdeeFor(endKey){
+  var startKey = shiftKey(endKey, -(TDEE_WINDOW - 1));
+  var kcals = [];
+  var key = startKey;
+
+  for(var i = 0; i < TDEE_WINDOW; i++){
+    var food = nutritionOn(key);
+    if(food && food.kcal !== null) kcals.push(food.kcal);
+    key = shiftKey(key, 1);
+  }
+
+  var pts = [];
+  state.body.forEach(function(b){
+    var k = dayKey(b.at);
+    if(k >= startKey && k <= endKey){
+      pts.push({ x: daysBetween(fromDayKey(startKey), b.at), y: b.w });
+    }
+  });
+  var span = pts.length ? pts[pts.length - 1].x - pts[0].x : 0;
+
+  var out = {
+    from: startKey,
+    to: endKey,
+    window: TDEE_WINDOW,
+    kcalDays: kcals.length,
+    weighIns: pts.length,
+    span: span,
+    need: {
+      kcalDays: Math.max(0, TDEE_NEEDS.kcalDays - kcals.length),
+      weighIns: Math.max(0, TDEE_NEEDS.weighIns - pts.length),
+      span: Math.max(0, TDEE_NEEDS.span - span)
+    },
+    ready: false
+  };
+
+  if(out.need.kcalDays || out.need.weighIns || out.need.span) return out;
+
+  var intake = kcals.reduce(function(n, v){ return n + v; }, 0) / kcals.length;
+  var fit = fitLine(pts);
+  var perUnit = energyPerUnit();
+
+  out.ready = true;
+  out.intake = Math.round(intake);
+  out.perWeek = Math.round(fit.slope * 7 * 100) / 100;       /* unit per week */
+  out.unit = state.prefs.unit;
+  out.tdee = Math.round((intake - fit.slope * perUnit) / 10) * 10;
+  out.band = Math.max(10, Math.round(fit.se * perUnit / 10) * 10);
+  return out;
+}
+
+/* Now, and a week ago — so the card can say whether it's drifting. */
+function tdee(){
+  var today = dayKey(Date.now());
+  var now = tdeeFor(shiftKey(today, -1));
+  var weekAgo = tdeeFor(shiftKey(today, -1 - TREND_DAYS));
+
+  return {
+    now: now,
+    weekAgo: weekAgo.ready ? weekAgo : null,
+    change: (now.ready && weekAgo.ready) ? now.tdee - weekAgo.tdee : null
+  };
+}
+
+/* --------------------------------------------------------------------------
    Progress — turning the log into something plottable
    -------------------------------------------------------------------------- */
 
@@ -676,8 +1038,8 @@ function loggedExercises(){
 /* The strength trend for one movement.
 
    metric "load" is an estimated 1RM, and for pull-ups and dips your
-   bodyweight at the time is added in — a chin-up at 150lb and the same rep
-   at 190lb are not the same lift. metric "reps" is the fallback for anything
+   bodyweight at the time (the 7-day average) is added in — a chin-up at
+   150lb and the same rep at 190lb are not the same lift. metric "reps" is the fallback for anything
    never logged with a load (and no bodyweight on file to supply one), where
    more reps IS the progress. */
 function exerciseSeries(name){
@@ -688,7 +1050,7 @@ function exerciseSeries(name){
     h.entries.forEach(function(en){
       if(en.name !== name || !en.completed) return;
 
-      var bw = bodyweightAt(h.at);
+      var bw = trendWeightAt(h.at);
       var carried = data.BODYWEIGHT[name] ? bw : 0;
       var best = 0;
       var reps = 0;
@@ -735,10 +1097,6 @@ function volumeSeries(){
   return sessionsOnly().map(function(h){
     return { x:h.at, y:h.volume || 0 };
   });
-}
-
-function bodySeries(){
-  return state.body.map(function(b){ return { x:b.at, y:b.w }; });
 }
 
 /* One row per calendar day for the consistency grid, oldest first, always
@@ -801,18 +1159,15 @@ function summary(){
     return h.skipType === "missed" && h.at >= monthAgo;
   });
 
-  var bw = latestBodyweight();
-  var firstBw = state.body.length ? state.body[0] : null;
-
+  /* Bodyweight isn't summarised here any more — it has its own trend (see
+     weightTrend), because a single reading makes a poor headline. */
   return {
     sessions: sessions.length,
     weeks: since,
     since: first,
     last30: recent.length,
     missed30: missed.length,
-    volume: sessions.reduce(function(n, h){ return n + (h.volume || 0); }, 0),
-    bodyweight: bw ? bw.w : 0,
-    bodyweightDelta: (bw && firstBw && bw !== firstBw) ? Math.round((bw.w - firstBw.w) * 10) / 10 : 0
+    volume: sessions.reduce(function(n, h){ return n + (h.volume || 0); }, 0)
   };
 }
 
@@ -965,10 +1320,12 @@ function csvCell(v){
    set number, so nothing is averaged away before it reaches a spreadsheet.
    Skipped days get a row of their own so the gaps are explicit. */
 function toCSV(){
-  var rows = [[
+  var header = [
     "date","time","day","type","exercise","set","segment",
-    "weight","reps","unit","volume","bodyweight","notes"
-  ]];
+    "weight","reps","unit","volume","bodyweight","notes",
+    "calories","calorie_target","protein_g","fiber_g"
+  ];
+  var rows = [header];
 
   state.history.forEach(function(h){
     var d = new Date(h.at);
@@ -1012,6 +1369,18 @@ function toCSV(){
                state.prefs.unit, "", b.w, ""]);
   });
 
+  /* And so does food, with the target that was in force that day — the
+     spreadsheet can do its own over/under without knowing about phases. */
+  nutritionKeys().slice().reverse().forEach(function(key){
+    var food = nutritionOn(key);
+    var goal = goalOn(key);
+    rows.push([key, "", "", "nutrition", "", "", "", "", "", "", "", "", "",
+               food.kcal, goal ? goal.kcal : "", food.protein, food.fiber]);
+  });
+
+  /* Rows written before the nutrition columns existed just end early. */
+  rows.forEach(function(r){ while(r.length < header.length) r.push(""); });
+
   return rows.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n");
 }
 
@@ -1027,6 +1396,20 @@ function restore(text){
   state = normalize(incoming);
   save();
   return state;
+}
+
+/* Stamped whenever a copy actually leaves the device, so the Data panel can
+   say how long it has been. Snapshots do NOT count — they live in the same
+   origin as the thing they are backing up. */
+function markExported(){
+  state.prefs.lastExport = Date.now();
+  save();
+  return state.prefs.lastExport;
+}
+
+function daysSinceExport(){
+  if(!state.prefs.lastExport) return null;
+  return daysBetween(state.prefs.lastExport, Date.now());
 }
 
 function exportName(ext){
@@ -1099,6 +1482,18 @@ IL.store = {
   setEntryDate: setEntryDate,
   addSkip: addSkip,
 
+  PHASES: PHASES,
+  nutritionOn: nutritionOn,
+  setNutrition: setNutrition,
+  clearNutrition: clearNutrition,
+  nutritionKeys: nutritionKeys,
+  goalOn: goalOn,
+  currentGoal: currentGoal,
+  setGoal: setGoal,
+  removeGoal: removeGoal,
+  nutritionSeries: nutritionSeries,
+  nutritionAverages: nutritionAverages,
+
   addBodyweight: addBodyweight,
   removeBodyweight: removeBodyweight,
   latestBodyweight: latestBodyweight,
@@ -1109,10 +1504,22 @@ IL.store = {
   exerciseSeries: exerciseSeries,
   relativeSeries: relativeSeries,
   volumeSeries: volumeSeries,
-  bodySeries: bodySeries,
+  TREND_DAYS: TREND_DAYS,
+  TDEE_NEEDS: TDEE_NEEDS,
+  shiftKey: shiftKey,
+  weekAverage: weekAverage,
+  weightTrend: weightTrend,
+  bodyTrendSeries: bodyTrendSeries,
+  trendWeightAt: trendWeightAt,
+  energyPerUnit: energyPerUnit,
+  fitLine: fitLine,
+  tdeeFor: tdeeFor,
+  tdee: tdee,
   calendar: calendar,
   summary: summary,
 
+  markExported: markExported,
+  daysSinceExport: daysSinceExport,
   toCSV: toCSV,
   toBackup: toBackup,
   restore: restore,

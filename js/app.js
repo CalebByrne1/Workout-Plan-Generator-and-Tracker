@@ -102,36 +102,69 @@ function applyPick(name, mode){
    Rest timer
    -------------------------------------------------------------------------- */
 
-var rest = { left:0, id:null };
+/* The deadline, not a count of ticks.
+
+   A phone suspends timers behind a locked screen, so anything that counts
+   down by decrementing on an interval is simply wrong when you come back —
+   ninety seconds in your pocket might be ten ticks. Storing WHEN the rest
+   ends and subtracting the clock makes the number right no matter what the
+   browser did with the interval in between. */
+var rest = { endsAt:0, id:null };
+
+function restLeft(){
+  if(!rest.endsAt) return 0;
+  return Math.max(0, Math.ceil((rest.endsAt - Date.now()) / 1000));
+}
 
 function startRest(seconds){
-  rest.left = seconds;
+  rest.endsAt = Date.now() + seconds * 1000;
   if(rest.id) clearInterval(rest.id);
-  rest.id = setInterval(tickRest, 1000);
+  /* Twice a second, so the digit shown is never more than half a second
+     behind the clock it is derived from. */
+  rest.id = setInterval(tickRest, 500);
   paintTimer();
 }
 
 function stopRest(){
   if(rest.id) clearInterval(rest.id);
   rest.id = null;
-  rest.left = 0;
+  rest.endsAt = 0;
   paintTimer();
+}
+
+function endRest(){
+  stopRest();
+  ui.toast("Rest is up — next set.");
+  if(navigator.vibrate) navigator.vibrate([90, 60, 90]);
 }
 
 function tickRest(){
-  rest.left--;
-  if(rest.left <= 0){
-    stopRest();
-    ui.toast("Rest is up — next set.");
-    if(navigator.vibrate) navigator.vibrate([90, 60, 90]);
+  if(restLeft() > 0){
+    paintTimer();
     return;
   }
-  paintTimer();
+  endRest();
 }
+
+/* Back from a locked screen or another app. The interval may not have run
+   at all, so the state is recomputed here rather than trusted. */
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden || !rest.id) return;
+
+  if(restLeft() > 0){
+    paintTimer();
+    return;
+  }
+
+  /* It ran out while you were away. Say so if you have only just come back;
+     a rest that ended ten minutes ago is not news, it's just noise. */
+  if(Date.now() - rest.endsAt < 90000) endRest();
+  else stopRest();
+});
 
 function paintTimer(){
   var running = rest.id !== null;
-  var seconds = running ? rest.left : store.state.prefs.restCompound;
+  var seconds = running ? restLeft() : store.state.prefs.restCompound;
   $("timerT").textContent = ui.formatClock(seconds);
   $("timerL").textContent = running ? "Tap to stop" : "Rest";
   $("timer").dataset.run = running ? "1" : "0";
@@ -208,12 +241,14 @@ function shareFiles(files){
 
 function exportCSV(){
   saveFile(store.exportName("csv"), store.toCSV(), "text/csv");
+  store.markExported();
   ui.toast("CSV saved.");
 }
 
 function exportBackup(){
   saveFile("iron-ledger-backup-" + store.dayKey(Date.now()) + ".json",
            store.toBackup(), "application/json");
+  store.markExported();
   ui.toast("Backup saved.");
 }
 
@@ -231,8 +266,8 @@ function exportShare(){
 
   /* Some targets refuse a multi-file share — fall back to the readable one,
      then to a plain download. */
-  if(files.length && shareFiles(files)) return;
-  if(files.length && shareFiles([files[0]])) return;
+  if(files.length && shareFiles(files)){ store.markExported(); return; }
+  if(files.length && shareFiles([files[0]])){ store.markExported(); return; }
   exportCSV();
 }
 
@@ -241,6 +276,7 @@ function copyCSV(){
 
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(function(){
+      store.markExported();
       ui.toast("CSV copied — paste it into a spreadsheet.");
     }, function(){
       ui.toast("Couldn't copy. Use the CSV button instead.");
@@ -250,20 +286,30 @@ function copyCSV(){
   ui.toast("Couldn't copy. Use the CSV button instead.");
 }
 
+/* Every route that throws the current state away takes a snapshot first and
+   WAITS for it to land. Fire-and-forget would be a race against the very
+   thing the snapshot exists to undo. The `true` means "even if it's a copy
+   of the last one" — see vault.snapshot(). */
+function guard(reason, then){
+  IL.vault.snapshot(store.toBackup(), reason, true).then(then, then);
+}
+
 function restoreFrom(file){
   var reader = new FileReader();
 
   reader.onload = function(){
-    try{
-      store.restore(String(reader.result));
-    }catch(err){
-      ui.toast("That file isn't an Iron Ledger backup.");
-      return;
-    }
-    openSession = null;
-    stopRest();
-    showLog();
-    ui.toast("Backup restored.");
+    guard("before restoring a backup file", function(){
+      try{
+        store.restore(String(reader.result));
+      }catch(err){
+        ui.toast("That file isn't an Iron Ledger backup.");
+        return;
+      }
+      openSession = null;
+      stopRest();
+      showLog();
+      ui.toast("Backup restored.");
+    });
   };
 
   reader.onerror = function(){ ui.toast("Couldn't read that file."); };
@@ -382,6 +428,32 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  if(t.closest("#logFood")){
+    ui.foodSheet();
+    return;
+  }
+
+  /* Unfolded in place rather than re-rendered, so the page doesn't jump. */
+  hit = t.closest("#foodMore");
+  if(hit){
+    var more = document.querySelectorAll(".food-row[data-more]");
+    for(var m = 0; m < more.length; m++) more[m].hidden = false;
+    hit.remove();
+    return;
+  }
+
+  /* A row in the recent-days list — straight into editing that day. */
+  hit = t.closest("[data-food]");
+  if(hit){
+    ui.foodSheet(hit.dataset.food);
+    return;
+  }
+
+  if(t.closest("#editGoal")){
+    ui.goalSheet();
+    return;
+  }
+
   hit = t.closest("[data-unit]");
   if(hit){
     store.state.prefs.unit = hit.dataset.unit;
@@ -431,13 +503,66 @@ $("view").addEventListener("click", function(ev){
   }
 
   if(t.closest("#resetAll")){
-    if(confirm("Reset everything? Your plan, history and settings will be erased.")){
-      store.reset();
-      openSession = null;
-      stopRest();
-      showTrain();
-      ui.toast("Back to the starting plan.");
+    if(confirm("Reset everything? Your plan, history and settings will be erased.\n\n" +
+               "A snapshot is taken first, so this can be undone from Snapshots " +
+               "further down this tab.")){
+      guard("before reset", function(){
+        store.reset();
+        openSession = null;
+        stopRest();
+        showTrain();
+        ui.toast("Back to the starting plan — undo it from Snapshots.");
+      });
     }
+    return;
+  }
+
+  /* --- snapshots -------------------------------------------------------- */
+
+  if(t.closest("#snapNow")){
+    IL.vault.snapshot(store.toBackup(), "saved by hand").then(function(id){
+      ui.toast(id ? "Snapshot saved." : "Nothing changed since the last one.");
+      ui.paintDataPanel();
+    });
+    return;
+  }
+
+  hit = t.closest("[data-snaprestore]");
+  if(hit){
+    var snapId = parseInt(hit.dataset.snaprestore, 10);
+    if(!confirm("Roll back to this snapshot? Everything in the app now is " +
+                "replaced by what it held.\n\nThe current state is snapshotted " +
+                "first, so this is reversible too.")){
+      return;
+    }
+
+    guard("before rolling back", function(){
+      IL.vault.read(snapId).then(function(json){
+        if(!json){
+          ui.toast("That snapshot couldn't be read.");
+          return;
+        }
+        try{
+          store.restore(json);
+        }catch(err){
+          ui.toast("That snapshot is unreadable.");
+          return;
+        }
+        openSession = null;
+        stopRest();
+        showLog();
+        ui.toast("Rolled back.");
+      });
+    });
+    return;
+  }
+
+  hit = t.closest("[data-snapdel]");
+  if(hit){
+    IL.vault.remove(parseInt(hit.dataset.snapdel, 10)).then(function(){
+      ui.paintDataPanel();
+    });
+    return;
   }
 });
 
@@ -645,6 +770,90 @@ $("sheetBody").addEventListener("click", function(ev){
     return;
   }
 
+  /* --- food ------------------------------------------------------------- */
+
+  if(ui.sheetMode() === "food"){
+    var foodDay = $("fdDate").value;
+
+    if(t.closest("#saveFood")){
+      if(!foodDay){
+        ui.toast("Pick a date first.");
+        return;
+      }
+      var had = !!store.nutritionOn(foodDay);
+      var kept = store.setNutrition(foodDay, readFood());
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+
+      /* Saving an empty form is how a day gets cleared, so say which of the
+         two just happened rather than claiming a save of nothing. */
+      if(kept) ui.toast("Saved for " + ui.formatDay(store.fromDayKey(foodDay)) + ".");
+      else ui.toast(had ? "Cleared " + ui.formatDay(store.fromDayKey(foodDay)) + "."
+                        : "Nothing entered, so nothing saved.");
+      return;
+    }
+
+    if(t.closest("#clearFood")){
+      store.clearNutrition(foodDay);
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+      ui.toast("Cleared " + ui.formatDay(store.fromDayKey(foodDay)) + ".");
+    }
+    return;
+  }
+
+  /* --- the calorie target ----------------------------------------------- */
+
+  if(ui.sheetMode() === "goal"){
+    hit = t.closest("[data-gphase]");
+    if(hit){
+      toggleGroup(hit, "gphase");
+      return;
+    }
+
+    /* A suggestion fills the number and picks the phase — nothing is saved
+       until you press Save, so it's a starting point you can still edit. */
+    hit = t.closest("[data-suggest]");
+    if(hit){
+      $("gKcal").value = hit.dataset.suggest;
+      var phaseBtn = $("sheetBody").querySelector('[data-gphase="' + hit.dataset.sphase + '"]');
+      if(phaseBtn) toggleGroup(phaseBtn, "gphase");
+      toggleGroup(hit, "suggest");
+      return;
+    }
+
+    hit = t.closest("[data-goaldel]");
+    if(hit){
+      if(confirm("Remove this target? The days it covered go back to being " +
+                 "judged against the one before it, or against none.")){
+        store.removeGoal(hit.dataset.goaldel);
+        if(view === "progress") ui.renderProgress();
+        ui.goalSheet();
+      }
+      return;
+    }
+
+    if(t.closest("#saveGoal")){
+      var goal = store.setGoal({
+        kcal: $("gKcal").value,
+        phase: pickedValue("gphase"),
+        from: $("gFrom").value || store.dayKey(Date.now())
+      });
+      if(!goal){
+        ui.toast("Enter a calorie target first.");
+        return;
+      }
+      ui.closeSheet();
+      if(view === "progress") ui.renderProgress();
+
+      var starts = goal.from === store.dayKey(Date.now())
+        ? "from today"
+        : "from " + ui.formatDay(store.fromDayKey(goal.from));
+      ui.toast("Target set: " + goal.kcal.toLocaleString() + " kcal " + starts + ".");
+    }
+    return;
+  }
+
   /* --- adding training you already did ---------------------------------- */
 
   if(ui.sheetMode() === "import"){
@@ -655,16 +864,18 @@ $("sheetBody").addEventListener("click", function(ev){
         return;
       }
 
-      var added = IL.plan.commitImport(parsed);
-      /* The whole reason for importing: the plan now opens at the loads your
-         own history says you have earned. */
-      var reseeded = IL.plan.reseed();
+      guard("before importing " + parsed.sessions.length + " sessions", function(){
+        var added = IL.plan.commitImport(parsed);
+        /* The whole reason for importing: the plan now opens at the loads
+           your own history says you have earned. */
+        var reseeded = IL.plan.reseed();
 
-      ui.closeSheet();
-      showLog();
-      ui.toast(added.sessions + " session" + (added.sessions === 1 ? "" : "s") +
-               " added" +
-               (reseeded ? " · " + reseeded + " working weights updated" : "") + ".");
+        ui.closeSheet();
+        showLog();
+        ui.toast(added.sessions + " session" + (added.sessions === 1 ? "" : "s") +
+                 " added" +
+                 (reseeded ? " · " + reseeded + " working weights updated" : "") + ".");
+      });
     }
     return;
   }
@@ -824,7 +1035,22 @@ $("sheetBody").addEventListener("input", function(ev){
   ui.patchExercise(editing);
 });
 
+/* What the food sheet currently holds, as typed. */
+function readFood(){
+  return { kcal:$("fdKcal").value, protein:$("fdProt").value, fiber:$("fdFib").value };
+}
+
 $("sheetBody").addEventListener("change", function(ev){
+  /* Moving the food sheet to another date. If that day already has an entry
+     you're now editing it, so its numbers load; if it doesn't, whatever you'd
+     typed comes with you — "oh, that was yesterday" shouldn't cost a retype. */
+  if(ui.sheetMode() === "food" && ev.target.id === "fdDate"){
+    var key = ev.target.value;
+    if(!key) return;
+    ui.foodSheet(key, store.nutritionOn(key) ? null : readFood());
+    return;
+  }
+
   if(ui.sheetMode() !== "edit" || editing < 0) return;
   var e = store.currentDay().ex[editing];
 
@@ -900,6 +1126,9 @@ $("finish").addEventListener("click", function(){
   editing = -1;
   stopRest();
   render();
+
+  /* The one moment there is definitely something new worth keeping. */
+  IL.vault.snapshot(store.toBackup(), "after " + out.day.name);
   window.scrollTo({ top:0, behavior:"smooth" });
 
   /* Say what the finish decided, not just that it happened — the plan for
@@ -951,6 +1180,12 @@ store.onSaveError = function(){
 };
 paintTimer();
 render();
+
+/* Ask the browser to treat this origin's storage as persistent rather than
+   as a cache it may reclaim. The browser decides — an installed app is the
+   likeliest to get a yes. Either way it is one call and it costs nothing,
+   and the answer is reported in the Data panel rather than in a popup. */
+IL.vault.persist();
 
 /* Offline support. Only meaningful over http(s); skipped when the file is
    opened straight off the disk. */
