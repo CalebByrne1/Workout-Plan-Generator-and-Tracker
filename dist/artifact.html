@@ -152,6 +152,7 @@ p{margin:0}
 textarea,
 input[type="text"],
 input[type="email"],
+input[type="password"],
 input[type="number"]{
   width:100%;
   background:var(--surface);
@@ -768,6 +769,9 @@ input[type="date"]{
    ========================================================================== */
 
 .chart-host{margin-top:4px}
+/* Reading a day off the chart is a tap, not a long press: no selection,
+   no callout, no magnifier over the plot. */
+.chart-host{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .chart{display:block;width:100%;touch-action:pan-y}
 
 .chart-read{display:flex;align-items:baseline;gap:9px;min-height:28px;flex-wrap:wrap}
@@ -1256,6 +1260,49 @@ textarea.tall{
 #syncBox .syncrow{margin:0}
 #syncBox .linkish{margin-top:0}
 
+
+/* ==========================================================================
+   Gyms
+   ========================================================================== */
+
+.gymrow{padding:0 14px 12px;margin-top:-4px}
+
+.gymchip{
+  display:flex;align-items:baseline;gap:8px;
+  padding:7px 11px;
+  border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);
+}
+.gymchip .lab{margin-bottom:0}
+.gymchip b{
+  font-family:var(--font-d);font-size:15px;font-weight:600;letter-spacing:.02em;
+  overflow-wrap:anywhere;
+}
+
+/* A weight carried over from another gym is a guess, so it reads as one. */
+.last.away{font-style:italic}
+
+.gymlist{display:flex;flex-direction:column}
+.gymrow-item{
+  display:flex;align-items:stretch;gap:8px;
+  border-bottom:1px solid var(--line-soft);
+}
+.gymrow-item:last-child{border-bottom:0}
+.gympick{
+  flex:1;min-width:0;padding:11px 2px;text-align:left;
+}
+.gympick b{
+  display:block;font-family:var(--font-d);font-size:17px;font-weight:500;
+  letter-spacing:.01em;overflow-wrap:anywhere;
+}
+.gympick small{
+  display:block;margin-top:1px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.gymrow-item.here .gympick b{color:var(--accent)}
+.gymrow-item .lib-edit{align-self:center}
+
 </style>
 
 <div class="app">
@@ -1297,6 +1344,11 @@ textarea.tall{
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!--
+  Plain <script> tags, not ES modules, so the app also runs when you just
+  double-click this file. Modules would need a web server to load.
+  Order matters: each file hangs itself off the shared window.IL namespace.
+-->
 <script>
 /* ==========================================================================
    data.js — the program itself.
@@ -1936,6 +1988,8 @@ IL.vault = {
        history: [ session | skip ]        always sorted oldest → newest
        body:    [ { at, w } ]             bodyweight log, one entry per day
        custom:  [ libEntry ]              exercises you added on the phone
+       gyms:    [ { id, name } ]          the places you train
+       gym:     id of the one you're at now, or ""
        nutrition: { days:{ "YYYY-MM-DD": food }, goals:[ goal ] }
        prefs:   { unit, step, autoRest, restCompound, restOther,
                   autoProgress, variety, lastExport }
@@ -1973,7 +2027,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 5;
+var SCHEMA = 6;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -2241,6 +2295,8 @@ function seed(){
     history: [],
     body: [],
     custom: [],
+    gyms: [],
+    gym: "",
     nutrition: { days:{}, goals:[] },
     prefs: {
       unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
@@ -2314,6 +2370,16 @@ function migrateToV5(saved){
   return saved;
 }
 
+/* schema 5 didn't know where you trained. Nothing to convert: sessions
+   already logged simply have no gym against them, which is honest — they
+   were logged before the app asked. */
+function migrateToV6(saved){
+  saved.gyms = saved.gyms || [];
+  saved.gym = saved.gym || "";
+  saved.schema = 6;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
@@ -2329,6 +2395,12 @@ function normalize(saved){
   if(saved.schema < 3) migrateToV3(saved);
   if(saved.schema < 4) migrateToV4(saved);
   if(saved.schema < 5) migrateToV5(saved);
+  if(saved.schema < 6) migrateToV6(saved);
+
+  saved.gyms = Array.isArray(saved.gyms) ? saved.gyms : [];
+  if(typeof saved.gym !== "string") saved.gym = "";
+  /* A current gym that has since been deleted is no gym at all. */
+  if(saved.gym && !saved.gyms.some(function(g){ return g.id === saved.gym; })) saved.gym = "";
 
   /* Whatever arrived, leave nutrition in exactly one shape: days as a map,
      goals as a list in date order. A hand-edited backup can't break it. */
@@ -2431,39 +2503,95 @@ function exerciseVolume(e){
 }
 
 /* Most recent logged performance per movement, for the "last ..." line.
-   Walks history newest-first and keeps the first hit for each name. */
+   Gym-aware in the same way as lastEntryFor: what you did HERE, falling
+   back to anywhere, flagged so the row can say which. */
 function lastPerformed(){
-  var map = {};
+  var here = {};
+  var anywhere = {};
+  var at = state.gym;
+
   for(var i = state.history.length - 1; i >= 0; i--){
     var h = state.history[i];
+    if(isSkip(h)) continue;
+
     for(var j = 0; j < h.entries.length; j++){
       var en = h.entries[j];
-      if(!map[en.name] && en.completed > 0){
-        map[en.name] = {
-          topWeight: en.topWeight || 0,
-          logged: en.logged || [],
-          unit: h.unit || "lb"
-        };
-      }
+      if(!en.completed) continue;
+
+      var seen = {
+        topWeight: en.topWeight || 0,
+        logged: en.logged || [],
+        unit: h.unit || "lb",
+        gymId: h.gymId || "",
+        gymName: h.gymName || "",
+        elsewhere: false
+      };
+      if(at && h.gymId === at && !here[en.name]) here[en.name] = seen;
+      if(!anywhere[en.name]) anywhere[en.name] = seen;
     }
   }
+
+  var map = {};
+  Object.keys(anywhere).forEach(function(name){
+    if(here[name]) map[name] = here[name];
+    else{
+      map[name] = anywhere[name];
+      /* Only "elsewhere" if you're somewhere in particular and it wasn't
+         here. With no gym set, a record is just a record. */
+      map[name].elsewhere = !!(at && map[name].gymId !== at);
+    }
+  });
   return map;
 }
 
 /* The most recent session in which a movement was actually worked, handed
    over whole — sets planned, target, every rep of every set. This is what
-   the progression rules read to decide the next load. */
+   the progression rules read to decide the next load.
+
+   Prefers the gym you're at. The elsewhere flag tells the caller the numbers came
+   from a different building, which is worth saying out loud before anyone
+   plans a personal best on them. */
 function lastEntryFor(name){
+  var at = state.gym;
+  var fallback = null;
+
+  for(var i = state.history.length - 1; i >= 0; i--){
+    var h = state.history[i];
+    if(isSkip(h)) continue;
+
+    for(var j = 0; j < h.entries.length; j++){
+      var en = h.entries[j];
+      if(en.name !== name || !en.completed) continue;
+
+      var hit = {
+        at: h.at,
+        unit: h.unit || "lb",
+        entry: en,
+        gymId: h.gymId || "",
+        gymName: h.gymName || "",
+        elsewhere: false
+      };
+      if(!at || h.gymId === at) return hit;
+      if(!fallback){
+        fallback = hit;
+        fallback.elsewhere = true;
+      }
+    }
+  }
+  return fallback;
+}
+
+/* When a movement was last done ANYWHERE. Rotation asks this: variety is
+   about what you have and haven't trained lately, not about buildings. */
+function lastTouchedAt(name){
   for(var i = state.history.length - 1; i >= 0; i--){
     var h = state.history[i];
     if(isSkip(h)) continue;
     for(var j = 0; j < h.entries.length; j++){
-      if(h.entries[j].name === name && h.entries[j].completed > 0){
-        return { at:h.at, unit:h.unit || "lb", entry:h.entries[j] };
-      }
+      if(h.entries[j].name === name && h.entries[j].completed > 0) return h.at;
     }
   }
-  return null;
+  return 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -2598,6 +2726,83 @@ function bodyweightAt(ts){
     else break;
   }
   return best || state.body[0].w;
+}
+
+/* --------------------------------------------------------------------------
+   Gyms
+
+   The same lat pulldown is a different lift in two buildings: different
+   pulleys, different cams, different stack. So "what did I lift last time"
+   has to mean "last time HERE", or the app spends every session telling you
+   to add weight you can't add.
+
+   A gym is just a name. The work is in lastEntryFor(): it prefers the gym
+   you're standing in, and only falls back to another one when you've never
+   done that movement here — and says so when it does, because a weight
+   carried over from somewhere else is a guess, not a record.
+   -------------------------------------------------------------------------- */
+
+function gyms(){ return state.gyms; }
+
+function currentGym(){
+  var id = state.gym;
+  return id ? (gymById(id) || null) : null;
+}
+
+function gymById(id){
+  var found = null;
+  state.gyms.forEach(function(g){ if(g.id === id) found = g; });
+  return found;
+}
+
+function gymName(id){
+  var g = gymById(id);
+  return g ? g.name : "";
+}
+
+function addGym(name){
+  var clean = String(name || "").trim().replace(/\s+/g, " ");
+  if(!clean) return null;
+
+  var existing = null;
+  state.gyms.forEach(function(g){
+    if(g.name.toLowerCase() === clean.toLowerCase()) existing = g;
+  });
+  if(existing) return existing;
+
+  var gym = { id: uid("g"), name: clean };
+  state.gyms.push(gym);
+  save();
+  return gym;
+}
+
+function renameGym(id, name){
+  var gym = gymById(id);
+  var clean = String(name || "").trim().replace(/\s+/g, " ");
+  if(!gym || !clean) return null;
+  gym.name = clean;
+  /* Sessions keep the name they were logged under; update those too, so the
+     log doesn't show two names for one place. */
+  state.history.forEach(function(h){ if(h.gymId === id) h.gymName = clean; });
+  save();
+  return gym;
+}
+
+/* Forgetting a gym leaves every session that happened there alone — they
+   keep the name they were logged with. Only the list forgets it. */
+function removeGym(id){
+  var before = state.gyms.length;
+  state.gyms = state.gyms.filter(function(g){ return g.id !== id; });
+  if(state.gyms.length === before) return false;
+  if(state.gym === id) state.gym = "";
+  save();
+  return true;
+}
+
+function setGym(id){
+  state.gym = gymById(id) ? id : "";
+  save();
+  return currentGym();
 }
 
 /* --------------------------------------------------------------------------
@@ -3202,12 +3407,15 @@ function finishSession(){
     };
   });
 
+  var here = currentGym();
   var record = {
     id: uid("h"),
     at: Date.now(),
     kind: "session",
     dayId: day.id,
     dayName: day.name,
+    gymId: here ? here.id : "",
+    gymName: here ? here.name : "",
     notes: day.notes,
     unit: state.prefs.unit,
     volume: Math.round(volume),
@@ -3250,7 +3458,7 @@ function csvCell(v){
    Skipped days get a row of their own so the gaps are explicit. */
 function toCSV(){
   var header = [
-    "date","time","day","type","exercise","set","segment",
+    "date","time","day","gym","type","exercise","set","segment",
     "weight","reps","unit","volume","bodyweight","notes",
     "calories","calorie_target","protein_g","fiber_g"
   ];
@@ -3270,20 +3478,21 @@ function toCSV(){
     }
 
     if(isSkip(h)){
-      rows.push([date, time, h.dayName, h.skipType, "", "", "", "", "", "", 0, bw, note()]);
+      rows.push([date, time, h.dayName, h.gymName || "", h.skipType,
+                 "", "", "", "", "", "", 0, bw, note()]);
       return;
     }
 
     h.entries.forEach(function(en){
       if(!en.logged || !en.logged.length){
-        rows.push([date, time, h.dayName, "not done", en.name, "", "", "", "",
-                   h.unit || "lb", 0, bw, note()]);
+        rows.push([date, time, h.dayName, h.gymName || "", "not done", en.name,
+                   "", "", "", "", h.unit || "lb", 0, bw, note()]);
         return;
       }
       en.logged.forEach(function(item){
         item.segs.forEach(function(s, i){
           rows.push([
-            date, time, h.dayName, "set", en.name, item.set, i + 1,
+            date, time, h.dayName, h.gymName || "", "set", en.name, item.set, i + 1,
             s.w || 0, s.r || 0, h.unit || "lb",
             Math.round((s.w || 0) * (s.r || 0)), bw, note()
           ]);
@@ -3294,7 +3503,7 @@ function toCSV(){
 
   /* Weigh-ins ride along in the same file, so one export is the whole story. */
   state.body.forEach(function(b){
-    rows.push([dayKey(b.at), "", "", "weigh-in", "", "", "", b.w, "",
+    rows.push([dayKey(b.at), "", "", "", "weigh-in", "", "", "", b.w, "",
                state.prefs.unit, "", b.w, ""]);
   });
 
@@ -3303,7 +3512,7 @@ function toCSV(){
   nutritionKeys().slice().reverse().forEach(function(key){
     var food = nutritionOn(key);
     var goal = goalOn(key);
-    rows.push([key, "", "", "nutrition", "", "", "", "", "", "", "", "", "",
+    rows.push([key, "", "", "", "nutrition", "", "", "", "", "", "", "", "", "",
                food.kcal, goal ? goal.kcal : "", food.protein, food.fiber]);
   });
 
@@ -3370,6 +3579,14 @@ IL.store = {
   isLogged: isLogged,
 
   currentDay: currentDay,
+  gyms: gyms,
+  currentGym: currentGym,
+  gymById: gymById,
+  gymName: gymName,
+  addGym: addGym,
+  renameGym: renameGym,
+  removeGym: removeGym,
+  setGym: setGym,
   customLib: customLib,
   libLookup: libLookup,
   libAll: libAll,
@@ -3405,6 +3622,7 @@ IL.store = {
   isSkip: isSkip,
   sortHistory: sortHistory,
   lastEntryFor: lastEntryFor,
+  lastTouchedAt: lastTouchedAt,
   sessionsOnly: sessionsOnly,
   skipsOnly: skipsOnly,
   findEntry: findEntry,
@@ -3619,9 +3837,10 @@ function inUse(exceptUid){
   return used;
 }
 
+/* Deliberately gym-blind, unlike the progression rules: rotation is about
+   what you have and haven't done lately, wherever you did it. */
 function lastTouched(name){
-  var found = store.lastEntryFor(name);
-  return found ? found.at : 0;
+  return store.lastTouchedAt(name);
 }
 
 /* The exercise this slot should hand over to, or "" for "leave it". */
@@ -4098,11 +4317,17 @@ IL.plan = {
    so the app still needs nothing but a browser. The server side is in
    supabase/schema.sql.
 
-   SIGN-IN IS BY CODE, NOT LINK. The email carries a one-time code you type
-   into the app. A link would open in the phone's browser, and on an iPhone a
-   home-screen app doesn't share storage with Safari: you'd end up signed in
-   to Safari, not to the app. A link still works if it happens to open in the
-   same browser the app is running in, so both are handled.
+   SIGN-IN IS EMAIL AND PASSWORD, AND THAT IS ON PURPOSE.
+
+   Nothing is emailed when you sign in, so the whole thing happens inside the
+   app. The alternatives both break on a phone: a sign-in LINK always opens
+   the browser, and on an iPhone a home-screen app has storage of its own, so
+   you end up signed in to Safari looking at an empty log. A CODE would be
+   fine, but Supabase stopped letting new free projects edit the emails that
+   would have to carry it.
+
+   A link arriving some other way (confirming an address, say) is still
+   handled, and warns if it landed outside the app.
    ========================================================================== */
 
 window.IL = window.IL || {};
@@ -4237,6 +4462,14 @@ function explain(err){
     return "The sync table doesn't exist yet. Run supabase/schema.sql in the Supabase SQL editor.";
   if(code === "42501" || err.status === 403)
     return "The account's database refused this. Check that supabase/schema.sql has been run.";
+  if(code === "invalid_credentials" || /invalid login credentials/i.test(err.message))
+    return "That email and password don't match an account. Check them, or create the account first.";
+  if(code === "user_already_exists" || /already registered|already been registered/i.test(err.message))
+    return "That email already has an account — sign in instead.";
+  if(code === "weak_password" || /password should be at least/i.test(err.message))
+    return "That password is too short — use at least six characters.";
+  if(code === "email_not_confirmed" || /email not confirmed/i.test(err.message))
+    return "That address hasn't been confirmed yet. Switch off \"Confirm email\" in Supabase, or use the link it emailed you.";
   return err.message || "Couldn't sync.";
 }
 
@@ -4294,41 +4527,52 @@ function redirectTo(){
     : "";
 }
 
-function sendCode(email){
-  var back = redirectTo();
-  return api("/auth/v1/otp" + (back ? "?redirect_to=" + encodeURIComponent(back) : ""), {
+/* Both of these resolve once the first sync after signing in has finished,
+   with how it went ("created", "pulled", "choose"…), so the app can say what
+   actually happened rather than guess. */
+function afterAuth(body){
+  adopt(body);
+  setStatus("idle");
+  return syncNow("sign-in");
+}
+
+function signIn(email, password){
+  return api("/auth/v1/token?grant_type=password", {
     method: "POST",
-    body: { email: email, create_user: true }
+    body: { email: email, password: password }
+  }).then(afterAuth);
+}
+
+/* A new account. If the project still has email confirmation switched on,
+   Supabase answers with a user and no session — there is nothing to sign in
+   with until the address is confirmed, so say so rather than pretending. */
+function signUp(email, password){
+  var back = redirectTo();
+  return api("/auth/v1/signup" + (back ? "?redirect_to=" + encodeURIComponent(back) : ""), {
+    method: "POST",
+    body: { email: email, password: password }
+  }).then(function(body){
+    if(!body || !body.access_token) return "confirm";
+    return afterAuth(body);
   });
 }
 
-/* A first-time address gets a sign-up email and a returning one a sign-in
-   email, and older servers want the matching type when the code comes back.
-   "email" covers both on current Supabase; the others are the fallback. */
-function verifyCode(email, code){
-  var types = ["email", "signup", "magiclink"];
-  var token = String(code).replace(/\s+/g, "");
+/* --------------------------------------------------------------------------
+   Which copy of the app is this?
 
-  function attempt(i){
-    return api("/auth/v1/verify", {
-      method: "POST",
-      body: { type: types[i], email: email, token: token }
-    }).catch(function(err){
-      if(i + 1 < types.length && (err.status === 400 || err.status === 401 || err.status === 403)){
-        return attempt(i + 1).catch(function(){ throw err; });   /* report the first failure */
-      }
-      throw err;
-    });
-  }
+   On an iPhone the home-screen app and Safari keep separate storage, as if
+   they were two phones. Signing in on the wrong one is how you end up
+   staring at an empty log, so the app can tell you which one you're in.
+   -------------------------------------------------------------------------- */
+function inBrowserNotApp(){
+  var ua = navigator.userAgent || "";
+  var iOS = /iPad|iPhone|iPod/.test(ua) ||
+            (/Macintosh/.test(ua) && typeof document !== "undefined" && "ontouchend" in document);
+  if(!iOS) return false;
 
-  /* Resolves once the first sync after signing in has finished, with how
-     it went ("created", "pulled", "choose"…) — so the app can say what just
-     happened rather than guess. */
-  return attempt(0).then(function(body){
-    adopt(body);
-    setStatus("idle");
-    return syncNow("sign-in");
-  });
+  if(navigator.standalone === true) return false;
+  if(typeof matchMedia === "function" && matchMedia("(display-mode: standalone)").matches) return false;
+  return true;
 }
 
 /* A magic link opened in the same browser lands here with the session in the
@@ -4603,6 +4847,20 @@ function pass(depth){
         saveMeta({ lastSync: Date.now() });
         return "unchanged";
       }
+
+      /* Pushing an empty log over an account that has training in it is
+         almost always a mistake — the wrong copy of the app, a reset that
+         wasn't meant, a fresh browser. Worth the extra fetch to check, and
+         worth asking before doing it. */
+      if(!hasTraining(store.state)){
+        return readRow(true).then(function(row){
+          if(row && hasTraining(row.data)) return askWhichCopy(row);
+          return sendLocal(head.rev).then(function(sent){
+            return sent ? "pushed" : pass(depth + 1);
+          });
+        });
+      }
+
       return sendLocal(head.rev).then(function(sent){
         return sent ? "pushed" : pass(depth + 1);
       });
@@ -4632,6 +4890,13 @@ function pass(depth){
 function bothChanged(row, depth){
   var theirs = Date.parse(row.updated_at) || 0;
 
+  /* Newest-wins is fine between two real logs. It is not fine when the newer
+     one is empty: that isn't a change of mind, it's a mistake about to be
+     copied everywhere. Ask instead. */
+  if(!hasTraining(store.state) && hasTraining(row.data)){
+    return askWhichCopy(row);
+  }
+
   if(theirs > meta.edited){
     return takeRemote(row, "this device's copy — replaced by a newer one from " +
                            (row.device || "another device"), true)
@@ -4653,6 +4918,21 @@ function bothChanged(row, depth){
     if(hooks.conflict) hooks.conflict({ kept: "local", device: row.device });
     return "conflict-local";
   });
+}
+
+/* Put the question to the person, and stop until they answer. Raised on a
+   first link with training on both sides, and any time an empty copy is
+   about to replace one that isn't. */
+function askWhichCopy(row){
+  pendingChoice = {
+    row: row,
+    local: summarize(store.state),
+    remote: summarize(row.data),
+    remoteDevice: row.device || ""
+  };
+  setStatus("choose");
+  if(hooks.choose) hooks.choose(pendingChoice);
+  return Promise.resolve("choose");
 }
 
 /* The first time this device meets this account. If only one side has any
@@ -4677,15 +4957,7 @@ function firstLink(row, depth){
     });
   }
 
-  pendingChoice = {
-    row: row,
-    local: summarize(store.state),
-    remote: summarize(row.data),
-    remoteDevice: row.device || ""
-  };
-  setStatus("choose");
-  if(hooks.choose) hooks.choose(pendingChoice);
-  return Promise.resolve("choose");
+  return askWhichCopy(row);
 }
 
 /* The answer to "which do you keep?". The one not kept goes into a snapshot
@@ -4830,8 +5102,9 @@ IL.sync = {
   info: info,
   onChange: onChange,
   explain: explain,
-  sendCode: sendCode,
-  verifyCode: verifyCode,
+  signIn: signIn,
+  signUp: signUp,
+  inBrowserNotApp: inBrowserNotApp,
   signOut: signOut,
   syncNow: syncNow,
   resolveChoice: resolveChoice,
@@ -5189,9 +5462,35 @@ function wire(host, pts, X, Y, cfg, band){
     show(best);
   }
 
-  svg.addEventListener("pointermove", at);
-  svg.addEventListener("pointerdown", at);
-  svg.addEventListener("pointerleave", reset);
+  /* A finger and a mouse want different things here.
+
+     With a mouse, the crosshair follows the pointer and snaps back to the
+     latest point when it leaves — hovering is free, so nothing needs to stay.
+
+     With a finger it must STAY where you put it. Holding still to keep a day
+     on screen is both tiring and, on iOS, a long press: it raises the
+     copy/paste callout over the chart. So a touch reads as "show me this
+     day", and it stays shown until the next tap. */
+  var touching = false;
+
+  svg.addEventListener("pointerdown", function(ev){
+    touching = ev.pointerType !== "mouse";
+    at(ev);
+    /* Stops the long-press selection and callout from ever starting. */
+    if(touching && ev.cancelable) ev.preventDefault();
+  });
+
+  svg.addEventListener("pointermove", function(ev){
+    /* Dragging across still scrubs; a touch that isn't down doesn't. */
+    if(ev.pointerType === "mouse" || ev.buttons || ev.pressure > 0) at(ev);
+  });
+
+  svg.addEventListener("pointerleave", function(ev){
+    if(ev.pointerType === "mouse") reset();
+  });
+
+  /* Long-press on the chart never means "select" or "share". */
+  svg.addEventListener("contextmenu", function(ev){ ev.preventDefault(); });
 }
 
 IL.chart = { draw: draw, height: H };
@@ -5388,9 +5687,15 @@ function exerciseRow(e, i, last){
   var sets = "";
   for(var k = 0; k < e.sets; k++) sets += setButton(e, i, k);
 
+  /* Where it was lifted matters as much as what: the same machine in
+     another building doesn't take the same pin. When the number comes from
+     a different gym, the line says so rather than quietly implying you can
+     lift it here. */
   var lastLine = (last && last.logged.length)
-    ? '<span class="last">last ' + formatWeight(last.topWeight, e.name) + " " + esc(last.unit) +
-      ' · ' + esc(repsSummary(last.logged)) + '</span>'
+    ? '<span class="last' + (last.elsewhere ? " away" : "") + '">last ' +
+      formatWeight(last.topWeight, e.name) + " " + esc(last.unit) +
+      ' · ' + esc(repsSummary(last.logged)) +
+      (last.elsewhere && last.gymName ? ' · at ' + esc(last.gymName) : '') + '</span>'
     : '';
 
   return '<article class="ex" data-row="' + i + '"' +
@@ -5413,6 +5718,17 @@ function exerciseRow(e, i, last){
   '</article>';
 }
 
+/* The place you're training, and the way to change it. Tapping it is how a
+   gym gets added the first time, so there's nothing to set up in advance. */
+function gymChip(){
+  var here = store.currentGym();
+  return '<button class="gymchip" id="gymPick"' +
+      ' aria-label="' + (here ? 'Training at ' + esc(here.name) + '. Change gym.' : 'Set which gym you are at') + '">' +
+    '<span class="lab">Gym</span>' +
+    '<b>' + (here ? esc(here.name) : "Set gym") + '</b>' +
+  '</button>';
+}
+
 function renderTrain(){
   var day = store.currentDay();
   var last = store.lastPerformed();
@@ -5433,6 +5749,7 @@ function renderTrain(){
         '<div class="cap">Sets in</div>' +
       '</div>' +
     '</div>' +
+    '<div class="gymrow">' + gymChip() + '</div>' +
     planBanner(day) +
     '<div class="ledger" id="ledger">' + rows + '</div>' +
     '<div class="addrow"><button class="add-btn" id="addEx">+ Add exercise</button></div>' +
@@ -5511,7 +5828,8 @@ function sessionCard(h, isOpen){
   return '<div class="sess">' +
     '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
       '<span class="sess-tag">' + esc(h.dayId) + '</span>' +
-      '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) + '</small></span>' +
+      '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) +
+        (h.gymName ? ' · ' + esc(h.gymName) : '') + '</small></span>' +
       '<span class="sess-vol"><b>' + h.volume.toLocaleString() + '</b><small>' + esc(u) + ' volume</small></span>' +
     '</button>' +
     (isOpen ?
@@ -5601,11 +5919,11 @@ function settingsPanel(){
    this screen, not about the account.
    -------------------------------------------------------------------------- */
 
-var syncForm = { step:"email", email:"", error:"", busy:false };
+var syncForm = { email:"", error:"", note:"", busy:false };
 
 function resetSyncForm(){
-  syncForm.step = "email";
   syncForm.error = "";
+  syncForm.note = "";
   syncForm.busy = false;
 }
 
@@ -5635,30 +5953,21 @@ function syncHTML(){
   var head = '<h3 class="set-title">Sync</h3>';
   var err = syncForm.error ? '<p class="impwarn" id="syErr">' + esc(syncForm.error) + '</p>' : '';
 
-  if(!s.signedIn && syncForm.step === "code"){
-    return head +
-      '<p class="hint">A code is on its way to <b>' + esc(syncForm.email) + '</b>. Type it in ' +
-        'here — the code keeps you in the app, where the link in the email would open ' +
-        'your browser instead.</p>' +
-      '<div class="field">' +
-        '<label class="lab" for="syCode">Code from the email</label>' +
-        '<input id="syCode" type="text" inputmode="numeric" autocomplete="one-time-code"' +
-          ' maxlength="12" placeholder="123456">' +
-      '</div>' +
-      err +
-      '<div class="datarow">' +
-        '<button class="add-btn" id="syVerify"' + (syncForm.busy ? ' disabled' : '') + '>' +
-          (syncForm.busy ? 'Signing in…' : 'Sign in') + '</button>' +
-        '<button class="add-btn" id="syBack">Other email</button>' +
-      '</div>' +
-      '<button class="linkish" id="syResend">Send a new code</button>';
-  }
-
   if(!s.signedIn){
+    /* The single most useful warning in the app: on an iPhone, signing in
+       here rather than in the installed app signs in a different copy with
+       different data. */
+    var wrongCopy = IL.sync.inBrowserNotApp()
+      ? '<p class="impwarn">You\'re in Safari, not the app you added to your home ' +
+          'screen. They keep separate data. Open the app from its icon and sign in ' +
+          'there, or this copy — which may be empty — is the one that syncs.</p>'
+      : '';
+
     return head +
       '<p class="hint">Sign in and this log is on every device you sign in on — and ' +
         'survives losing this one. Everything still works offline; it catches up ' +
         'when you’re back.</p>' +
+      wrongCopy +
       (s.message ? '<p class="impwarn">' + esc(s.message) + '</p>' : '') +
       '<div class="field">' +
         '<label class="lab" for="syEmail">Email</label>' +
@@ -5666,9 +5975,21 @@ function syncHTML(){
           ' autocapitalize="none" spellcheck="false" placeholder="you@example.com"' +
           ' value="' + esc(syncForm.email) + '">' +
       '</div>' +
+      '<div class="field">' +
+        '<label class="lab" for="syPass">Password</label>' +
+        '<input id="syPass" type="password" autocomplete="current-password"' +
+          ' placeholder="at least six characters">' +
+      '</div>' +
       err +
-      '<button class="add-btn" id="sySend"' + (syncForm.busy ? ' disabled' : '') + '>' +
-        (syncForm.busy ? 'Sending…' : 'Email me a sign-in code') + '</button>';
+      (syncForm.note ? '<p class="hint good">' + esc(syncForm.note) + '</p>' : '') +
+      '<div class="datarow">' +
+        '<button class="add-btn" id="syIn"' + (syncForm.busy ? ' disabled' : '') + '>' +
+          (syncForm.busy ? 'Working…' : 'Sign in') + '</button>' +
+        '<button class="add-btn" id="syUp"' + (syncForm.busy ? ' disabled' : '') + '>' +
+          'Create account</button>' +
+      '</div>' +
+      '<p class="hint">Nothing is emailed when you sign in, so this works inside the ' +
+        'app — no links, no waiting.</p>';
   }
 
   return head +
@@ -6631,6 +6952,76 @@ function exerciseSheet(i){
 }
 
 /* --------------------------------------------------------------------------
+   Where you're training
+
+   Switching gyms re-reads every working weight from what you have lifted at
+   the new one, because that's the number you'll actually pull out of the
+   stack there. Nothing about your history changes — only which part of it
+   the plan is reading.
+   -------------------------------------------------------------------------- */
+
+function gymSheet(){
+  var here = store.currentGym();
+  var list = store.gyms();
+
+  var rows = list.map(function(g){
+    var current = here && here.id === g.id;
+    return '<div class="gymrow-item' + (current ? " here" : "") + '">' +
+      '<button class="gympick" data-gym="' + esc(g.id) + '" aria-pressed="' + !!current + '">' +
+        '<b>' + esc(g.name) + '</b>' +
+        '<small>' + (current ? "you're here" : "switch to this") + '</small>' +
+      '</button>' +
+      '<button class="lib-edit" data-gymedit="' + esc(g.id) + '">Edit</button>' +
+    '</div>';
+  }).join("");
+
+  openSheet("Which gym?",
+    '<p class="sheet-sub">The same machine loads differently in different buildings, so ' +
+      'each gym keeps its own working weights.</p>' +
+
+    (rows ? '<div class="gymlist">' + rows + '</div>' : '') +
+
+    '<div class="field">' +
+      '<label class="lab" for="gymName">' + (rows ? "Add another gym" : "Add your first gym") + '</label>' +
+      '<input id="gymName" type="text" placeholder="Main Street" autocomplete="off">' +
+    '</div>' +
+    '<button class="add-btn" id="gymAdd">Add and train here</button>' +
+
+    (here
+      ? '<div class="rowbtns one"><button id="gymNone">Not at any of these today</button></div>'
+      : '') +
+
+    '<p class="hint">Sessions you logged before adding gyms keep counting — they ' +
+      'just aren\'t tied to a place, so they stand in anywhere until you have ' +
+      'logged that exercise here.</p>',
+  "gym");
+}
+
+/* Renaming keeps the sessions already logged under the old name in step;
+   removing one leaves them alone entirely. */
+function gymEditSheet(id){
+  var gym = store.gymById(id);
+  if(!gym) return;
+
+  var sessions = store.sessionsOnly().filter(function(h){ return h.gymId === id; }).length;
+
+  openSheet("Edit gym",
+    '<div class="field">' +
+      '<label class="lab" for="gymRename">Name</label>' +
+      '<input id="gymRename" type="text" value="' + esc(gym.name) + '" autocomplete="off">' +
+    '</div>' +
+    '<p class="hint">' + (sessions
+      ? sessions + (sessions === 1 ? " session" : " sessions") + ' logged here. Renaming ' +
+        'updates those too; removing the gym leaves them exactly as they are.'
+      : 'Nothing logged here yet.') + '</p>' +
+    '<div class="rowbtns two">' +
+      '<button class="primary" id="gymSave" data-gymid="' + esc(id) + '">Save</button>' +
+      '<button class="danger" data-gymdel="' + esc(id) + '">Remove</button>' +
+    '</div>',
+  "gymedit");
+}
+
+/* --------------------------------------------------------------------------
    Marking a day off
    -------------------------------------------------------------------------- */
 
@@ -7207,6 +7598,8 @@ IL.ui = {
   previewImport: previewImport,
   get lastImport(){ return lastImport; },
   skipSheet: skipSheet,
+  gymSheet: gymSheet,
+  gymEditSheet: gymEditSheet,
   weightSheet: weightSheet,
   foodSheet: foodSheet,
   goalSheet: goalSheet
@@ -7318,8 +7711,8 @@ function applyPick(name, mode){
 /* --------------------------------------------------------------------------
    Signing in to sync
 
-   Two steps: an email, then the code that arrives in it. The form's state
-   lives in ui.syncForm; these move it along and redraw.
+   Email and password, both handled here; the form's state lives in
+   ui.syncForm. See the top of sync.js for why it isn't a link or a code.
    -------------------------------------------------------------------------- */
 
 var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -7335,62 +7728,64 @@ var SIGNED_IN = {
   error:     "Signed in, but the first sync didn't work — see Sync for why."
 };
 
-function sendSyncCode(again){
+/* Shared by both buttons: check what was typed, then run whichever of
+   sign-in / create-account was asked for and report how it went. */
+function syncAuth(make){
   var form = ui.syncForm;
-  var email = again || ($("syEmail") ? $("syEmail").value.trim() : "");
+  var email = $("syEmail") ? $("syEmail").value.trim() : "";
+  var password = $("syPass") ? $("syPass").value : "";
 
   form.email = email;
+  form.note = "";
+
   if(!EMAIL_RE.test(email)){
     form.error = "That doesn't look like an email address.";
     ui.paintSync();
     return;
   }
-
-  form.error = "";
-  form.busy = true;
-  ui.paintSync();
-
-  IL.sync.sendCode(email).then(function(){
-    form.busy = false;
-    form.step = "code";
+  if(password.length < 6){
+    form.error = "Use a password of at least six characters.";
     ui.paintSync();
-    if($("syCode")) $("syCode").focus();
-    if(again) ui.toast("New code sent.");
-  }, function(err){
-    form.busy = false;
-    form.error = IL.sync.explain(err);
-    ui.paintSync();
-  });
-}
-
-function verifySyncCode(){
-  var form = ui.syncForm;
-  var code = $("syCode") ? $("syCode").value.replace(/\s+/g, "") : "";
-
-  if(!/^\d{4,10}$/.test(code)){
-    form.error = "Type the code from the email — just the digits.";
-    ui.paintSync();
-    if($("syCode")){ $("syCode").value = code; $("syCode").focus(); }
+    if($("syPass")) $("syPass").focus();
     return;
   }
 
   form.error = "";
   form.busy = true;
   ui.paintSync();
-  if($("syCode")) $("syCode").value = code;
 
-  IL.sync.verifyCode(form.email, code).then(function(result){
-    ui.resetSyncForm();
-    ui.paintSync();
-    var said = SIGNED_IN.hasOwnProperty(result) ? SIGNED_IN[result] : "Signed in.";
-    if(said) ui.toast(said);
-  }, function(err){
-    form.busy = false;
-    form.error = IL.sync.explain(err);
-    ui.paintSync();
-    /* Put the code back so a typo can be fixed rather than retyped. */
-    if($("syCode")){ $("syCode").value = code; $("syCode").focus(); }
-  });
+  (make ? IL.sync.signUp(email, password) : IL.sync.signIn(email, password))
+    .then(function(result){
+      if(result === "confirm"){
+        form.busy = false;
+        form.note = "Account created. Confirm the address from the email Supabase just " +
+                    "sent, then sign in here.";
+        ui.paintSync();
+        return;
+      }
+      ui.resetSyncForm();
+      ui.paintSync();
+      var said = SIGNED_IN.hasOwnProperty(result) ? SIGNED_IN[result] : "Signed in.";
+      if(said) ui.toast(said);
+    }, function(err){
+      form.busy = false;
+      form.error = IL.sync.explain(err);
+      ui.paintSync();
+    });
+}
+
+/* Moving to another gym re-derives every working weight from what you have
+   lifted THERE. Nothing in the log changes; the plan just starts reading the
+   part of it that applies to the building you're standing in. */
+function switchGym(id){
+  var gym = store.setGym(id);
+  var seeded = IL.plan.reseed();
+
+  ui.closeSheet();
+  ui.renderTrain();
+  ui.toast(gym
+    ? "At " + gym.name + (seeded ? " — weights from your history here." : " — no history here yet.")
+    : "No gym set.");
 }
 
 /* --------------------------------------------------------------------------
@@ -7670,6 +8065,11 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  if(t.closest("#gymPick")){
+    ui.gymSheet();
+    return;
+  }
+
   /* --- log view --- */
 
   hit = t.closest("[data-open]");
@@ -7814,15 +8214,8 @@ $("view").addEventListener("click", function(ev){
 
   /* --- sync ------------------------------------------------------------- */
 
-  if(t.closest("#sySend")){ sendSyncCode(); return; }
-  if(t.closest("#syResend")){ sendSyncCode(ui.syncForm.email); return; }
-  if(t.closest("#syVerify")){ verifySyncCode(); return; }
-
-  if(t.closest("#syBack")){
-    ui.resetSyncForm();
-    ui.paintSync();
-    return;
-  }
+  if(t.closest("#syIn")){ syncAuth(false); return; }
+  if(t.closest("#syUp")){ syncAuth(true); return; }
 
   if(t.closest("#syNow")){
     IL.sync.syncNow("button").then(function(result){
@@ -7901,8 +8294,8 @@ $("view").addEventListener("click", function(ev){
 /* The phone keyboard's Go / Enter submits the step you're on. */
 $("view").addEventListener("keydown", function(ev){
   if(ev.key !== "Enter") return;
-  if(ev.target.id === "syEmail"){ ev.preventDefault(); sendSyncCode(); }
-  else if(ev.target.id === "syCode"){ ev.preventDefault(); verifySyncCode(); }
+  if(ev.target.id === "syEmail" && $("syPass")){ ev.preventDefault(); $("syPass").focus(); }
+  else if(ev.target.id === "syPass"){ ev.preventDefault(); syncAuth(false); }
 });
 
 $("view").addEventListener("input", function(ev){
@@ -8052,6 +8445,70 @@ $("sheetBody").addEventListener("click", function(ev){
 
   if(ui.sheetMode() === "set" && editingSet){
     if(setSheetClick(t)) return;
+  }
+
+  /* --- which gym ------------------------------------------------------- */
+
+  if(ui.sheetMode() === "gym"){
+    hit = t.closest("[data-gym]");
+    if(hit){
+      switchGym(hit.dataset.gym);
+      return;
+    }
+
+    hit = t.closest("[data-gymedit]");
+    if(hit){
+      ui.gymEditSheet(hit.dataset.gymedit);
+      return;
+    }
+
+    if(t.closest("#gymAdd")){
+      var name = $("gymName").value.trim();
+      if(!name){
+        ui.toast("Give the gym a name first.");
+        return;
+      }
+      switchGym(store.addGym(name).id);
+      return;
+    }
+
+    if(t.closest("#gymNone")){
+      store.setGym("");
+      IL.plan.reseed();
+      ui.closeSheet();
+      ui.renderTrain();
+      ui.toast("No gym set — weights come from wherever you last trained.");
+    }
+    return;
+  }
+
+  if(ui.sheetMode() === "gymedit"){
+    hit = t.closest("#gymSave");
+    if(hit){
+      var renamed = store.renameGym(hit.dataset.gymid, $("gymRename").value);
+      if(!renamed){
+        ui.toast("Give it a name first.");
+        return;
+      }
+      ui.gymSheet();
+      if(view === "train") ui.renderTrain();
+      ui.toast("Renamed to " + renamed.name + ".");
+      return;
+    }
+
+    hit = t.closest("[data-gymdel]");
+    if(hit){
+      var gone = store.gymName(hit.dataset.gymdel);
+      if(confirm("Remove " + gone + "? Sessions you logged there stay in the log " +
+                 "exactly as they are — only the list forgets it.")){
+        store.removeGym(hit.dataset.gymdel);
+        IL.plan.reseed();
+        ui.gymSheet();
+        if(view === "train") ui.renderTrain();
+        ui.toast(gone + " removed.");
+      }
+    }
+    return;
   }
 
   /* --- marking a day off ------------------------------------------------ */

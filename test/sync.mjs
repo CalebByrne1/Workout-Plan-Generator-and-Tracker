@@ -24,6 +24,7 @@ const FakeSupabase = globalThis.FakeSupabase;
 const URL = "https://fhfpcknbivgdsefllloi.supabase.co";
 const KEY = "sb_publishable_hG3P3R3JKhwSLa6pPXjayQ_3kGAb8T1";
 const EMAIL = "caleb@example.com";
+const PASSWORD = "barbell123";
 
 const fake = new FakeSupabase({ url: URL, key: KEY });
 
@@ -104,11 +105,15 @@ function keyAgo(d, n) {
   return d.store.dayKey(t.getTime());
 }
 
-/* Resolves with the result of the sync that signing in kicks off. */
+/* Resolves with the result of the sync that signing in kicks off. The first
+   device to use an address creates the account; the rest sign in to it. */
 async function signIn(d, email = EMAIL) {
-  await d.sync.sendCode(email);
-  return d.sync.verifyCode(email, fake.codeFor(email));
+  return fake.userId(email)
+    ? d.sync.signIn(email, PASSWORD)
+    : d.sync.signUp(email, PASSWORD);
 }
+
+const hasTrainingIn = (data) => !!(data && ((data.history || []).length || (data.body || []).length));
 
 const requests = (method, path) => fake.requests.filter((r) => r.method === method && (!path || r.path === path)).length;
 
@@ -120,11 +125,8 @@ phone.store.setNutrition(keyAgo(phone, 1), { kcal: 2300, protein: 170 });
 eq("changes before signing in are marked as unsynced", phone.meta().dirty, true);
 eq("and nothing was sent — not signed in", fake.requests.length, 0);
 
-await phone.sync.sendCode(EMAIL);
-eq("the code request asks the link to come back to the app", fake.redirects[0],
-   "https://calebbyrne1.github.io/Workout-Plan-Generator-and-Tracker/");
-let res = await phone.sync.verifyCode(EMAIL, fake.codeFor(EMAIL));
-eq("signing in created the account's copy", res, "created");
+let res = await phone.sync.signUp(EMAIL, PASSWORD);
+eq("signing up created the account's copy", res, "created");
 const uid = fake.userId(EMAIL);
 ok("signed in", phone.sync.info().signedIn);
 eq("the email came back with the session", phone.sync.info().email, EMAIL);
@@ -351,35 +353,60 @@ phone.sync.signOut();
 await signIn(phone);
 
 /* ----------------------------------------------------------- sign-in paths */
-group("sign-in: codes, links, and what goes wrong");
+group("sign-in: passwords, links, and what goes wrong");
 const fresh = device(UA.windows);
-await fresh.sync.sendCode("third@example.com");
 let err = null;
-try { await fresh.sync.verifyCode("third@example.com", "000000"); } catch (e) { err = e; }
-ok("a wrong code is refused", !!err);
-eq("in plain words", fresh.sync.explain(err), "That code didn't work — it may have expired. Send a new one.");
+
+try { await fresh.sync.signIn("third@example.com", PASSWORD); } catch (e) { err = e; }
+ok("signing in to an account that doesn't exist is refused", !!err);
+ok("in plain words", /don't match an account/.test(fresh.sync.explain(err)), fresh.sync.explain(err));
 eq("not signed in", fresh.sync.info().signedIn, false);
 
-fake.acceptTypes = ["signup"];
-await fresh.sync.sendCode("third@example.com");
-await fresh.sync.verifyCode("third@example.com", " " + fake.codeFor("third@example.com").replace(/(\d{3})/, "$1 ") + " ");
-ok("an older server wanting a different type still signs in, spaces and all", fresh.sync.info().signedIn);
-fake.acceptTypes = ["email", "signup", "magiclink"];
-
-fake.rateLimited = true;
 err = null;
-try { await fresh.sync.sendCode("fourth@example.com"); } catch (e) { err = e; }
-ok("the email limit is explained", /limits how often/.test(fresh.sync.explain(err)), fresh.sync.explain(err));
-fake.rateLimited = false;
+try { await fresh.sync.signUp("third@example.com", "short"); } catch (e) { err = e; }
+ok("a too-short password is refused", /at least six/.test(fresh.sync.explain(err)), fresh.sync.explain(err));
 
+await fresh.sync.signUp("third@example.com", PASSWORD);
+ok("creating the account signs you straight in", fresh.sync.info().signedIn);
+
+err = null;
+try { await fresh.sync.signUp("third@example.com", PASSWORD); } catch (e) { err = e; }
+ok("creating it twice is explained", /already has an account/.test(fresh.sync.explain(err)),
+   fresh.sync.explain(err));
+
+fresh.sync.signOut();
+err = null;
+try { await fresh.sync.signIn("third@example.com", "wrong-password"); } catch (e) { err = e; }
+ok("a wrong password is refused", /don't match an account/.test(fresh.sync.explain(err)),
+   fresh.sync.explain(err));
+ok("and leaves you signed out", !fresh.sync.info().signedIn);
+ok("the right one gets back in", (await fresh.sync.signIn("third@example.com", PASSWORD)) !== "error");
+
+group("sign-in: when the project still confirms addresses");
+fake.confirmEmail = true;
+const unconfirmed = device(UA.windows);
+eq("creating an account says it needs confirming",
+   await unconfirmed.sync.signUp("fifth@example.com", PASSWORD), "confirm");
+eq("and you aren't signed in yet", unconfirmed.sync.info().signedIn, false);
+err = null;
+try { await unconfirmed.sync.signIn("fifth@example.com", PASSWORD); } catch (e) { err = e; }
+ok("signing in before confirming says which switch to flip",
+   /Confirm email/.test(unconfirmed.sync.explain(err)), unconfirmed.sync.explain(err));
+fake.confirm("fifth@example.com");
+ok("once confirmed it works", (await unconfirmed.sync.signIn("fifth@example.com", PASSWORD)) !== "error");
+fake.confirmEmail = false;
+
+group("failures people can act on");
+eq("the email limit", fresh.sync.explain({ status: 429 }),
+   "Supabase limits how often it sends sign-in emails. Wait a few minutes and try again.");
 fake.offline = true;
 err = null;
-try { await fresh.sync.sendCode("fourth@example.com"); } catch (e) { err = e; }
+try { await fresh.sync.signIn("third@example.com", PASSWORD); } catch (e) { err = e; }
 ok("no connection is explained", /Couldn't reach/.test(fresh.sync.explain(err)), fresh.sync.explain(err));
 fake.offline = false;
 
 /* A sign-in link opened in the same browser the app runs in. */
-fake.users["link@example.com"] = { id: "user-link", email: "link@example.com" };
+fake.addUser("link@example.com", PASSWORD);
 const s = fake._session(fake.users["link@example.com"]);
 const hash = "#access_token=" + s.access_token + "&expires_at=" + s.expires_at +
              "&expires_in=3600&refresh_token=" + s.refresh_token + "&token_type=bearer&type=magiclink";
@@ -414,6 +441,48 @@ res = await phone.sync.syncNow("test");
 eq("reported", res, "error");
 ok("saying why", /isn't a readable save/.test(phone.sync.info().message), phone.sync.info().message);
 eq("and this device's data is untouched", JSON.stringify(phone.store.state), before);
+
+group("an empty copy never quietly replaces a full one");
+
+/* The group above deliberately left an unreadable copy on the account. Put a
+   real one back: the phone still has its training, so a change plus a sync
+   overwrites the rubbish. */
+phone.store.addBodyweight(175, keyAgo(phone, 21));
+await phone.sync.syncNow("test");
+ok("the account is readable again", hasTrainingIn(fake.row(uid).data));
+
+/* A device that was syncing happily, then lost everything — a reset, the
+   wrong copy of the app, a cleared browser. It must not push that up. */
+const wiped = device(UA.windows);
+await signIn(wiped);
+await wiped.sync.syncNow("test");
+ok("it starts in step with the account", wiped.store.state.body.length > 0);
+
+wiped.store.reset();                       /* everything gone, locally */
+res = await wiped.sync.syncNow("test");
+eq("it stops and asks rather than pushing the emptiness", res, "choose");
+ok("the account still has the training", hasTrainingIn(fake.row(uid).data));
+eq("and the app was asked", wiped.events.choose.length, 1);
+
+res = await wiped.sync.resolveChoice("remote");
+eq("taking the account's copy puts it back", res, "pulled");
+ok("training restored", wiped.store.state.body.length > 0);
+
+/* The same guard when the account moved as well — newest-wins must not
+   hand the win to an empty copy. */
+await phone.sync.syncNow("test");
+phone.store.addBodyweight(169, keyAgo(phone, 22));
+await phone.sync.syncNow("test");
+wiped.store.reset();
+res = await wiped.sync.syncNow("test");
+eq("still asks", res, "choose");
+ok("and the account is untouched", hasTrainingIn(fake.row(uid).data));
+
+/* Saying "use this device's" is an explicit answer, and is honoured. */
+res = await wiped.sync.resolveChoice("local");
+eq("the empty copy goes up only when you say so", res, "pushed");
+ok("with the account's old copy kept as a snapshot here",
+   wiped.snaps.some((s) => /replaced by this device's on first sync/.test(s.reason)));
 
 /* ------------------------------------------------------------------- done */
 console.log("\n" + pass + " passed, " + fail + " failed");

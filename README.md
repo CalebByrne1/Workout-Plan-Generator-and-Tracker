@@ -32,6 +32,30 @@ used.
 Number fields start **empty**, not at `0`, with the zero shown as a
 placeholder. Tap and type; there is nothing to delete first.
 
+## Gyms
+
+The same lat pulldown is a different lift in two buildings — different
+pulleys, different cams, different stack — so "what did I lift last time" has
+to mean "last time **here**", or the app spends every session asking for
+weight that isn't there.
+
+Tap the **Gym** chip under the day's name to add a gym or switch to one. Then:
+
+- Every session records where it happened, and the log shows it.
+- **Working weights come from your history at the gym you're at.** Switching
+  gyms re-reads them; nothing in the log changes, only which part of it the
+  plan is reading.
+- Until you've done an exercise at this gym, the most recent number from
+  anywhere stands in — shown in italics with the gym named, because a weight
+  carried over from somewhere else is a guess, not a record.
+- Renaming a gym renames it in the sessions logged there. Removing one leaves
+  those sessions exactly as they are; only the list forgets it.
+- Sessions logged before you added any gyms aren't tied to a place, so they
+  stand in anywhere until you've logged that exercise at a gym.
+
+**Not at any of these today** covers a hotel or a friend's garage: no gym is
+set, and the numbers fall back to wherever you last trained.
+
 ## Dates and days off
 
 Every finished session is stamped with the day you finished it, and the Log
@@ -77,7 +101,10 @@ The third tab turns the log into four things worth looking at.
   amber for a day you trained (darker with more volume), a grey ring for a
   rest day, a red one for a missed day.
 
-Tap or drag across any chart to read off a specific day.
+**Tap any chart to read off a day, and it stays put** until you tap
+elsewhere — no holding your finger down, and no copy-and-paste callout
+appearing over the chart. With a mouse, hovering works as you'd expect and
+the reading snaps back to the latest point when the pointer leaves.
 
 ## Nutrition
 
@@ -468,11 +495,19 @@ weigh-ins, food, your own exercises — is on every device you sign in on.
 Nothing about using the app changes: it all still works offline, and each
 device catches up when it's back.
 
-**Signing in is by code.** Type your email, and a code arrives by email; type
-that into the app. It's a code rather than a link because on an iPhone an app
-added to the home screen doesn't share storage with Safari — a link would sign
-Safari in, not the app. (A link still works on a computer, where it opens in
-the same browser.)
+**Signing in is email and a password**, and nothing is emailed when you do
+it, so it all happens inside the app.
+
+That's deliberate. A sign-in **link** always opens the browser, and on an
+iPhone a home-screen app keeps storage of its own — so the link signs Safari
+in, and you find yourself staring at an empty log while your training sits
+safely in the app you didn't sign in to. A one-time **code** in the email
+would avoid that, but Supabase stopped letting new free projects edit the
+emails that would have to carry it (June 2026), so the code never arrives.
+
+A password sidesteps both. If a link does arrive some other way — confirming
+an address, say — the app still handles it, and warns you when it landed in
+Safari rather than the installed app.
 
 **How it behaves:**
 
@@ -504,22 +539,18 @@ stamps its time, which is how two devices writing at once are caught.
 
 1. **Run `supabase/schema.sql`** in the Supabase dashboard: SQL Editor → New
    query → paste the whole file → Run. It's safe to run again.
-2. **Put the code in the sign-in emails.** In Authentication, open the email
-   templates and add `{{ .Token }}` to both the **Magic link** and **Confirm
-   signup** templates — a first-time address gets the second one. For example:
+2. **Switch off "Confirm email"** in Authentication. Creating the account then
+   signs you straight in, with no email at all. Leave it on and Supabase emails
+   a confirmation link instead — which opens your browser, not the app — and
+   the app will tell you the address needs confirming before it can sign in.
+3. **Create the account on the device that has your training**, so that copy
+   becomes the account's. Every other device signs in to it afterwards.
+4. **Then switch off "Allow new users to sign up"**, also in Authentication.
+   Your own account keeps working everywhere; only new addresses are blocked,
+   so nobody who finds the site can create accounts on your project.
 
-   ```html
-   <h2>Your Iron Ledger sign-in code</h2>
-   <p>Type this into the app:</p>
-   <p style="font-size:28px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
-   <p>Or, on a computer, <a href="{{ .ConfirmationURL }}">sign in with this link</a>.</p>
-   ```
-
-3. **Set the Site URL** (Authentication → URL Configuration) to where the app
-   is hosted, so the link in the email comes back to it.
-
-Supabase's built-in email sender only sends a few emails an hour — plenty for
-one person; if you hit it, the app says so, and it clears in a few minutes.
+None of this involves email templates, which is the point: new free Supabase
+projects can't edit them.
 
 ## Getting your data off the phone
 

@@ -4,6 +4,8 @@
    Implements exactly the slice of Supabase that js/sync.js uses, with the
    same shapes on the wire:
 
+     POST  /auth/v1/signup     create an account with a password
+     POST  /auth/v1/token?grant_type=password
      POST  /auth/v1/otp        send a sign-in code (recorded, not emailed)
      POST  /auth/v1/verify     trade the code for a session
      POST  /auth/v1/token      refresh — rotating, one-time refresh tokens
@@ -40,6 +42,7 @@ function FakeSupabase(opts){
   this.offline = false;
   this.rateLimited = false;
   this.noTable = false;
+  this.confirmEmail = false;     /* Supabase's "Confirm email" switch */
   this.redirects = [];
 
   this._n = 0;
@@ -108,6 +111,16 @@ P.writeAs = function(uid, data, device){
 
 P.userId = function(email){ return this.users[email] && this.users[email].id; };
 
+/* A ready-made account, for tests that don't care about signing up. */
+P.addUser = function(email, password){
+  this.users[email] = { id:this._id("user-"), email:email, password:password, confirmed:true };
+  return this.users[email];
+};
+
+P.confirm = function(email){
+  if(this.users[email]) this.users[email].confirmed = true;
+};
+
 /* The wire ----------------------------------------------------------------- */
 
 function respond(status, body){
@@ -161,6 +174,39 @@ P.fetch = function(url, init){
   if(headers.apikey !== this.key) return respond(401, { message:"Invalid API key" });
 
   /* ------------------------------------------------------------ auth */
+
+  if(path === "/auth/v1/signup" && method === "POST"){
+    if(!body || !body.email || !body.password) return respond(400, { msg:"email and password required" });
+    if(String(body.password).length < 6){
+      return respond(422, { code:"weak_password", msg:"Password should be at least 6 characters." });
+    }
+    if(this.users[body.email]){
+      return respond(422, { code:"user_already_exists", msg:"User already registered" });
+    }
+
+    this.users[body.email] = {
+      id: this._id("user-"),
+      email: body.email,
+      password: body.password,
+      confirmed: !this.confirmEmail
+    };
+    if(this.confirmEmail){
+      /* Supabase answers with a user and no session until it's confirmed. */
+      return respond(200, { id:this.users[body.email].id, email:body.email, aud:"authenticated" });
+    }
+    return respond(200, this._session(this.users[body.email]));
+  }
+
+  if(path === "/auth/v1/token" && method === "POST" && query.grant_type === "password"){
+    var who = this.users[body.email];
+    if(!who || who.password !== body.password){
+      return respond(400, { code:"invalid_credentials", msg:"Invalid login credentials" });
+    }
+    if(!who.confirmed){
+      return respond(400, { code:"email_not_confirmed", msg:"Email not confirmed" });
+    }
+    return respond(200, this._session(who));
+  }
 
   if(path === "/auth/v1/otp" && method === "POST"){
     if(this.rateLimited) return respond(429, { code:"over_email_send_rate_limit", msg:"email rate limit exceeded" });

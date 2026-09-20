@@ -158,9 +158,10 @@ function inUse(exceptUid){
   return used;
 }
 
+/* Deliberately gym-blind, unlike the progression rules: rotation is about
+   what you have and haven't done lately, wherever you did it. */
 function lastTouched(name){
-  var found = store.lastEntryFor(name);
-  return found ? found.at : 0;
+  return store.lastTouchedAt(name);
 }
 
 /* The exercise this slot should hand over to, or "" for "leave it". */

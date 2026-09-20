@@ -535,6 +535,105 @@ both = store.tdee();
 ok("more activity shows up as a higher maintenance", both.change > 100,
    both.weekAgo && both.weekAgo.tdee + " -> " + both.now.tdee);
 
+/* ------------------------------------------------------------------ gyms */
+group("gyms: the same machine in two buildings");
+store.reset();
+/* Variety off: this group is about which gym's numbers get used, and a slot
+   rotating to another exercise mid-test would be measuring something else. */
+store.state.prefs.variety = "off";
+
+const west = store.addGym("Westside");
+const town = store.addGym("Downtown");
+eq("two gyms", store.gyms().length, 2);
+eq("the same name twice is still one gym", store.addGym("  westside "), west);
+eq("a blank name isn't a gym", store.addGym("   "), null);
+eq("none chosen yet", store.currentGym(), null);
+eq("choosing one", store.setGym(west.id).name, "Westside");
+
+/* One exercise, one set, at whichever gym is current. */
+function trainAt(gymId, name, weight, reps) {
+  store.setGym(gymId);
+  const day = store.state.days[0];
+  day.ex[0].name = name;
+  day.ex[0].sets = 1;
+  day.ex[0].reps = "6-8";
+  day.ex[0].log = [[{ w: weight, r: reps }]];
+  store.state.day = 0;
+  return store.finishSession();
+}
+
+const PULL = "Cable Lat Pulldown";
+trainAt(west.id, PULL, 120, 8);
+eq("the session remembers where it happened", store.state.history[0].gymName, "Westside");
+
+store.setGym(town.id);
+let seen = store.lastEntryFor(PULL);
+eq("with nothing logged here, the other gym's number stands in", seen.entry.topWeight, 120);
+eq("and says it's from elsewhere", seen.elsewhere, true);
+eq("naming which elsewhere", seen.gymName, "Westside");
+
+trainAt(town.id, PULL, 100, 8);
+seen = store.lastEntryFor(PULL);
+eq("once you've lifted it here, here is what counts", seen.entry.topWeight, 100);
+eq("no longer a stand-in", seen.elsewhere, false);
+
+store.setGym(west.id);
+eq("and the other gym still has its own number", store.lastEntryFor(PULL).entry.topWeight, 120);
+eq("not flagged as elsewhere", store.lastEntryFor(PULL).elsewhere, false);
+
+eq("the 'last' line follows the same rule", store.lastPerformed()[PULL].topWeight, 120);
+store.setGym(town.id);
+eq("at the other gym", store.lastPerformed()[PULL].topWeight, 100);
+
+const third = store.addGym("Hotel");
+store.setGym(third.id);
+eq("somewhere new falls back to the most recent anywhere", store.lastPerformed()[PULL].topWeight, 100);
+eq("flagged", store.lastPerformed()[PULL].elsewhere, true);
+
+eq("rotation is gym-blind: it asks when, not where",
+   store.lastTouchedAt(PULL), store.state.history[store.state.history.length - 1].at);
+
+group("gyms: the plan follows you");
+store.setGym(west.id);
+plan.reseed();
+eq("at Westside the working weight comes from Westside", store.state.days[0].ex[0].weight, 125);
+store.setGym(town.id);
+plan.reseed();
+eq("at Downtown it comes from Downtown", store.state.days[0].ex[0].weight, 105);
+
+group("gyms: renaming and removing");
+store.renameGym(west.id, "Westside Barbell");
+eq("the list is renamed", store.gymById(west.id).name, "Westside Barbell");
+eq("and so are the sessions logged there", store.state.history[0].gymName, "Westside Barbell");
+
+const before = store.state.history.length;
+store.setGym(town.id);
+store.removeGym(town.id);
+eq("removing it leaves the sessions alone", store.state.history.length, before);
+eq("their name survives the gym", store.state.history[1].gymName, "Downtown");
+eq("and you're no longer anywhere", store.state.gym, "");
+eq("history there still counts", store.lastEntryFor(PULL).entry.topWeight, 100);
+
+group("gyms: in the CSV and through a migration");
+const gymCsv = store.toCSV().split("\r\n");
+eq("a gym column, next to the day", gymCsv[0].split(",")[3], "gym");
+ok("and the sessions carry it", gymCsv.some((l) => l.includes(",Westside Barbell,")),
+   gymCsv.slice(1, 3).join(" | "));
+
+const old5 = JSON.parse(store.toBackup());
+old5.schema = 5;
+delete old5.gyms;
+delete old5.gym;
+store.restore(JSON.stringify(old5));
+eq("a save from before gyms migrates", store.state.schema, CURRENT);
+eq("with an empty list", store.state.gyms, []);
+eq("and nowhere selected", store.state.gym, "");
+
+store.state.gyms = [{ id: "g-ghost", name: "Ghost" }];
+store.state.gym = "g-nope";
+store.restore(store.toBackup());
+eq("a current gym that no longer exists is dropped", store.state.gym, "");
+
 /* ------------------------------------------ the vault, with no IndexedDB */
 group("vault degrades quietly with no IndexedDB");
 const results = await Promise.all([

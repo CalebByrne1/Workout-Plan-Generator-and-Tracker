@@ -12,6 +12,8 @@
        history: [ session | skip ]        always sorted oldest → newest
        body:    [ { at, w } ]             bodyweight log, one entry per day
        custom:  [ libEntry ]              exercises you added on the phone
+       gyms:    [ { id, name } ]          the places you train
+       gym:     id of the one you're at now, or ""
        nutrition: { days:{ "YYYY-MM-DD": food }, goals:[ goal ] }
        prefs:   { unit, step, autoRest, restCompound, restOther,
                   autoProgress, variety, lastExport }
@@ -49,7 +51,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 5;
+var SCHEMA = 6;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -317,6 +319,8 @@ function seed(){
     history: [],
     body: [],
     custom: [],
+    gyms: [],
+    gym: "",
     nutrition: { days:{}, goals:[] },
     prefs: {
       unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
@@ -390,6 +394,16 @@ function migrateToV5(saved){
   return saved;
 }
 
+/* schema 5 didn't know where you trained. Nothing to convert: sessions
+   already logged simply have no gym against them, which is honest — they
+   were logged before the app asked. */
+function migrateToV6(saved){
+  saved.gyms = saved.gyms || [];
+  saved.gym = saved.gym || "";
+  saved.schema = 6;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
@@ -405,6 +419,12 @@ function normalize(saved){
   if(saved.schema < 3) migrateToV3(saved);
   if(saved.schema < 4) migrateToV4(saved);
   if(saved.schema < 5) migrateToV5(saved);
+  if(saved.schema < 6) migrateToV6(saved);
+
+  saved.gyms = Array.isArray(saved.gyms) ? saved.gyms : [];
+  if(typeof saved.gym !== "string") saved.gym = "";
+  /* A current gym that has since been deleted is no gym at all. */
+  if(saved.gym && !saved.gyms.some(function(g){ return g.id === saved.gym; })) saved.gym = "";
 
   /* Whatever arrived, leave nutrition in exactly one shape: days as a map,
      goals as a list in date order. A hand-edited backup can't break it. */
@@ -507,39 +527,95 @@ function exerciseVolume(e){
 }
 
 /* Most recent logged performance per movement, for the "last ..." line.
-   Walks history newest-first and keeps the first hit for each name. */
+   Gym-aware in the same way as lastEntryFor: what you did HERE, falling
+   back to anywhere, flagged so the row can say which. */
 function lastPerformed(){
-  var map = {};
+  var here = {};
+  var anywhere = {};
+  var at = state.gym;
+
   for(var i = state.history.length - 1; i >= 0; i--){
     var h = state.history[i];
+    if(isSkip(h)) continue;
+
     for(var j = 0; j < h.entries.length; j++){
       var en = h.entries[j];
-      if(!map[en.name] && en.completed > 0){
-        map[en.name] = {
-          topWeight: en.topWeight || 0,
-          logged: en.logged || [],
-          unit: h.unit || "lb"
-        };
-      }
+      if(!en.completed) continue;
+
+      var seen = {
+        topWeight: en.topWeight || 0,
+        logged: en.logged || [],
+        unit: h.unit || "lb",
+        gymId: h.gymId || "",
+        gymName: h.gymName || "",
+        elsewhere: false
+      };
+      if(at && h.gymId === at && !here[en.name]) here[en.name] = seen;
+      if(!anywhere[en.name]) anywhere[en.name] = seen;
     }
   }
+
+  var map = {};
+  Object.keys(anywhere).forEach(function(name){
+    if(here[name]) map[name] = here[name];
+    else{
+      map[name] = anywhere[name];
+      /* Only "elsewhere" if you're somewhere in particular and it wasn't
+         here. With no gym set, a record is just a record. */
+      map[name].elsewhere = !!(at && map[name].gymId !== at);
+    }
+  });
   return map;
 }
 
 /* The most recent session in which a movement was actually worked, handed
    over whole — sets planned, target, every rep of every set. This is what
-   the progression rules read to decide the next load. */
+   the progression rules read to decide the next load.
+
+   Prefers the gym you're at. The elsewhere flag tells the caller the numbers came
+   from a different building, which is worth saying out loud before anyone
+   plans a personal best on them. */
 function lastEntryFor(name){
+  var at = state.gym;
+  var fallback = null;
+
+  for(var i = state.history.length - 1; i >= 0; i--){
+    var h = state.history[i];
+    if(isSkip(h)) continue;
+
+    for(var j = 0; j < h.entries.length; j++){
+      var en = h.entries[j];
+      if(en.name !== name || !en.completed) continue;
+
+      var hit = {
+        at: h.at,
+        unit: h.unit || "lb",
+        entry: en,
+        gymId: h.gymId || "",
+        gymName: h.gymName || "",
+        elsewhere: false
+      };
+      if(!at || h.gymId === at) return hit;
+      if(!fallback){
+        fallback = hit;
+        fallback.elsewhere = true;
+      }
+    }
+  }
+  return fallback;
+}
+
+/* When a movement was last done ANYWHERE. Rotation asks this: variety is
+   about what you have and haven't trained lately, not about buildings. */
+function lastTouchedAt(name){
   for(var i = state.history.length - 1; i >= 0; i--){
     var h = state.history[i];
     if(isSkip(h)) continue;
     for(var j = 0; j < h.entries.length; j++){
-      if(h.entries[j].name === name && h.entries[j].completed > 0){
-        return { at:h.at, unit:h.unit || "lb", entry:h.entries[j] };
-      }
+      if(h.entries[j].name === name && h.entries[j].completed > 0) return h.at;
     }
   }
-  return null;
+  return 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -674,6 +750,83 @@ function bodyweightAt(ts){
     else break;
   }
   return best || state.body[0].w;
+}
+
+/* --------------------------------------------------------------------------
+   Gyms
+
+   The same lat pulldown is a different lift in two buildings: different
+   pulleys, different cams, different stack. So "what did I lift last time"
+   has to mean "last time HERE", or the app spends every session telling you
+   to add weight you can't add.
+
+   A gym is just a name. The work is in lastEntryFor(): it prefers the gym
+   you're standing in, and only falls back to another one when you've never
+   done that movement here — and says so when it does, because a weight
+   carried over from somewhere else is a guess, not a record.
+   -------------------------------------------------------------------------- */
+
+function gyms(){ return state.gyms; }
+
+function currentGym(){
+  var id = state.gym;
+  return id ? (gymById(id) || null) : null;
+}
+
+function gymById(id){
+  var found = null;
+  state.gyms.forEach(function(g){ if(g.id === id) found = g; });
+  return found;
+}
+
+function gymName(id){
+  var g = gymById(id);
+  return g ? g.name : "";
+}
+
+function addGym(name){
+  var clean = String(name || "").trim().replace(/\s+/g, " ");
+  if(!clean) return null;
+
+  var existing = null;
+  state.gyms.forEach(function(g){
+    if(g.name.toLowerCase() === clean.toLowerCase()) existing = g;
+  });
+  if(existing) return existing;
+
+  var gym = { id: uid("g"), name: clean };
+  state.gyms.push(gym);
+  save();
+  return gym;
+}
+
+function renameGym(id, name){
+  var gym = gymById(id);
+  var clean = String(name || "").trim().replace(/\s+/g, " ");
+  if(!gym || !clean) return null;
+  gym.name = clean;
+  /* Sessions keep the name they were logged under; update those too, so the
+     log doesn't show two names for one place. */
+  state.history.forEach(function(h){ if(h.gymId === id) h.gymName = clean; });
+  save();
+  return gym;
+}
+
+/* Forgetting a gym leaves every session that happened there alone — they
+   keep the name they were logged with. Only the list forgets it. */
+function removeGym(id){
+  var before = state.gyms.length;
+  state.gyms = state.gyms.filter(function(g){ return g.id !== id; });
+  if(state.gyms.length === before) return false;
+  if(state.gym === id) state.gym = "";
+  save();
+  return true;
+}
+
+function setGym(id){
+  state.gym = gymById(id) ? id : "";
+  save();
+  return currentGym();
 }
 
 /* --------------------------------------------------------------------------
@@ -1278,12 +1431,15 @@ function finishSession(){
     };
   });
 
+  var here = currentGym();
   var record = {
     id: uid("h"),
     at: Date.now(),
     kind: "session",
     dayId: day.id,
     dayName: day.name,
+    gymId: here ? here.id : "",
+    gymName: here ? here.name : "",
     notes: day.notes,
     unit: state.prefs.unit,
     volume: Math.round(volume),
@@ -1326,7 +1482,7 @@ function csvCell(v){
    Skipped days get a row of their own so the gaps are explicit. */
 function toCSV(){
   var header = [
-    "date","time","day","type","exercise","set","segment",
+    "date","time","day","gym","type","exercise","set","segment",
     "weight","reps","unit","volume","bodyweight","notes",
     "calories","calorie_target","protein_g","fiber_g"
   ];
@@ -1346,20 +1502,21 @@ function toCSV(){
     }
 
     if(isSkip(h)){
-      rows.push([date, time, h.dayName, h.skipType, "", "", "", "", "", "", 0, bw, note()]);
+      rows.push([date, time, h.dayName, h.gymName || "", h.skipType,
+                 "", "", "", "", "", "", 0, bw, note()]);
       return;
     }
 
     h.entries.forEach(function(en){
       if(!en.logged || !en.logged.length){
-        rows.push([date, time, h.dayName, "not done", en.name, "", "", "", "",
-                   h.unit || "lb", 0, bw, note()]);
+        rows.push([date, time, h.dayName, h.gymName || "", "not done", en.name,
+                   "", "", "", "", h.unit || "lb", 0, bw, note()]);
         return;
       }
       en.logged.forEach(function(item){
         item.segs.forEach(function(s, i){
           rows.push([
-            date, time, h.dayName, "set", en.name, item.set, i + 1,
+            date, time, h.dayName, h.gymName || "", "set", en.name, item.set, i + 1,
             s.w || 0, s.r || 0, h.unit || "lb",
             Math.round((s.w || 0) * (s.r || 0)), bw, note()
           ]);
@@ -1370,7 +1527,7 @@ function toCSV(){
 
   /* Weigh-ins ride along in the same file, so one export is the whole story. */
   state.body.forEach(function(b){
-    rows.push([dayKey(b.at), "", "", "weigh-in", "", "", "", b.w, "",
+    rows.push([dayKey(b.at), "", "", "", "weigh-in", "", "", "", b.w, "",
                state.prefs.unit, "", b.w, ""]);
   });
 
@@ -1379,7 +1536,7 @@ function toCSV(){
   nutritionKeys().slice().reverse().forEach(function(key){
     var food = nutritionOn(key);
     var goal = goalOn(key);
-    rows.push([key, "", "", "nutrition", "", "", "", "", "", "", "", "", "",
+    rows.push([key, "", "", "", "nutrition", "", "", "", "", "", "", "", "", "",
                food.kcal, goal ? goal.kcal : "", food.protein, food.fiber]);
   });
 
@@ -1446,6 +1603,14 @@ IL.store = {
   isLogged: isLogged,
 
   currentDay: currentDay,
+  gyms: gyms,
+  currentGym: currentGym,
+  gymById: gymById,
+  gymName: gymName,
+  addGym: addGym,
+  renameGym: renameGym,
+  removeGym: removeGym,
+  setGym: setGym,
   customLib: customLib,
   libLookup: libLookup,
   libAll: libAll,
@@ -1481,6 +1646,7 @@ IL.store = {
   isSkip: isSkip,
   sortHistory: sortHistory,
   lastEntryFor: lastEntryFor,
+  lastTouchedAt: lastTouchedAt,
   sessionsOnly: sessionsOnly,
   skipsOnly: skipsOnly,
   findEntry: findEntry,

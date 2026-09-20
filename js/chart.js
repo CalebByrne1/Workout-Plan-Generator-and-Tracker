@@ -341,9 +341,35 @@ function wire(host, pts, X, Y, cfg, band){
     show(best);
   }
 
-  svg.addEventListener("pointermove", at);
-  svg.addEventListener("pointerdown", at);
-  svg.addEventListener("pointerleave", reset);
+  /* A finger and a mouse want different things here.
+
+     With a mouse, the crosshair follows the pointer and snaps back to the
+     latest point when it leaves — hovering is free, so nothing needs to stay.
+
+     With a finger it must STAY where you put it. Holding still to keep a day
+     on screen is both tiring and, on iOS, a long press: it raises the
+     copy/paste callout over the chart. So a touch reads as "show me this
+     day", and it stays shown until the next tap. */
+  var touching = false;
+
+  svg.addEventListener("pointerdown", function(ev){
+    touching = ev.pointerType !== "mouse";
+    at(ev);
+    /* Stops the long-press selection and callout from ever starting. */
+    if(touching && ev.cancelable) ev.preventDefault();
+  });
+
+  svg.addEventListener("pointermove", function(ev){
+    /* Dragging across still scrubs; a touch that isn't down doesn't. */
+    if(ev.pointerType === "mouse" || ev.buttons || ev.pressure > 0) at(ev);
+  });
+
+  svg.addEventListener("pointerleave", function(ev){
+    if(ev.pointerType === "mouse") reset();
+  });
+
+  /* Long-press on the chart never means "select" or "share". */
+  svg.addEventListener("contextmenu", function(ev){ ev.preventDefault(); });
 }
 
 IL.chart = { draw: draw, height: H };

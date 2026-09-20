@@ -19,11 +19,17 @@
    so the app still needs nothing but a browser. The server side is in
    supabase/schema.sql.
 
-   SIGN-IN IS BY CODE, NOT LINK. The email carries a one-time code you type
-   into the app. A link would open in the phone's browser, and on an iPhone a
-   home-screen app doesn't share storage with Safari: you'd end up signed in
-   to Safari, not to the app. A link still works if it happens to open in the
-   same browser the app is running in, so both are handled.
+   SIGN-IN IS EMAIL AND PASSWORD, AND THAT IS ON PURPOSE.
+
+   Nothing is emailed when you sign in, so the whole thing happens inside the
+   app. The alternatives both break on a phone: a sign-in LINK always opens
+   the browser, and on an iPhone a home-screen app has storage of its own, so
+   you end up signed in to Safari looking at an empty log. A CODE would be
+   fine, but Supabase stopped letting new free projects edit the emails that
+   would have to carry it.
+
+   A link arriving some other way (confirming an address, say) is still
+   handled, and warns if it landed outside the app.
    ========================================================================== */
 
 window.IL = window.IL || {};
@@ -158,6 +164,14 @@ function explain(err){
     return "The sync table doesn't exist yet. Run supabase/schema.sql in the Supabase SQL editor.";
   if(code === "42501" || err.status === 403)
     return "The account's database refused this. Check that supabase/schema.sql has been run.";
+  if(code === "invalid_credentials" || /invalid login credentials/i.test(err.message))
+    return "That email and password don't match an account. Check them, or create the account first.";
+  if(code === "user_already_exists" || /already registered|already been registered/i.test(err.message))
+    return "That email already has an account — sign in instead.";
+  if(code === "weak_password" || /password should be at least/i.test(err.message))
+    return "That password is too short — use at least six characters.";
+  if(code === "email_not_confirmed" || /email not confirmed/i.test(err.message))
+    return "That address hasn't been confirmed yet. Switch off \"Confirm email\" in Supabase, or use the link it emailed you.";
   return err.message || "Couldn't sync.";
 }
 
@@ -215,41 +229,52 @@ function redirectTo(){
     : "";
 }
 
-function sendCode(email){
-  var back = redirectTo();
-  return api("/auth/v1/otp" + (back ? "?redirect_to=" + encodeURIComponent(back) : ""), {
+/* Both of these resolve once the first sync after signing in has finished,
+   with how it went ("created", "pulled", "choose"…), so the app can say what
+   actually happened rather than guess. */
+function afterAuth(body){
+  adopt(body);
+  setStatus("idle");
+  return syncNow("sign-in");
+}
+
+function signIn(email, password){
+  return api("/auth/v1/token?grant_type=password", {
     method: "POST",
-    body: { email: email, create_user: true }
+    body: { email: email, password: password }
+  }).then(afterAuth);
+}
+
+/* A new account. If the project still has email confirmation switched on,
+   Supabase answers with a user and no session — there is nothing to sign in
+   with until the address is confirmed, so say so rather than pretending. */
+function signUp(email, password){
+  var back = redirectTo();
+  return api("/auth/v1/signup" + (back ? "?redirect_to=" + encodeURIComponent(back) : ""), {
+    method: "POST",
+    body: { email: email, password: password }
+  }).then(function(body){
+    if(!body || !body.access_token) return "confirm";
+    return afterAuth(body);
   });
 }
 
-/* A first-time address gets a sign-up email and a returning one a sign-in
-   email, and older servers want the matching type when the code comes back.
-   "email" covers both on current Supabase; the others are the fallback. */
-function verifyCode(email, code){
-  var types = ["email", "signup", "magiclink"];
-  var token = String(code).replace(/\s+/g, "");
+/* --------------------------------------------------------------------------
+   Which copy of the app is this?
 
-  function attempt(i){
-    return api("/auth/v1/verify", {
-      method: "POST",
-      body: { type: types[i], email: email, token: token }
-    }).catch(function(err){
-      if(i + 1 < types.length && (err.status === 400 || err.status === 401 || err.status === 403)){
-        return attempt(i + 1).catch(function(){ throw err; });   /* report the first failure */
-      }
-      throw err;
-    });
-  }
+   On an iPhone the home-screen app and Safari keep separate storage, as if
+   they were two phones. Signing in on the wrong one is how you end up
+   staring at an empty log, so the app can tell you which one you're in.
+   -------------------------------------------------------------------------- */
+function inBrowserNotApp(){
+  var ua = navigator.userAgent || "";
+  var iOS = /iPad|iPhone|iPod/.test(ua) ||
+            (/Macintosh/.test(ua) && typeof document !== "undefined" && "ontouchend" in document);
+  if(!iOS) return false;
 
-  /* Resolves once the first sync after signing in has finished, with how
-     it went ("created", "pulled", "choose"…) — so the app can say what just
-     happened rather than guess. */
-  return attempt(0).then(function(body){
-    adopt(body);
-    setStatus("idle");
-    return syncNow("sign-in");
-  });
+  if(navigator.standalone === true) return false;
+  if(typeof matchMedia === "function" && matchMedia("(display-mode: standalone)").matches) return false;
+  return true;
 }
 
 /* A magic link opened in the same browser lands here with the session in the
@@ -524,6 +549,20 @@ function pass(depth){
         saveMeta({ lastSync: Date.now() });
         return "unchanged";
       }
+
+      /* Pushing an empty log over an account that has training in it is
+         almost always a mistake — the wrong copy of the app, a reset that
+         wasn't meant, a fresh browser. Worth the extra fetch to check, and
+         worth asking before doing it. */
+      if(!hasTraining(store.state)){
+        return readRow(true).then(function(row){
+          if(row && hasTraining(row.data)) return askWhichCopy(row);
+          return sendLocal(head.rev).then(function(sent){
+            return sent ? "pushed" : pass(depth + 1);
+          });
+        });
+      }
+
       return sendLocal(head.rev).then(function(sent){
         return sent ? "pushed" : pass(depth + 1);
       });
@@ -553,6 +592,13 @@ function pass(depth){
 function bothChanged(row, depth){
   var theirs = Date.parse(row.updated_at) || 0;
 
+  /* Newest-wins is fine between two real logs. It is not fine when the newer
+     one is empty: that isn't a change of mind, it's a mistake about to be
+     copied everywhere. Ask instead. */
+  if(!hasTraining(store.state) && hasTraining(row.data)){
+    return askWhichCopy(row);
+  }
+
   if(theirs > meta.edited){
     return takeRemote(row, "this device's copy — replaced by a newer one from " +
                            (row.device || "another device"), true)
@@ -574,6 +620,21 @@ function bothChanged(row, depth){
     if(hooks.conflict) hooks.conflict({ kept: "local", device: row.device });
     return "conflict-local";
   });
+}
+
+/* Put the question to the person, and stop until they answer. Raised on a
+   first link with training on both sides, and any time an empty copy is
+   about to replace one that isn't. */
+function askWhichCopy(row){
+  pendingChoice = {
+    row: row,
+    local: summarize(store.state),
+    remote: summarize(row.data),
+    remoteDevice: row.device || ""
+  };
+  setStatus("choose");
+  if(hooks.choose) hooks.choose(pendingChoice);
+  return Promise.resolve("choose");
 }
 
 /* The first time this device meets this account. If only one side has any
@@ -598,15 +659,7 @@ function firstLink(row, depth){
     });
   }
 
-  pendingChoice = {
-    row: row,
-    local: summarize(store.state),
-    remote: summarize(row.data),
-    remoteDevice: row.device || ""
-  };
-  setStatus("choose");
-  if(hooks.choose) hooks.choose(pendingChoice);
-  return Promise.resolve("choose");
+  return askWhichCopy(row);
 }
 
 /* The answer to "which do you keep?". The one not kept goes into a snapshot
@@ -751,8 +804,9 @@ IL.sync = {
   info: info,
   onChange: onChange,
   explain: explain,
-  sendCode: sendCode,
-  verifyCode: verifyCode,
+  signIn: signIn,
+  signUp: signUp,
+  inBrowserNotApp: inBrowserNotApp,
   signOut: signOut,
   syncNow: syncNow,
   resolveChoice: resolveChoice,

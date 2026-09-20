@@ -600,6 +600,105 @@ step(function(){
   click("#sheetClose");
 });
 
+/* ------------------------------------------------------------------ gyms */
+step(function(){
+  head("gyms: none set");
+  click("#tabTrain");
+  ok("the day offers to set one", !!$("gymPick"));
+  ok("saying it isn't set yet", /Set gym/.test($("gymPick").textContent), $("gymPick").textContent);
+  click("#gymPick");
+});
+
+step(function(){
+  eq("the gym sheet opens", $("sheet").dataset.mode, "gym");
+  ok("with nothing listed yet", qa(".gymrow-item").length === 0);
+  $("gymName").value = "Westside";
+  click("#gymAdd");
+  return wait(120);
+});
+
+step(function(){
+  eq("the gym is added and you're at it", IL.store.currentGym().name, "Westside");
+  ok("the chip says so", /Westside/.test($("gymPick").textContent), $("gymPick").textContent);
+  ok("the sheet closed", !$("sheet").classList.contains("open"));
+
+  /* A session at Westside, so there's something to carry between gyms.
+     Variety off: a slot rotating to another exercise would be a different
+     test, and finishing moves the rotation on, so remember which day. */
+  IL.store.state.prefs.variety = "off";
+  var day = IL.store.currentDay();
+  day.ex[0].sets = 1;
+  day.ex[0].reps = "6-8";
+  day.ex[0].log = [[{ w: 120, r: 8 }]];
+  stash.pulldown = day.ex[0].name;
+  stash.gymDay = IL.store.state.day;
+  click("#finish");
+  return wait(200);
+});
+
+step(function(){
+  head("gyms: a second gym has its own weights");
+  var logged = IL.store.state.history.filter(function(h){ return h.kind !== "skip"; }).slice(-1)[0];
+  eq("the session recorded where it happened", logged.gymName, "Westside");
+
+  click("#tabTrain");
+  click("#gymPick");
+  return wait(120);
+});
+
+step(function(){
+  eq("Westside is listed as where you are", qa(".gymrow-item.here").length, 1);
+  $("gymName").value = "Downtown";
+  click("#gymAdd");
+  return wait(150);
+});
+
+step(function(){
+  eq("now at Downtown", IL.store.currentGym().name, "Downtown");
+  /* Finishing moved the rotation on, so go back to the day that session
+     came from before looking for its exercise. */
+  click(qa("#rail button")[stash.gymDay]);
+  return wait(120);
+});
+
+step(function(){
+  var row = qa(".ex").filter(function(el){
+    return el.querySelector("h3").textContent === stash.pulldown;
+  })[0];
+  ok("the exercise trained at Westside is on the day", !!row, stash.pulldown +
+     " | " + qa(".ex h3").map(function(h){ return h.textContent; }).join(", "));
+  if(!row) return;
+
+  var last = row.querySelector(".last");
+  ok("its last-time line is there", !!last, row.textContent.slice(0, 80));
+  ok("marked as coming from the other gym", !!row.querySelector(".last.away"),
+     last && last.textContent);
+  ok("and it names which", /Westside/.test(last ? last.textContent : ""),
+     last && last.textContent);
+});
+
+step(function(){
+  head("gyms: renaming keeps the log in step");
+  click("#gymPick");
+  return wait(120);
+});
+
+step(function(){
+  click(qa("[data-gymedit]")[0]);
+  return wait(120);
+});
+
+step(function(){
+  eq("the edit sheet opens", $("sheet").dataset.mode, "gymedit");
+  $("gymRename").value = "Westside Barbell";
+  click("#gymSave");
+  return wait(150).then(function(){
+    var logged = IL.store.state.history.filter(function(h){ return h.gymName; })[0];
+    eq("the session's gym name followed", logged.gymName, "Westside Barbell");
+    click("#sheetClose");
+  });
+});
+
 /* ------------------------------------------------------------- progress */
 step(function(){
   head("progress tab");
@@ -607,6 +706,49 @@ step(function(){
   ok("progress rendered", /Strength trend/.test($("view").textContent));
   ok("charts drawn", qa(".chart").length >= 1, qa(".chart").length);
   ok("calendar drawn", qa(".cal-c").length > 60, qa(".cal-c").length);
+});
+
+step(function(){
+  head("charts: a tap stays put");
+  click("#tabProgress");
+  return wait(150);
+});
+
+step(function(){
+  var svg = q("#chFood .chart") || q(".chart");
+  ok("there's a chart to read", !!svg);
+  if(!svg) return;
+
+  var box = svg.getBoundingClientRect();
+  var host = svg.closest(".chart-host");
+  var before = host.querySelector("[data-read] b").textContent;
+
+  function poke(type, x, opts){
+    var ev = new PointerEvent(type, Object.assign({
+      bubbles: true, cancelable: true, pointerType: "touch",
+      clientX: box.left + x, clientY: box.top + box.height / 2
+    }, opts || {}));
+    svg.dispatchEvent(ev);
+    return ev;
+  }
+
+  var down = poke("pointerdown", box.width * 0.25);
+  var after = host.querySelector("[data-read] b").textContent;
+  ok("tapping a day reads it out", after !== before || !!host.querySelector("[data-cross]:not([hidden])"),
+     before + " -> " + after);
+  ok("and the tap is claimed, so no text selection starts", down.defaultPrevented);
+
+  /* Lift the finger: on a touch screen the reading must stay. */
+  poke("pointerup", box.width * 0.25);
+  poke("pointerleave", box.width * 0.25);
+  eq("it stays after lifting your finger", host.querySelector("[data-read] b").textContent, after);
+
+  var menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+  svg.dispatchEvent(menu);
+  ok("a long press can't raise the copy menu", menu.defaultPrevented);
+
+  ok("the chart isn't selectable text", getComputedStyle(host).webkitUserSelect === "none",
+     getComputedStyle(host).webkitUserSelect);
 });
 
 /* --------------------------------------------------------------- mobile */
@@ -665,6 +807,7 @@ IL.sync.config.pushDelay = 30;
 IL.sync.config.checkEvery = 0;
 
 var EMAIL = "caleb@example.com";
+var PASSWORD = "barbell123";
 function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 function uidOf(email){ return fake.userId(email); }
 
@@ -672,47 +815,52 @@ step(function(){
   head("sync: signed out");
   click("#tabLog");
   ok("the sync box is on the Log tab", !!$("syncBox"));
-  ok("asking for an email", !!$("syEmail") && !!$("sySend"));
+  ok("asking for an email and a password", !!$("syEmail") && !!$("syPass"));
+  ok("with both ways in", !!$("syIn") && !!$("syUp"));
   ok("the email field is 16px, so focusing it can't zoom the phone",
      parseFloat(getComputedStyle($("syEmail")).fontSize) >= 16, getComputedStyle($("syEmail")).fontSize);
+  ok("and so is the password field",
+     parseFloat(getComputedStyle($("syPass")).fontSize) >= 16, getComputedStyle($("syPass")).fontSize);
+  ok("the password is not shown on screen", $("syPass").type === "password");
+  ok("no Safari warning on a desktop browser", !IL.sync.inBrowserNotApp());
   ok("the old 'nowhere to upload it to' promise is gone", !/nowhere/.test($("view").textContent));
 });
 
 step(function(){
-  head("sync: sending a code");
+  head("sync: what it won't accept");
   $("syEmail").value = "not an email";
-  click("#sySend");
+  $("syPass").value = PASSWORD;
+  click("#syIn");
   ok("a bad address is caught before sending", /doesn't look like an email/.test($("syErr").textContent),
      $("syErr") && $("syErr").textContent);
   eq("and nothing was sent", fake.requests.length, 0);
 
   $("syEmail").value = EMAIL;
-  click("#sySend");
-  return wait(80).then(function(){
-    ok("a code was requested", !!fake.codeFor(EMAIL));
-    ok("the form moved on to the code", !!$("syCode"));
-    ok("naming where it went", $("syncBox").textContent.indexOf(EMAIL) >= 0);
-    eq("the code field hints the phone to offer the code from the email",
-       $("syCode").getAttribute("autocomplete"), "one-time-code");
-  });
+  $("syPass").value = "short";
+  click("#syIn");
+  ok("so is a flimsy password", /at least six/.test($("syErr").textContent), $("syErr").textContent);
+  eq("still nothing sent", fake.requests.length, 0);
 });
 
 step(function(){
-  head("sync: a wrong code");
-  $("syCode").value = "000000";
-  click("#syVerify");
-  return wait(120).then(function(){
-    ok("refused in plain words", /didn't work/.test(($("syErr") || {}).textContent || ""),
+  head("sync: a wrong password");
+  fake.addUser(EMAIL, PASSWORD);
+  $("syEmail").value = EMAIL;
+  $("syPass").value = "not-the-password";
+  click("#syIn");
+  return wait(150).then(function(){
+    ok("refused in plain words", /don't match an account/.test(($("syErr") || {}).textContent || ""),
        $("syErr") && $("syErr").textContent);
-    eq("the code is left in place to fix", $("syCode").value, "000000");
     eq("still signed out", IL.sync.info().signedIn, false);
+    ok("the email is kept so only the password needs retyping", $("syEmail").value === EMAIL);
   });
 });
 
 step(function(){
   head("sync: signing in");
-  $("syCode").value = fake.codeFor(EMAIL);
-  click("#syVerify");
+  $("syEmail").value = EMAIL;
+  $("syPass").value = PASSWORD;
+  click("#syIn");
   return wait(300).then(function(){
     ok("signed in", IL.sync.info().signedIn);
     ok("the box shows who", !!q(".syncrow") && q(".syncrow").textContent.indexOf(EMAIL) >= 0);
@@ -764,29 +912,26 @@ step(function(){
   var other = JSON.parse(IL.store.toBackup());
   other.body = [{ at: IL.store.fromDayKey(dayAgo(90)), w: 150 }];
   other.history = [];
-  fake.users["second@example.com"] = { id: "user-second", email: "second@example.com" };
-  fake.rows["user-second"] = {
-    user_id: "user-second", data: other, rev: 4, device: "iPad",
+  var second = fake.addUser("second@example.com", PASSWORD);
+  fake.rows[second.id] = {
+    user_id: second.id, data: other, rev: 4, device: "iPad",
     updated_at: new Date().toISOString()
   };
 
   $("syEmail").value = "second@example.com";
-  click("#sySend");
-  return wait(80).then(function(){
-    $("syCode").value = fake.codeFor("second@example.com");
-    click("#syVerify");
-    return wait(300);
-  }).then(function(){
+  $("syPass").value = PASSWORD;
+  click("#syIn");
+  return wait(300).then(function(){
     eq("it asks", $("sheet").dataset.mode, "syncchoice");
     eq("showing both sides", qa(".choice").length, 2);
     ok("naming the other device", /iPad/.test(q(".choices").textContent));
     eq("with a button for each", qa("[data-keep]").length, 2);
-    eq("the account is untouched while it waits", fake.row("user-second").rev, 4);
+    eq("the account is untouched while it waits", fake.row(uidOf("second@example.com")).rev, 4);
     click('[data-keep="local"]');
     return wait(250);
   }).then(function(){
-    ok("keeping this device's pushed it", fake.row("user-second").rev === 5 &&
-       IL.sync.sameData(fake.row("user-second").data, IL.store.state));
+    var row = fake.row(uidOf("second@example.com"));
+    ok("keeping this device's pushed it", row.rev === 5 && IL.sync.sameData(row.data, IL.store.state));
     ok("and said the other copy is kept", /kept in Snapshots/.test($("toast").textContent), $("toast").textContent);
     return IL.vault.list();
   }).then(function(rows){

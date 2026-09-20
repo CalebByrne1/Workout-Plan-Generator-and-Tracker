@@ -101,8 +101,8 @@ function applyPick(name, mode){
 /* --------------------------------------------------------------------------
    Signing in to sync
 
-   Two steps: an email, then the code that arrives in it. The form's state
-   lives in ui.syncForm; these move it along and redraw.
+   Email and password, both handled here; the form's state lives in
+   ui.syncForm. See the top of sync.js for why it isn't a link or a code.
    -------------------------------------------------------------------------- */
 
 var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -118,62 +118,64 @@ var SIGNED_IN = {
   error:     "Signed in, but the first sync didn't work — see Sync for why."
 };
 
-function sendSyncCode(again){
+/* Shared by both buttons: check what was typed, then run whichever of
+   sign-in / create-account was asked for and report how it went. */
+function syncAuth(make){
   var form = ui.syncForm;
-  var email = again || ($("syEmail") ? $("syEmail").value.trim() : "");
+  var email = $("syEmail") ? $("syEmail").value.trim() : "";
+  var password = $("syPass") ? $("syPass").value : "";
 
   form.email = email;
+  form.note = "";
+
   if(!EMAIL_RE.test(email)){
     form.error = "That doesn't look like an email address.";
     ui.paintSync();
     return;
   }
-
-  form.error = "";
-  form.busy = true;
-  ui.paintSync();
-
-  IL.sync.sendCode(email).then(function(){
-    form.busy = false;
-    form.step = "code";
+  if(password.length < 6){
+    form.error = "Use a password of at least six characters.";
     ui.paintSync();
-    if($("syCode")) $("syCode").focus();
-    if(again) ui.toast("New code sent.");
-  }, function(err){
-    form.busy = false;
-    form.error = IL.sync.explain(err);
-    ui.paintSync();
-  });
-}
-
-function verifySyncCode(){
-  var form = ui.syncForm;
-  var code = $("syCode") ? $("syCode").value.replace(/\s+/g, "") : "";
-
-  if(!/^\d{4,10}$/.test(code)){
-    form.error = "Type the code from the email — just the digits.";
-    ui.paintSync();
-    if($("syCode")){ $("syCode").value = code; $("syCode").focus(); }
+    if($("syPass")) $("syPass").focus();
     return;
   }
 
   form.error = "";
   form.busy = true;
   ui.paintSync();
-  if($("syCode")) $("syCode").value = code;
 
-  IL.sync.verifyCode(form.email, code).then(function(result){
-    ui.resetSyncForm();
-    ui.paintSync();
-    var said = SIGNED_IN.hasOwnProperty(result) ? SIGNED_IN[result] : "Signed in.";
-    if(said) ui.toast(said);
-  }, function(err){
-    form.busy = false;
-    form.error = IL.sync.explain(err);
-    ui.paintSync();
-    /* Put the code back so a typo can be fixed rather than retyped. */
-    if($("syCode")){ $("syCode").value = code; $("syCode").focus(); }
-  });
+  (make ? IL.sync.signUp(email, password) : IL.sync.signIn(email, password))
+    .then(function(result){
+      if(result === "confirm"){
+        form.busy = false;
+        form.note = "Account created. Confirm the address from the email Supabase just " +
+                    "sent, then sign in here.";
+        ui.paintSync();
+        return;
+      }
+      ui.resetSyncForm();
+      ui.paintSync();
+      var said = SIGNED_IN.hasOwnProperty(result) ? SIGNED_IN[result] : "Signed in.";
+      if(said) ui.toast(said);
+    }, function(err){
+      form.busy = false;
+      form.error = IL.sync.explain(err);
+      ui.paintSync();
+    });
+}
+
+/* Moving to another gym re-derives every working weight from what you have
+   lifted THERE. Nothing in the log changes; the plan just starts reading the
+   part of it that applies to the building you're standing in. */
+function switchGym(id){
+  var gym = store.setGym(id);
+  var seeded = IL.plan.reseed();
+
+  ui.closeSheet();
+  ui.renderTrain();
+  ui.toast(gym
+    ? "At " + gym.name + (seeded ? " — weights from your history here." : " — no history here yet.")
+    : "No gym set.");
 }
 
 /* --------------------------------------------------------------------------
@@ -453,6 +455,11 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  if(t.closest("#gymPick")){
+    ui.gymSheet();
+    return;
+  }
+
   /* --- log view --- */
 
   hit = t.closest("[data-open]");
@@ -597,15 +604,8 @@ $("view").addEventListener("click", function(ev){
 
   /* --- sync ------------------------------------------------------------- */
 
-  if(t.closest("#sySend")){ sendSyncCode(); return; }
-  if(t.closest("#syResend")){ sendSyncCode(ui.syncForm.email); return; }
-  if(t.closest("#syVerify")){ verifySyncCode(); return; }
-
-  if(t.closest("#syBack")){
-    ui.resetSyncForm();
-    ui.paintSync();
-    return;
-  }
+  if(t.closest("#syIn")){ syncAuth(false); return; }
+  if(t.closest("#syUp")){ syncAuth(true); return; }
 
   if(t.closest("#syNow")){
     IL.sync.syncNow("button").then(function(result){
@@ -684,8 +684,8 @@ $("view").addEventListener("click", function(ev){
 /* The phone keyboard's Go / Enter submits the step you're on. */
 $("view").addEventListener("keydown", function(ev){
   if(ev.key !== "Enter") return;
-  if(ev.target.id === "syEmail"){ ev.preventDefault(); sendSyncCode(); }
-  else if(ev.target.id === "syCode"){ ev.preventDefault(); verifySyncCode(); }
+  if(ev.target.id === "syEmail" && $("syPass")){ ev.preventDefault(); $("syPass").focus(); }
+  else if(ev.target.id === "syPass"){ ev.preventDefault(); syncAuth(false); }
 });
 
 $("view").addEventListener("input", function(ev){
@@ -835,6 +835,70 @@ $("sheetBody").addEventListener("click", function(ev){
 
   if(ui.sheetMode() === "set" && editingSet){
     if(setSheetClick(t)) return;
+  }
+
+  /* --- which gym ------------------------------------------------------- */
+
+  if(ui.sheetMode() === "gym"){
+    hit = t.closest("[data-gym]");
+    if(hit){
+      switchGym(hit.dataset.gym);
+      return;
+    }
+
+    hit = t.closest("[data-gymedit]");
+    if(hit){
+      ui.gymEditSheet(hit.dataset.gymedit);
+      return;
+    }
+
+    if(t.closest("#gymAdd")){
+      var name = $("gymName").value.trim();
+      if(!name){
+        ui.toast("Give the gym a name first.");
+        return;
+      }
+      switchGym(store.addGym(name).id);
+      return;
+    }
+
+    if(t.closest("#gymNone")){
+      store.setGym("");
+      IL.plan.reseed();
+      ui.closeSheet();
+      ui.renderTrain();
+      ui.toast("No gym set — weights come from wherever you last trained.");
+    }
+    return;
+  }
+
+  if(ui.sheetMode() === "gymedit"){
+    hit = t.closest("#gymSave");
+    if(hit){
+      var renamed = store.renameGym(hit.dataset.gymid, $("gymRename").value);
+      if(!renamed){
+        ui.toast("Give it a name first.");
+        return;
+      }
+      ui.gymSheet();
+      if(view === "train") ui.renderTrain();
+      ui.toast("Renamed to " + renamed.name + ".");
+      return;
+    }
+
+    hit = t.closest("[data-gymdel]");
+    if(hit){
+      var gone = store.gymName(hit.dataset.gymdel);
+      if(confirm("Remove " + gone + "? Sessions you logged there stay in the log " +
+                 "exactly as they are — only the list forgets it.")){
+        store.removeGym(hit.dataset.gymdel);
+        IL.plan.reseed();
+        ui.gymSheet();
+        if(view === "train") ui.renderTrain();
+        ui.toast(gone + " removed.");
+      }
+    }
+    return;
   }
 
   /* --- marking a day off ------------------------------------------------ */

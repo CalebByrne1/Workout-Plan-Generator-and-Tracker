@@ -187,9 +187,15 @@ function exerciseRow(e, i, last){
   var sets = "";
   for(var k = 0; k < e.sets; k++) sets += setButton(e, i, k);
 
+  /* Where it was lifted matters as much as what: the same machine in
+     another building doesn't take the same pin. When the number comes from
+     a different gym, the line says so rather than quietly implying you can
+     lift it here. */
   var lastLine = (last && last.logged.length)
-    ? '<span class="last">last ' + formatWeight(last.topWeight, e.name) + " " + esc(last.unit) +
-      ' · ' + esc(repsSummary(last.logged)) + '</span>'
+    ? '<span class="last' + (last.elsewhere ? " away" : "") + '">last ' +
+      formatWeight(last.topWeight, e.name) + " " + esc(last.unit) +
+      ' · ' + esc(repsSummary(last.logged)) +
+      (last.elsewhere && last.gymName ? ' · at ' + esc(last.gymName) : '') + '</span>'
     : '';
 
   return '<article class="ex" data-row="' + i + '"' +
@@ -212,6 +218,17 @@ function exerciseRow(e, i, last){
   '</article>';
 }
 
+/* The place you're training, and the way to change it. Tapping it is how a
+   gym gets added the first time, so there's nothing to set up in advance. */
+function gymChip(){
+  var here = store.currentGym();
+  return '<button class="gymchip" id="gymPick"' +
+      ' aria-label="' + (here ? 'Training at ' + esc(here.name) + '. Change gym.' : 'Set which gym you are at') + '">' +
+    '<span class="lab">Gym</span>' +
+    '<b>' + (here ? esc(here.name) : "Set gym") + '</b>' +
+  '</button>';
+}
+
 function renderTrain(){
   var day = store.currentDay();
   var last = store.lastPerformed();
@@ -232,6 +249,7 @@ function renderTrain(){
         '<div class="cap">Sets in</div>' +
       '</div>' +
     '</div>' +
+    '<div class="gymrow">' + gymChip() + '</div>' +
     planBanner(day) +
     '<div class="ledger" id="ledger">' + rows + '</div>' +
     '<div class="addrow"><button class="add-btn" id="addEx">+ Add exercise</button></div>' +
@@ -310,7 +328,8 @@ function sessionCard(h, isOpen){
   return '<div class="sess">' +
     '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
       '<span class="sess-tag">' + esc(h.dayId) + '</span>' +
-      '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) + '</small></span>' +
+      '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) +
+        (h.gymName ? ' · ' + esc(h.gymName) : '') + '</small></span>' +
       '<span class="sess-vol"><b>' + h.volume.toLocaleString() + '</b><small>' + esc(u) + ' volume</small></span>' +
     '</button>' +
     (isOpen ?
@@ -400,11 +419,11 @@ function settingsPanel(){
    this screen, not about the account.
    -------------------------------------------------------------------------- */
 
-var syncForm = { step:"email", email:"", error:"", busy:false };
+var syncForm = { email:"", error:"", note:"", busy:false };
 
 function resetSyncForm(){
-  syncForm.step = "email";
   syncForm.error = "";
+  syncForm.note = "";
   syncForm.busy = false;
 }
 
@@ -434,30 +453,21 @@ function syncHTML(){
   var head = '<h3 class="set-title">Sync</h3>';
   var err = syncForm.error ? '<p class="impwarn" id="syErr">' + esc(syncForm.error) + '</p>' : '';
 
-  if(!s.signedIn && syncForm.step === "code"){
-    return head +
-      '<p class="hint">A code is on its way to <b>' + esc(syncForm.email) + '</b>. Type it in ' +
-        'here — the code keeps you in the app, where the link in the email would open ' +
-        'your browser instead.</p>' +
-      '<div class="field">' +
-        '<label class="lab" for="syCode">Code from the email</label>' +
-        '<input id="syCode" type="text" inputmode="numeric" autocomplete="one-time-code"' +
-          ' maxlength="12" placeholder="123456">' +
-      '</div>' +
-      err +
-      '<div class="datarow">' +
-        '<button class="add-btn" id="syVerify"' + (syncForm.busy ? ' disabled' : '') + '>' +
-          (syncForm.busy ? 'Signing in…' : 'Sign in') + '</button>' +
-        '<button class="add-btn" id="syBack">Other email</button>' +
-      '</div>' +
-      '<button class="linkish" id="syResend">Send a new code</button>';
-  }
-
   if(!s.signedIn){
+    /* The single most useful warning in the app: on an iPhone, signing in
+       here rather than in the installed app signs in a different copy with
+       different data. */
+    var wrongCopy = IL.sync.inBrowserNotApp()
+      ? '<p class="impwarn">You\'re in Safari, not the app you added to your home ' +
+          'screen. They keep separate data. Open the app from its icon and sign in ' +
+          'there, or this copy — which may be empty — is the one that syncs.</p>'
+      : '';
+
     return head +
       '<p class="hint">Sign in and this log is on every device you sign in on — and ' +
         'survives losing this one. Everything still works offline; it catches up ' +
         'when you’re back.</p>' +
+      wrongCopy +
       (s.message ? '<p class="impwarn">' + esc(s.message) + '</p>' : '') +
       '<div class="field">' +
         '<label class="lab" for="syEmail">Email</label>' +
@@ -465,9 +475,21 @@ function syncHTML(){
           ' autocapitalize="none" spellcheck="false" placeholder="you@example.com"' +
           ' value="' + esc(syncForm.email) + '">' +
       '</div>' +
+      '<div class="field">' +
+        '<label class="lab" for="syPass">Password</label>' +
+        '<input id="syPass" type="password" autocomplete="current-password"' +
+          ' placeholder="at least six characters">' +
+      '</div>' +
       err +
-      '<button class="add-btn" id="sySend"' + (syncForm.busy ? ' disabled' : '') + '>' +
-        (syncForm.busy ? 'Sending…' : 'Email me a sign-in code') + '</button>';
+      (syncForm.note ? '<p class="hint good">' + esc(syncForm.note) + '</p>' : '') +
+      '<div class="datarow">' +
+        '<button class="add-btn" id="syIn"' + (syncForm.busy ? ' disabled' : '') + '>' +
+          (syncForm.busy ? 'Working…' : 'Sign in') + '</button>' +
+        '<button class="add-btn" id="syUp"' + (syncForm.busy ? ' disabled' : '') + '>' +
+          'Create account</button>' +
+      '</div>' +
+      '<p class="hint">Nothing is emailed when you sign in, so this works inside the ' +
+        'app — no links, no waiting.</p>';
   }
 
   return head +
@@ -1430,6 +1452,76 @@ function exerciseSheet(i){
 }
 
 /* --------------------------------------------------------------------------
+   Where you're training
+
+   Switching gyms re-reads every working weight from what you have lifted at
+   the new one, because that's the number you'll actually pull out of the
+   stack there. Nothing about your history changes — only which part of it
+   the plan is reading.
+   -------------------------------------------------------------------------- */
+
+function gymSheet(){
+  var here = store.currentGym();
+  var list = store.gyms();
+
+  var rows = list.map(function(g){
+    var current = here && here.id === g.id;
+    return '<div class="gymrow-item' + (current ? " here" : "") + '">' +
+      '<button class="gympick" data-gym="' + esc(g.id) + '" aria-pressed="' + !!current + '">' +
+        '<b>' + esc(g.name) + '</b>' +
+        '<small>' + (current ? "you're here" : "switch to this") + '</small>' +
+      '</button>' +
+      '<button class="lib-edit" data-gymedit="' + esc(g.id) + '">Edit</button>' +
+    '</div>';
+  }).join("");
+
+  openSheet("Which gym?",
+    '<p class="sheet-sub">The same machine loads differently in different buildings, so ' +
+      'each gym keeps its own working weights.</p>' +
+
+    (rows ? '<div class="gymlist">' + rows + '</div>' : '') +
+
+    '<div class="field">' +
+      '<label class="lab" for="gymName">' + (rows ? "Add another gym" : "Add your first gym") + '</label>' +
+      '<input id="gymName" type="text" placeholder="Main Street" autocomplete="off">' +
+    '</div>' +
+    '<button class="add-btn" id="gymAdd">Add and train here</button>' +
+
+    (here
+      ? '<div class="rowbtns one"><button id="gymNone">Not at any of these today</button></div>'
+      : '') +
+
+    '<p class="hint">Sessions you logged before adding gyms keep counting — they ' +
+      'just aren\'t tied to a place, so they stand in anywhere until you have ' +
+      'logged that exercise here.</p>',
+  "gym");
+}
+
+/* Renaming keeps the sessions already logged under the old name in step;
+   removing one leaves them alone entirely. */
+function gymEditSheet(id){
+  var gym = store.gymById(id);
+  if(!gym) return;
+
+  var sessions = store.sessionsOnly().filter(function(h){ return h.gymId === id; }).length;
+
+  openSheet("Edit gym",
+    '<div class="field">' +
+      '<label class="lab" for="gymRename">Name</label>' +
+      '<input id="gymRename" type="text" value="' + esc(gym.name) + '" autocomplete="off">' +
+    '</div>' +
+    '<p class="hint">' + (sessions
+      ? sessions + (sessions === 1 ? " session" : " sessions") + ' logged here. Renaming ' +
+        'updates those too; removing the gym leaves them exactly as they are.'
+      : 'Nothing logged here yet.') + '</p>' +
+    '<div class="rowbtns two">' +
+      '<button class="primary" id="gymSave" data-gymid="' + esc(id) + '">Save</button>' +
+      '<button class="danger" data-gymdel="' + esc(id) + '">Remove</button>' +
+    '</div>',
+  "gymedit");
+}
+
+/* --------------------------------------------------------------------------
    Marking a day off
    -------------------------------------------------------------------------- */
 
@@ -2006,6 +2098,8 @@ IL.ui = {
   previewImport: previewImport,
   get lastImport(){ return lastImport; },
   skipSheet: skipSheet,
+  gymSheet: gymSheet,
+  gymEditSheet: gymEditSheet,
   weightSheet: weightSheet,
   foodSheet: foodSheet,
   goalSheet: goalSheet

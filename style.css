@@ -145,6 +145,7 @@ p{margin:0}
 textarea,
 input[type="text"],
 input[type="email"],
+input[type="password"],
 input[type="number"]{
   width:100%;
   background:var(--surface);
@@ -761,6 +762,9 @@ input[type="date"]{
    ========================================================================== */
 
 .chart-host{margin-top:4px}
+/* Reading a day off the chart is a tap, not a long press: no selection,
+   no callout, no magnifier over the plot. */
+.chart-host{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .chart{display:block;width:100%;touch-action:pan-y}
 
 .chart-read{display:flex;align-items:baseline;gap:9px;min-height:28px;flex-wrap:wrap}
@@ -1248,3 +1252,46 @@ textarea.tall{
 #syncBox .field{margin:0}
 #syncBox .syncrow{margin:0}
 #syncBox .linkish{margin-top:0}
+
+
+/* ==========================================================================
+   Gyms
+   ========================================================================== */
+
+.gymrow{padding:0 14px 12px;margin-top:-4px}
+
+.gymchip{
+  display:flex;align-items:baseline;gap:8px;
+  padding:7px 11px;
+  border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);
+}
+.gymchip .lab{margin-bottom:0}
+.gymchip b{
+  font-family:var(--font-d);font-size:15px;font-weight:600;letter-spacing:.02em;
+  overflow-wrap:anywhere;
+}
+
+/* A weight carried over from another gym is a guess, so it reads as one. */
+.last.away{font-style:italic}
+
+.gymlist{display:flex;flex-direction:column}
+.gymrow-item{
+  display:flex;align-items:stretch;gap:8px;
+  border-bottom:1px solid var(--line-soft);
+}
+.gymrow-item:last-child{border-bottom:0}
+.gympick{
+  flex:1;min-width:0;padding:11px 2px;text-align:left;
+}
+.gympick b{
+  display:block;font-family:var(--font-d);font-size:17px;font-weight:500;
+  letter-spacing:.01em;overflow-wrap:anywhere;
+}
+.gympick small{
+  display:block;margin-top:1px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.gymrow-item.here .gympick b{color:var(--accent)}
+.gymrow-item .lib-edit{align-self:center}
