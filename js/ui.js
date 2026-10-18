@@ -1044,6 +1044,24 @@ function weightTile(){
   return statTile("Bodyweight", "—", "add a weigh-in");
 }
 
+function bodyCard(){
+  return '<section class="card">' +
+    '<div class="card-head">' +
+      '<h3>Bodyweight</h3>' +
+      '<button class="edit" id="logWeight">Log weight</button>' +
+    '</div>' +
+    '<div class="chart-key">' +
+      '<span><i class="sw line"></i>7-day average</span>' +
+      '<span><i class="sw raw"></i>Daily weigh-in</span>' +
+    '</div>' +
+    '<div class="chart-host" id="chBody"></div>' +
+    (store.state.body.length > 1
+      ? '<p class="hint">Water moves a single reading by a pound or three — ' +
+          'the line is what’s actually changing.</p>'
+      : '') +
+  '</section>';
+}
+
 /* --------------------------------------------------------------------------
    Maintenance
 
@@ -1058,21 +1076,33 @@ function rateWords(perWeek){
          " " + unit() + " a week";
 }
 
+/* What the current window is still short of, as list items. */
+function tdeeNeeds(est){
+  var need = [];
+  if(est.need.kcalDays) need.push(est.need.kcalDays + " more day" + (est.need.kcalDays === 1 ? "" : "s") + " with calories logged");
+  if(est.need.weighIns) need.push(est.need.weighIns + " more weigh-in" + (est.need.weighIns === 1 ? "" : "s"));
+  if(est.need.span)     need.push("weigh-ins spread over " + est.need.span + " more day" + (est.need.span === 1 ? "" : "s"));
+  return '<ul class="tdee-need">' + need.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join("") + '</ul>';
+}
+
+/* A weekly pace as a share of bodyweight, sign dropped — the words around
+   it say which way. */
+function pctFmt(pct){
+  return (Math.round(Math.abs(pct) * 100) / 100).toString() + "%";
+}
+
 function maintenanceCard(){
   var t = store.tdee();
-  var est = t.now;
-  var head = '<div class="card-head"><h3>Maintenance</h3><span class="tag">estimated</span></div>';
+  var est = t.last;
+  var head = '<div class="card-head"><h3>Maintenance</h3>' +
+    '<span class="tag">' + (t.stale ? "last estimate" : "estimated") + '</span></div>';
 
-  if(!est.ready){
-    var need = [];
-    if(est.need.kcalDays) need.push(est.need.kcalDays + " more day" + (est.need.kcalDays === 1 ? "" : "s") + " with calories logged");
-    if(est.need.weighIns) need.push(est.need.weighIns + " more weigh-in" + (est.need.weighIns === 1 ? "" : "s"));
-    if(est.need.span)     need.push("weigh-ins spread over " + est.need.span + " more day" + (est.need.span === 1 ? "" : "s"));
-
+  if(!est){
+    est = t.now;
     return '<section class="card">' + head +
       '<div class="tdee"><div class="tdee-num"><b class="none">—</b><span>not enough to go on yet</span></div></div>' +
       '<p class="tdee-why">Worked out from your own intake and weight trend over three weeks. Still to go:</p>' +
-      '<ul class="tdee-need">' + need.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join("") + '</ul>' +
+      tdeeNeeds(est) +
       '<p class="hint">It looks at the ' + est.window + ' days through yesterday and needs at least ' +
         store.TDEE_NEEDS.kcalDays + ' of them with calories and ' + store.TDEE_NEEDS.weighIns +
         ' weigh-ins across ' + store.TDEE_NEEDS.span + '+ days. Until then an online calculator is the better guess.</p>' +
@@ -1084,10 +1114,13 @@ function maintenanceCard(){
   if(goal){
     var gap = goal.kcal - est.tdee;
     var weekly = gap * 7 / store.energyPerUnit();
+    var pct = store.pacePct(gap);
     goalLine = '<p class="tdee-goal">Your ' + kcal(goal.kcal) + ' target is ' +
       (gap === 0 ? 'right at maintenance' :
         '<b>' + kcal(Math.abs(gap)) + (gap < 0 ? ' below' : ' above') + '</b> it — roughly ' +
-        rateWords(weekly) + ' if you hit it') + '.</p>';
+        rateWords(weekly) +
+        (pct !== null && Math.abs(weekly) >= 0.05 ? ' (' + pctFmt(pct) + ' of your bodyweight)' : '') +
+        ' if you hit it') + '.</p>';
   }
 
   return '<section class="card">' + head +
@@ -1102,6 +1135,11 @@ function maintenanceCard(){
         : '') +
     '</p>' +
     goalLine +
+    (t.stale
+      ? '<p class="tdee-why">This is from the three weeks through <b>' +
+          esc(formatDay(store.fromDayKey(est.to))) + '</b> — there’s been too little logged since to update it. ' +
+          'It stays until the last ' + est.window + ' days have:</p>' + tdeeNeeds(t.now)
+      : '') +
     '<p class="hint">From ' + est.kcalDays + ' of the last ' + est.window + ' days of food and ' +
       est.weighIns + ' weigh-ins, through ' + esc(formatDay(store.fromDayKey(est.to))) + '. ' +
       'The ± is how far the scale wanders from its trend; it narrows the more you weigh in. ' +
@@ -1157,10 +1195,11 @@ function renderProgress(){
         weightTile() +
       '</div>' +
 
-      /* Near the top on purpose: it's the one card on this tab you'll touch
-         every day, not just read. Maintenance sits between today and the
-         history because it's what the target should be set from. */
+      /* Near the top on purpose: food and the scale are the two cards on
+         this tab you touch every day, not just read, and maintenance is
+         worked out from both of them — so it sits right underneath. */
       nutritionCard() +
+      bodyCard() +
       maintenanceCard() +
       calorieCard() +
 
@@ -1171,22 +1210,6 @@ function renderProgress(){
         picker +
         '<div class="chart-host hero" id="chStrength"></div>' +
         (strengthNote ? '<p class="hint">' + esc(strengthNote) + '</p>' : '') +
-      '</section>' +
-
-      '<section class="card">' +
-        '<div class="card-head">' +
-          '<h3>Bodyweight</h3>' +
-          '<button class="edit" id="logWeight">Log weight</button>' +
-        '</div>' +
-        '<div class="chart-key">' +
-          '<span><i class="sw line"></i>7-day average</span>' +
-          '<span><i class="sw raw"></i>Daily weigh-in</span>' +
-        '</div>' +
-        '<div class="chart-host" id="chBody"></div>' +
-        (store.state.body.length > 1
-          ? '<p class="hint">Water moves a single reading by a pound or three — ' +
-              'the line is what’s actually changing.</p>'
-          : '') +
       '</section>' +
 
       '<section class="card">' +
@@ -1677,23 +1700,25 @@ function foodSheet(key, draft){
 
 /* Starting points worked out from your own maintenance, when there is one.
 
-   −500 a day is the classic steady cut and +250 a slow, lean gain. They're
-   suggestions and nothing more: a tap fills the field and picks the phase,
-   and the number is yours to change before saving. */
-var CUT = 500;
-var BULK = 250;
-
+   Paced by bodyweight rather than a fixed number: losing 0.75% of what you
+   weigh a week is a steady cut that keeps muscle, gaining 0.25% a lean bulk.
+   They're suggestions and nothing more: a tap fills the field and picks the
+   phase, and the number is yours to change before saving. */
 function suggestionsHTML(){
-  var est = store.tdee().now;
-  if(!est.ready) return "";
+  var est = store.tdee().last;
+  if(!est) return "";
+
+  var cut = store.paceKcal(store.PACE.cut);
+  var bulk = store.paceKcal(store.PACE.bulk);
+  if(cut === null || bulk === null) return "";
 
   var perUnit = store.energyPerUnit();
-  var cutRate = (Math.round(CUT * 7 / perUnit * 10) / 10) + " " + unit();
-  var bulkRate = (Math.round(BULK * 7 / perUnit * 10) / 10) + " " + unit();
+  var cutRate = (Math.round(cut * 7 / perUnit * 10) / 10) + " " + unit();
+  var bulkRate = (Math.round(bulk * 7 / perUnit * 10) / 10) + " " + unit();
   var opts = [
-    ["cut", "Cut", est.tdee - CUT, "−" + CUT],
+    ["cut", "Cut", est.tdee - cut, "−" + cut],
     ["maintain", "Maintain", est.tdee, "±0"],
-    ["bulk", "Bulk", est.tdee + BULK, "+" + BULK]
+    ["bulk", "Bulk", est.tdee + bulk, "+" + bulk]
   ];
 
   return '<div class="field">' +
@@ -1705,8 +1730,9 @@ function suggestionsHTML(){
         '<small>' + esc(o[3]) + '</small>' +
       '</button>';
     }).join("") + '</div>' +
-    '<p class="hint">Starting points: −' + CUT + ' a day is about ' + cutRate +
-      ' a week down, +' + BULK + ' about ' + bulkRate + ' a week up. Tap one, then adjust.</p>' +
+    '<p class="hint">Paced to your bodyweight: Cut loses about ' + cutRate + ' a week (' +
+      store.PACE.cut + '% of it), Bulk gains about ' + bulkRate + ' (' + store.PACE.bulk + '%). ' +
+      'Go nearer 0.5% to cut gently or 1% to cut hard. Tap one, then adjust.</p>' +
   '</div>';
 }
 

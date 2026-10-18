@@ -1072,6 +1072,11 @@ function trendWeightAt(ts){
 
    The window runs through YESTERDAY. Today's food isn't finished, and a
    breakfast-only today would drag the average down every morning.
+
+   Weigh-ins run ONE DAY LATER than the food, through this morning. A
+   morning weigh-in comes before that day's eating, so it's the result of
+   the day before: the food from the 1st through the 21st shows up on the
+   scale from the morning of the 1st to the morning of the 22nd.
    -------------------------------------------------------------------------- */
 
 var TDEE_WINDOW = 21;
@@ -1080,6 +1085,28 @@ var TDEE_NEEDS = { kcalDays: 10, weighIns: 6, span: 10 };
 /* The usual approximation for body tissue: 3,500 kcal a pound, 7,700 a kilo.
    Weights are stored in whatever unit the app is set to, so this follows. */
 function energyPerUnit(){ return state.prefs.unit === "kg" ? 7700 : 3500; }
+
+/* Pace as a share of bodyweight. A 500 kcal deficit is a pound a week
+   whoever you are, but a pound a week is a gentle cut at 230 lb and a hard
+   one at 140 — so rates are worked out as a percentage of what you weigh
+   (the 7-day average), and they follow you as that changes. */
+var PACE = { cut: 0.75, bulk: 0.25 };          /* % of bodyweight per week */
+
+/* Calories a day that move you `pct` percent of your bodyweight a week,
+   rounded to 10. null with no weigh-in to work from. */
+function paceKcal(pct){
+  var bw = trendWeightAt(Date.now());
+  if(!bw) return null;
+  return Math.round(bw * pct / 100 * energyPerUnit() / 7 / 10) * 10;
+}
+
+/* The other way: what a daily surplus (+) or deficit (−) comes to, as % of
+   bodyweight a week. */
+function pacePct(kcalPerDay){
+  var bw = trendWeightAt(Date.now());
+  if(!bw) return null;
+  return kcalPerDay * 7 / energyPerUnit() / bw * 100;
+}
 
 /* Ordinary least squares, plus the standard error of the slope. */
 function fitLine(pts){
@@ -1115,10 +1142,11 @@ function tdeeFor(endKey){
     key = shiftKey(key, 1);
   }
 
+  var lastMorning = shiftKey(endKey, 1);
   var pts = [];
   state.body.forEach(function(b){
     var k = dayKey(b.at);
-    if(k >= startKey && k <= endKey){
+    if(k >= startKey && k <= lastMorning){
       pts.push({ x: daysBetween(fromDayKey(startKey), b.at), y: b.w });
     }
   });
@@ -1154,14 +1182,38 @@ function tdeeFor(endKey){
   return out;
 }
 
-/* Now, and a week ago — so the card can say whether it's drifting. */
+/* The most recent window ending on or before `endKey` that had enough to
+   go on. A week off logging doesn't change what you burn, so the last good
+   estimate is still the best one there is — it just says how old it is.
+   The walk stops at the oldest thing ever logged. */
+function lastReadyTdee(endKey){
+  var first = nutritionKeys().pop() || "";
+  if(state.body.length){
+    var b = dayKey(state.body[0].at);
+    if(!first || b < first) first = b;
+  }
+  if(!first) return null;
+
+  for(var key = endKey; key >= first; key = shiftKey(key, -1)){
+    var est = tdeeFor(key);
+    if(est.ready) return est;
+  }
+  return null;
+}
+
+/* Now, and a week ago — so the card can say whether it's drifting. `last`
+   is what to show: the current estimate when it's ready, otherwise the
+   newest one that was, with `stale` set. */
 function tdee(){
   var today = dayKey(Date.now());
   var now = tdeeFor(shiftKey(today, -1));
   var weekAgo = tdeeFor(shiftKey(today, -1 - TREND_DAYS));
+  var last = now.ready ? now : lastReadyTdee(shiftKey(today, -2));
 
   return {
     now: now,
+    last: last,
+    stale: !now.ready && !!last,
     weekAgo: weekAgo.ready ? weekAgo : null,
     change: (now.ready && weekAgo.ready) ? now.tdee - weekAgo.tdee : null
   };
@@ -1684,6 +1736,9 @@ IL.store = {
   bodyTrendSeries: bodyTrendSeries,
   trendWeightAt: trendWeightAt,
   energyPerUnit: energyPerUnit,
+  PACE: PACE,
+  paceKcal: paceKcal,
+  pacePct: pacePct,
   fitLine: fitLine,
   tdeeFor: tdeeFor,
   tdee: tdee,

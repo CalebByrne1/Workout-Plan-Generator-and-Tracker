@@ -108,7 +108,9 @@ the reading snaps back to the latest point when the pointer leaves.
 
 ## Nutrition
 
-At the top of the Progress tab. **Log food** takes the day's totals —
+At the top of the Progress tab, in the order you use it: today's food, the
+**Bodyweight** chart, the **Maintenance** estimate worked out from both, then
+calories against your target. **Log food** takes the day's totals —
 calories, protein, fiber — and **every field is optional**: a day with only
 calories is a day with only calories, not a day of zero protein. A blank field
 is "not logged"; a typed 0 is a real zero.
@@ -146,9 +148,22 @@ what the scale did:
 > maintenance ≈ average daily calories − (weight trend per day × 3,500 kcal/lb)
 
 Averaging 2,300 kcal while losing half a pound a week (250 kcal a day of
-deficit) puts maintenance around 2,550. It uses the **21 days through
+deficit) puts maintenance around 2,550. It uses the **21 days of food through
 yesterday** — today's food isn't finished, and a breakfast-only today would
 drag the average down every morning.
+
+**Weigh-ins run one day later than the food, through this morning.** Weigh in
+when you wake up and log food at night, and a morning's reading is the result
+of the day *before*. So 21 days of food are paired with the weigh-ins from
+the first of those mornings to the morning after the last, and today's
+weigh-in counts as soon as you log it.
+
+**A gap in logging doesn't wipe it.** Miss a week or two and the last 21 days
+may not have enough to work out a new number — but what you burn hasn't
+changed, so the card keeps showing the most recent estimate that *did* have
+enough, labelled **last estimate** with the date it runs to and what's still
+needed to update it. The Cut / Maintain / Bulk starting points keep working
+from it too.
 
 How it avoids the usual traps:
 
@@ -177,9 +192,16 @@ it.
 
 The card also says how it compares week to week, and what it means for the
 target you've set ("your 2,100 target is 380 below it — roughly losing 0.8 lb a
-week if you hit it"). Once it's ready, the target sheet offers **Cut / Maintain
-/ Bulk** starting points from it — maintenance −500, as is, and +250 — which
-fill in the number and phase for you to adjust before saving.
+week if you hit it"), with that pace as a share of your bodyweight. Once it's
+ready, the target sheet offers **Cut / Maintain / Bulk** starting points from
+it, which fill in the number and phase for you to adjust before saving.
+
+**Cut and bulk are paced to your bodyweight**, not a fixed number. A pound a
+week is a gentle cut at 230 lb and a hard one at 140, so Cut aims to lose
+**0.75% of your 7-day average weight a week** and Bulk to gain **0.25%**. At
+200 lb that's −750 and +250 a day; at 160 lb, −600 and +200. The numbers
+follow you as your weight changes. Nearer 0.5% is a gentler cut, nearer 1% a
+harder one.
 
 ## The plan moves on its own
 

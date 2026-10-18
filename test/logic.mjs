@@ -535,6 +535,53 @@ both = store.tdee();
 ok("more activity shows up as a higher maintenance", both.change > 100,
    both.weekAgo && both.weekAgo.tdee + " -> " + both.now.tdee);
 
+group("maintenance: morning weigh-ins line up with the day before's food");
+scenario({ weighOn: () => false });
+for (let d = 20; d >= 0; d--) store.addBodyweight(185 - (20 - d) * 0.5 / 7, keyAgo(d));
+est = store.tdee().now;
+eq("this morning's weigh-in counts toward yesterday's food", est.weighIns, 21);
+ok("and the rate is the same", near(est.perWeek, -0.5, 0.02), est.perWeek);
+eq("a weigh-in after the window doesn't count", store.tdeeFor(keyAgo(2)).weighIns, 20);
+
+group("maintenance: a gap in logging keeps the last estimate");
+store.reset();
+for (let d = 40; d >= 15; d--) {
+  store.setNutrition(keyAgo(d), { kcal: 2300 });
+  store.addBodyweight(185 - (40 - d) * 0.5 / 7, keyAgo(d));
+}
+both = store.tdee();
+eq("two weeks unlogged leaves the current window short", both.now.ready, false);
+ok("but the last good estimate is still there", both.last && near(both.last.tdee, 2550, 20),
+   both.last && both.last.tdee);
+eq("flagged as stale", both.stale, true);
+/* Through 5 days ago: 11 days of food and weigh-ins 10 days apart, the
+   first window back that clears every minimum. */
+eq("from the newest window that was ready", both.last.to, keyAgo(5));
+eq("no week-on-week change from a stale number", both.change, null);
+
+scenario();
+both = store.tdee();
+eq("when it's current, last is now", both.last, both.now);
+eq("and not stale", both.stale, false);
+
+store.reset();
+eq("an empty log has no last estimate", store.tdee().last, null);
+
+group("maintenance: cut and bulk are paced to bodyweight");
+eq("no weigh-in, no pace", store.paceKcal(0.75), null);
+store.addBodyweight(200, keyAgo(0));
+eq("0.75% of 200 lb is 1.5 lb a week, 750 a day", store.paceKcal(0.75), 750);
+eq("0.25% is 250 a day", store.paceKcal(0.25), 250);
+ok("and back again", near(store.pacePct(-750), -0.75, 1e-9), store.pacePct(-750));
+store.reset();
+store.addBodyweight(140, keyAgo(0));
+eq("the same cut is smaller for a lighter lifter", store.paceKcal(0.75), 530);
+store.reset();
+store.state.prefs.unit = "kg";
+store.addBodyweight(90, keyAgo(0));
+eq("in kg: 0.75% of 90 kg at 7,700 a kilo", store.paceKcal(0.75), 740);
+store.state.prefs.unit = "lb";
+
 /* ------------------------------------------------------------------ gyms */
 group("gyms: the same machine in two buildings");
 store.reset();

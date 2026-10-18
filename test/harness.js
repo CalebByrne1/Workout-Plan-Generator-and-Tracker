@@ -589,15 +589,42 @@ step(function(){
   click("#editGoal");
   eq("three starting points", qa("[data-suggest]").length, 3);
   var est = IL.store.tdee().now.tdee;
+  /* ~182 lb: 0.75% a week is ~1.37 lb, ~680 a day; 0.25% is ~230. */
+  var deficit = IL.store.paceKcal(0.75);
+  ok("the cut is paced to bodyweight", deficit >= 660 && deficit <= 700, deficit);
   var cut = q('[data-suggest][data-sphase="cut"]');
   click(cut);
-  eq("Cut fills maintenance minus 500", $("gKcal").value, String(est - 500));
+  eq("Cut fills maintenance minus 0.75% a week", $("gKcal").value, String(est - deficit));
   eq("and picks the Cut phase", q('[data-gphase="cut"]').getAttribute("aria-pressed"), "true");
   eq("nothing is saved until you press Save", IL.store.currentGoal().kcal, 2100);
   click('[data-suggest][data-sphase="bulk"]');
-  eq("Bulk fills maintenance plus 250", $("gKcal").value, String(est + 250));
+  eq("Bulk fills maintenance plus 0.25% a week", $("gKcal").value, String(est + IL.store.paceKcal(0.25)));
   eq("and moves the phase with it", q('[data-gphase="bulk"]').getAttribute("aria-pressed"), "true");
   click("#sheetClose");
+});
+
+step(function(){
+  head("maintenance: a fortnight off logging keeps the last number");
+  IL.store.state.body = [];
+  IL.store.state.nutrition.days = {};
+  for(var d = 40; d >= 15; d--){
+    IL.store.setNutrition(dayAgo(d), { kcal: 2300 });
+    IL.store.addBodyweight(185 - (40 - d) * 0.5 / 7, dayAgo(d));
+  }
+  IL.ui.renderProgress();
+
+  var card = qa(".card").filter(function(c){ return /Maintenance/.test(c.textContent); })[0];
+  var n = card && card.querySelector(".tdee-num b").textContent.replace(/,/g, "");
+  ok("still shows the estimate", Math.abs(Number(n) - 2550) <= 20, n);
+  ok("labelled as the last one", card && /last estimate/.test(card.querySelector(".tag").textContent));
+  ok("saying what it needs to update", card && card.querySelectorAll(".tdee-need li").length >= 1);
+  click("#editGoal");
+  eq("and the target sheet still offers starting points", qa("[data-suggest]").length, 3);
+  click("#sheetClose");
+
+  var heads = qa(".prog-wrap > .card h3").map(function(h){ return h.textContent; });
+  eq("bodyweight sits with the nutrition cards", heads.slice(0, 4).join(" | "),
+     "Nutrition | Bodyweight | Maintenance | Calories vs target");
 });
 
 /* ------------------------------------------------------------------ gyms */
