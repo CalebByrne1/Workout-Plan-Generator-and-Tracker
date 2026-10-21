@@ -393,6 +393,30 @@ main{flex:1;padding-bottom:8px}
   padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));
 }
 
+/* The expanded chart: the whole screen, so the plot gets the room. */
+.zoom{
+  position:fixed;inset:0;z-index:45;
+  display:flex;flex-direction:column;
+  background:var(--ground);
+  padding-top:env(safe-area-inset-top);
+}
+.zoom-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 16px 12px;border-bottom:1px solid var(--line);
+  background:var(--surface);
+}
+.zoom-head h3{flex:1;min-width:0;font-size:19px;letter-spacing:.05em;text-transform:uppercase}
+.zoom-body{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;gap:12px;
+  width:100%;max-width:960px;margin:0 auto;
+  padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));
+}
+.zoom-body .chart-key{margin-top:0}
+.zoom-body .food-avg{margin-top:4px}
+.zoom-body .hint{margin:0}
+body.zoomed{overflow:hidden}
+
 .field{display:flex;flex-direction:column}
 
 .stepper{display:flex;align-items:stretch;gap:8px}
@@ -1143,6 +1167,40 @@ textarea.tall{
   grid-area:m;font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
 }
 .food-row small:empty{display:none}
+
+/* The weigh-in list borrows the food diary's row: date, reading, change
+   from the reading before, and the average underneath. */
+.bw-day{
+  display:grid;grid-template-columns:1fr auto 64px;
+  grid-template-areas:"d n x" "m m m";
+  align-items:baseline;column-gap:10px;
+  width:100%;padding:9px 0;text-align:left;
+  border-bottom:1px solid var(--line-soft);
+}
+.bw-day:last-child{border-bottom:0}
+.bw-day .d{grid-area:d;font-size:13px;color:var(--ink-2)}
+.bw-day b{
+  grid-area:n;text-align:right;
+  font-family:var(--font-m);font-size:13.5px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.bw-day .diff{
+  grid-area:x;text-align:right;
+  font-family:var(--font-m);font-size:12px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
+}
+.bw-day small{grid-area:m;font-family:var(--font-m);font-size:10.5px;color:var(--ink-3)}
+.bw-list-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin-bottom:4px;
+}
+.bw-change{
+  font-family:var(--font-m);font-size:11px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+#bwMore{margin-top:10px;min-height:40px;font-size:13px}
+
+.card-btns{display:flex;gap:6px;flex:none}
 
 
 /* ==========================================================================

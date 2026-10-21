@@ -1044,22 +1044,212 @@ function weightTile(){
   return statTile("Bodyweight", "—", "add a weigh-in");
 }
 
+/* The fortnight of weigh-ins listed under the chart, like the food diary:
+   the exact numbers at a glance, and a tap into fixing one. */
+var BODY_WINDOW = 14;
+var BODY_LIST = 7;
+
+/* The trend points from `days` days ago onward, oldest first. null = all. */
+function bodyWindow(days){
+  var series = store.bodyTrendSeries();
+  if(!days) return series;
+  var from = store.shiftKey(store.dayKey(Date.now()), -(days - 1));
+  return series.filter(function(p){ return store.dayKey(p.x) >= from; });
+}
+
+/* How far the 7-day average moved across a stretch of weigh-ins — the
+   average, not the readings, so a salty dinner at either end can't fake it. */
+function trendChange(pts){
+  return pts.length > 1 ? Math.round((pts[pts.length - 1].y - pts[0].y) * 10) / 10 : null;
+}
+
+function bodyListHTML(){
+  var all = store.bodyTrendSeries();
+  var from = all.length - bodyWindow(BODY_WINDOW).length;
+  var pts = all.slice(from);
+  if(!pts.length) return "";
+
+  var change = trendChange(pts);
+  var rows = pts.map(function(p, i){
+    /* Against the reading before it, even when that one is older than the
+       window — the oldest row in the list still has a day before it. */
+    var prev = all[from + i - 1];
+    var d = prev ? Math.round((p.raw - prev.raw) * 10) / 10 : null;
+    var n = pts.length - 1 - i;
+
+    return '<button class="bw-day" data-bwday="' + esc(store.dayKey(p.x)) + '"' +
+             (n >= BODY_LIST ? ' data-bwmore hidden' : '') + '>' +
+      '<span class="d">' + esc(formatWeekday(p.x)) + '</span>' +
+      '<b>' + weightFmt(p.raw) + ' ' + esc(unit()) + '</b>' +
+      '<span class="diff">' + (d !== null ? esc(signedWeight(d)) : "") + '</span>' +
+      '<small>7-day avg ' + weightFmt(p.y) + '</small>' +
+    '</button>';
+  }).reverse().join("");
+
+  return '<div class="food-list">' +
+    '<div class="bw-list-head">' +
+      '<span class="lab">Last ' + BODY_WINDOW + ' days — tap one to edit it</span>' +
+      (change !== null
+        ? '<span class="bw-change">' +
+            esc(change === 0 ? "average level" : "average " + signedWeight(change) + " " + unit()) +
+          '</span>'
+        : '') +
+    '</div>' +
+    rows +
+    (pts.length > BODY_LIST
+      ? '<button class="add-btn" id="bwMore">Show all ' + pts.length + ' weigh-ins</button>'
+      : '') +
+  '</div>';
+}
+
 function bodyCard(){
+  var drawn = store.state.body.length > 1;
   return '<section class="card">' +
     '<div class="card-head">' +
       '<h3>Bodyweight</h3>' +
-      '<button class="edit" id="logWeight">Log weight</button>' +
+      '<div class="card-btns">' +
+        (drawn ? '<button class="edit" data-expand="body" aria-label="Expand the bodyweight chart">Expand</button>' : '') +
+        '<button class="edit" id="logWeight">Log weight</button>' +
+      '</div>' +
     '</div>' +
     '<div class="chart-key">' +
       '<span><i class="sw line"></i>7-day average</span>' +
       '<span><i class="sw raw"></i>Daily weigh-in</span>' +
     '</div>' +
-    '<div class="chart-host" id="chBody"></div>' +
-    (store.state.body.length > 1
+    /* Tapping the chart reads a day off it, so expanding is the button's
+       job — and a double-tap's, for anyone who goes straight for the plot. */
+    '<div class="chart-host" id="chBody"' + (drawn ? ' data-expand="body"' : '') + '></div>' +
+    (drawn
       ? '<p class="hint">Water moves a single reading by a pound or three — ' +
           'the line is what’s actually changing.</p>'
       : '') +
+    bodyListHTML() +
   '</section>';
+}
+
+/* --------------------------------------------------------------------------
+   Expanded chart
+
+   The bodyweight chart, full screen: taller, so half a pound reads as half
+   a pound, with a range picker to zoom in on the last fortnight or back out
+   to everything, and what that range adds up to.
+   -------------------------------------------------------------------------- */
+
+var ZOOM_RANGES = [
+  { key:"2w",  label:"2W",  days:14 },
+  { key:"1m",  label:"1M",  days:30 },
+  { key:"3m",  label:"3M",  days:91 },
+  { key:"all", label:"All", days:null }
+];
+
+var zoom = { open:false, range:"1m" };
+var zoomEl;
+
+function zoomRange(){
+  for(var i = 0; i < ZOOM_RANGES.length; i++){
+    if(ZOOM_RANGES[i].key === zoom.range) return ZOOM_RANGES[i];
+  }
+  return ZOOM_RANGES[ZOOM_RANGES.length - 1];
+}
+
+function openZoom(){
+  zoom.open = true;
+  zoomEl.hidden = false;
+  document.body.classList.add("zoomed");
+  renderZoom();
+  $("zoomClose").focus();
+}
+
+function closeZoom(){
+  if(!zoom.open) return;
+  zoom.open = false;
+  zoomEl.hidden = true;
+  document.body.classList.remove("zoomed");
+}
+
+function setZoomRange(key){
+  zoom.range = key;
+  renderZoom();
+}
+
+function zoomTile(label, value, note){
+  return '<div class="food-avg-tile">' +
+    '<span class="lab">' + esc(label) + '</span>' +
+    (value !== null ? '<b>' + esc(value) + '</b>' : '<b class="none">—</b>') +
+    '<small>' + esc(note || "") + '</small>' +
+  '</div>';
+}
+
+function renderZoom(){
+  if(!zoom.open) return;
+  var range = zoomRange();
+  var pts = bodyWindow(range.days);
+
+  var change = trendChange(pts);
+  var lowest = null, highest = null;
+  pts.forEach(function(p){
+    if(!lowest || p.raw < lowest.raw) lowest = p;
+    if(!highest || p.raw > highest.raw) highest = p;
+  });
+
+  $("zoomBody").innerHTML =
+    '<div class="seg wide" role="group" aria-label="How far back to show">' +
+      ZOOM_RANGES.map(function(r){
+        return '<button data-range="' + r.key + '" aria-pressed="' + (r.key === range.key) + '">' +
+          esc(r.label) + '</button>';
+      }).join("") +
+    '</div>' +
+    '<div class="chart-key">' +
+      '<span><i class="sw line"></i>7-day average</span>' +
+      '<span><i class="sw raw"></i>Daily weigh-in</span>' +
+    '</div>' +
+    '<div class="chart-host" id="chZoom"></div>' +
+    '<div class="food-avg">' +
+      zoomTile("Change", change === null ? null : signedWeight(change) + " " + unit(),
+               change === null ? "" : "on the 7-day average") +
+      zoomTile("Lowest", lowest ? weightFmt(lowest.raw) + " " + unit() : null,
+               lowest ? formatDay(lowest.x) : "") +
+      zoomTile("Highest", highest ? weightFmt(highest.raw) + " " + unit() : null,
+               highest ? formatDay(highest.x) : "") +
+    '</div>' +
+    '<p class="hint">' + pts.length + (pts.length === 1 ? ' weigh-in' : ' weigh-ins') +
+      (range.days ? ' in the last ' + range.days + ' days' : ' in all') +
+      '. Tap or drag across the chart to read any day.</p>';
+
+  paintZoom();
+}
+
+/* Sized to the screen it's on: whatever the controls and tiles don't need
+   goes to the plot, within reason either way. */
+function paintZoom(){
+  if(!zoom.open || !$("chZoom")) return;
+  var pts = bodyWindow(zoomRange().days);
+  var height = Math.max(220, Math.min(560, window.innerHeight - 340));
+
+  IL.chart.draw($("chZoom"), bodyChartCfg(pts, {
+    height: height,
+    empty: "Fewer than two weigh-ins in this range — pick a longer one."
+  }));
+}
+
+/* The bodyweight chart's settings, shared by the card and the expanded view. */
+function bodyChartCfg(pts, extra){
+  var cfg = {
+    kind: "line",
+    points: pts,
+    raw: pts.map(function(p){ return { x:p.x, y:p.raw }; }),
+    /* Whole numbers until the gridlines get finer than a pound — then a
+       rounded label would print "186" twice. */
+    fmtY: function(v){ return v % 1 ? v.toFixed(1) : String(v); },
+    fmtV: function(v, p){
+      return weightFmt(v) + " " + unit() + " avg · weighed " + weightFmt(p.raw);
+    },
+    fmtX: formatDay,
+    label: "bodyweight, seven-day average over time",
+    empty: "Two weigh-ins draw a line. Log the first one with the button above."
+  };
+  for(var k in extra) cfg[k] = extra[k];
+  return cfg;
 }
 
 /* --------------------------------------------------------------------------
@@ -1249,19 +1439,8 @@ function paintCharts(){
 
   /* The line is the 7-day average as of each weigh-in; the readings sit
      underneath as faint dots, so the noise is visible but can't steal the eye. */
-  var body = store.bodyTrendSeries();
-  IL.chart.draw($("chBody"), {
-    kind: "line",
-    points: body,
-    raw: body.map(function(p){ return { x:p.x, y:p.raw }; }),
-    fmtY: function(v){ return Math.round(v); },
-    fmtV: function(v, p){
-      return weightFmt(v) + " " + unit() + " avg · weighed " + weightFmt(p.raw);
-    },
-    fmtX: formatDay,
-    label: "bodyweight, seven-day average over time",
-    empty: "Two weigh-ins draw a line. Log the first one with the button above."
-  });
+  IL.chart.draw($("chBody"), bodyChartCfg(store.bodyTrendSeries()));
+  renderZoom();
 
   IL.chart.draw($("chVolume"), {
     kind: "column",
@@ -1595,9 +1774,12 @@ function skipSheet(){
    Weigh-in
    -------------------------------------------------------------------------- */
 
-function weightSheet(){
+/* `key` opens it on a day that already has a reading, ready to correct. */
+function weightSheet(key){
   var today = store.dayKey(Date.now());
   var last = store.latestBodyweight();
+  var onDay = null;
+  if(key) store.state.body.forEach(function(b){ if(store.dayKey(b.at) === key) onDay = b; });
   var recent = store.state.body.slice(-6).reverse();
 
   openSheet("Weigh-in",
@@ -1606,12 +1788,13 @@ function weightSheet(){
 
     '<div class="field">' +
       '<label class="lab" for="bwDate">Date</label>' +
-      '<input id="bwDate" type="date" value="' + today + '" max="' + today + '">' +
+      '<input id="bwDate" type="date" value="' + esc(key || today) + '" max="' + today + '">' +
     '</div>' +
 
     '<div class="field">' +
       '<label class="lab" for="bwVal">Weight (' + esc(unit()) + ')</label>' +
       '<input id="bwVal" type="number" inputmode="decimal" step="any" min="0"' +
+        (onDay ? ' value="' + onDay.w + '"' : '') +
         ' placeholder="' + (last ? last.w : "0") + '">' +
       '<p class="hint">Your bodyweight is what makes the strength chart mean ' +
         'something — a lift going up while you get heavier is a different story ' +
@@ -2086,6 +2269,7 @@ function init(){
   sheetEl = $("sheet");
   scrimEl = $("scrim");
   toastEl = $("toast");
+  zoomEl  = $("zoom");
 }
 
 IL.ui = {
@@ -2109,6 +2293,10 @@ IL.ui = {
   syncChoiceSheet: syncChoiceSheet,
   renderProgress: renderProgress,
   paintCharts: paintCharts,
+  openZoom: openZoom,
+  closeZoom: closeZoom,
+  setZoomRange: setZoomRange,
+  get zoomOpen(){ return zoom.open; },
 
   get progress(){ return progress; },
 

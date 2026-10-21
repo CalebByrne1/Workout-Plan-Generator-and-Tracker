@@ -551,6 +551,48 @@ step(function(){
 });
 
 step(function(){
+  head("weight: the last fortnight, listed");
+  var rows = qa(".bw-day");
+  eq("every weigh-in in the window has a row", rows.length, 4);
+  ok("newest first, with the reading", /183\.0 lb/.test(rows[0].textContent), rows[0].textContent);
+  ok("and the change from the one before", /\+2\.0/.test(rows[0].querySelector(".diff").textContent),
+     rows[0].querySelector(".diff").textContent);
+  eq("the oldest has nothing to compare with", rows[3].querySelector(".diff").textContent, "");
+  ok("with the average's move over the window", /average −2\.0 lb/.test(q(".bw-change").textContent),
+     q(".bw-change").textContent);
+  ok("not counted as food days", qa(".food-row").every(function(r){ return !r.dataset.bwday; }));
+
+  click(rows[1]);
+  eq("a row opens the weigh-in sheet", IL.ui.sheetMode(), "weight");
+  eq("on that day", $("bwDate").value, dayAgo(1));
+  eq("with its reading filled in", $("bwVal").value, "181");
+  click("#sheetClose");
+});
+
+step(function(){
+  head("weight: the expanded chart");
+  click(q("button[data-expand]"));
+  ok("opens over the page", !$("zoom").hidden && IL.ui.zoomOpen);
+  ok("taller than the card's chart",
+     Number(q("#chZoom svg").getAttribute("height")) > IL.chart.height,
+     q("#chZoom svg") && q("#chZoom svg").getAttribute("height"));
+  eq("with every reading in range", qa("#chZoom .c-raw").length, 4);
+  eq("and a range picker", qa("#zoom [data-range]").length, 4);
+  ok("the tiles add the range up", /Lowest\s*181\.0 lb/.test(q("#zoomBody .food-avg").textContent),
+     q("#zoomBody .food-avg").textContent);
+
+  IL.store.addBodyweight(190, dayAgo(40));
+  click(q('[data-range="2w"]'));
+  eq("a short range leaves the old reading out", qa("#chZoom .c-raw").length, 4);
+  click(q('[data-range="all"]'));
+  eq("All brings it back", qa("#chZoom .c-raw").length, 5);
+  IL.store.removeBodyweight(IL.store.state.body[0].at);
+
+  click("#zoomClose");
+  ok("Done closes it", $("zoom").hidden && !IL.ui.zoomOpen);
+});
+
+step(function(){
   head("maintenance: honest about not being ready");
   var card = qa(".card").filter(function(c){ return /Maintenance/.test(c.textContent); })[0];
   ok("the card is there", !!card);

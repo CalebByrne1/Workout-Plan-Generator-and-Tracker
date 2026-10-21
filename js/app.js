@@ -417,6 +417,8 @@ $("rail").addEventListener("click", function(ev){
    Main view
    -------------------------------------------------------------------------- */
 
+var lastChartTap = 0;          /* for double-tap-to-expand on the weight chart */
+
 $("view").addEventListener("click", function(ev){
   var t = ev.target;
   var hit;
@@ -510,6 +512,44 @@ $("view").addEventListener("click", function(ev){
 
   if(t.closest("#logWeight")){
     ui.weightSheet();
+    return;
+  }
+
+  /* The Expand button. The chart host carries data-expand too, but only
+     for the double-tap below — a single tap on the plot reads a day. */
+  hit = t.closest("button[data-expand]");
+  if(hit){
+    ui.openZoom();
+    return;
+  }
+
+  /* Counted by hand rather than left to dblclick: the chart cancels the
+     touch's pointerdown to keep the iOS callout away, and some engines
+     drop the synthesised double-click along with it. */
+  hit = t.closest(".chart-host[data-expand]");
+  if(hit){
+    var now = Date.now();
+    if(now - lastChartTap < 350){
+      lastChartTap = 0;
+      ui.openZoom();
+    }else{
+      lastChartTap = now;
+    }
+    return;
+  }
+
+  /* Unfolded in place, like the food list. */
+  hit = t.closest("#bwMore");
+  if(hit){
+    var older = document.querySelectorAll(".bw-day[data-bwmore]");
+    for(var o = 0; o < older.length; o++) older[o].hidden = false;
+    hit.remove();
+    return;
+  }
+
+  hit = t.closest("[data-bwday]");
+  if(hit){
+    ui.weightSheet(hit.dataset.bwday);
     return;
   }
 
@@ -735,7 +775,18 @@ $("sheetClose").addEventListener("click", ui.closeSheet);
 $("scrim").addEventListener("click", ui.closeSheet);
 
 document.addEventListener("keydown", function(ev){
-  if(ev.key === "Escape" && !$("sheet").hidden) ui.closeSheet();
+  if(ev.key !== "Escape") return;
+  if(!$("sheet").hidden) ui.closeSheet();
+  else if(ui.zoomOpen) ui.closeZoom();
+});
+
+/* --- the expanded chart ----------------------------------------------- */
+
+$("zoomClose").addEventListener("click", ui.closeZoom);
+
+$("zoom").addEventListener("click", function(ev){
+  var hit = ev.target.closest("[data-range]");
+  if(hit) ui.setZoomRange(hit.dataset.range);
 });
 
 /* --- the set logger --------------------------------------------------- */

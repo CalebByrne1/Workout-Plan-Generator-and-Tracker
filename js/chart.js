@@ -44,7 +44,7 @@ function niceStep(span, count){
 /* Bars must grow from zero or their length lies about the data. A trend line
    doesn't: forcing zero onto a 185 → 205 lift flattens the whole story into
    one row of pixels, so lines get a padded window around their own range. */
-function axis(min, max, zero){
+function axis(min, max, zero, count){
   if(zero) min = 0;
 
   if(max === min){
@@ -57,7 +57,7 @@ function axis(min, max, zero){
     max += pad;
   }
 
-  var step = niceStep(max - min, 4);
+  var step = niceStep(max - min, count || 4);
   var lo = zero ? 0 : Math.floor(min / step) * step;
   var hi = Math.ceil(max / step) * step;
   if(lo < 0 && min >= 0) lo = 0;               /* never invent negative load */
@@ -107,20 +107,43 @@ function gridHTML(a, Y, w){
   }).join("");
 }
 
-/* First, middle and last only. A label under every point is unreadable at
-   phone width, and the readout carries the rest. */
-function xLabelsHTML(pts, X, cfg){
-  var picks = pts.length > 2
-    ? [0, Math.floor((pts.length - 1) / 2), pts.length - 1]
-    : [0, pts.length - 1];
-  var seen = {};
+/* As many date labels as the width has room for — about one per 90px, so
+   three on a phone card and more on the expanded view — and never one under
+   every point, which is unreadable. The readout carries the rest.
 
-  return picks.map(function(i, n){
-    if(seen[i]) return "";
-    seen[i] = 1;
-    var anchor = n === 0 ? "start" : (i === pts.length - 1 ? "end" : "middle");
-    return '<text class="c-tick" x="' + X(pts[i], i).toFixed(1) + '" y="' + (H - 6) +
-             '" text-anchor="' + anchor + '">' + esc(cfg.fmtX(pts[i].x)) + '</text>';
+   A line chart's x axis is time, so its labels are spaced evenly in time
+   and name the date at that spot; banded charts label evenly spaced slots. */
+function xLabelsHTML(pts, X, cfg, pw, h){
+  var count = Math.max(2, Math.min(8, Math.floor(pw / 90) + 1));
+  var labels = [];
+  var n;
+
+  if(cfg.kind === "line"){
+    var x0 = pts[0].x, x1 = pts[pts.length - 1].x;
+    if(x1 === x0) count = 1;
+    for(n = 0; n < count; n++){
+      var t = count === 1 ? x0 : x0 + (x1 - x0) * n / (count - 1);
+      labels.push({ x: X({ x:t }), text: cfg.fmtX(t), first: n === 0 && count > 1, last: n === count - 1 && count > 1 });
+    }
+  }else{
+    count = Math.min(count, pts.length);
+    var seen = {};
+    for(n = 0; n < count; n++){
+      var i = count === 1 ? 0 : Math.round((pts.length - 1) * n / (count - 1));
+      if(seen[i]) continue;
+      seen[i] = 1;
+      labels.push({ x: X(pts[i], i), text: cfg.fmtX(pts[i].x), first: n === 0, last: i === pts.length - 1 });
+    }
+  }
+
+  /* Neighbouring dates can format to the same day; one label is enough. */
+  var prev = null;
+  return labels.map(function(l){
+    if(l.text === prev) return "";
+    prev = l.text;
+    var anchor = l.first ? "start" : l.last ? "end" : "middle";
+    return '<text class="c-tick" x="' + l.x.toFixed(1) + '" y="' + (h - 6) +
+             '" text-anchor="' + anchor + '">' + esc(l.text) + '</text>';
   }).join("");
 }
 
@@ -163,6 +186,8 @@ function barPathDown(x, y, w, top){
      cfg.fmtV     readout value -> string; gets (y, point)
      cfg.fmtX     timestamp     -> string
      cfg.empty    what to say when there isn't enough to plot
+     cfg.height   optional plot height in px; the cards use the default, the
+                  expanded view asks for more
 
    "diverging" is a column chart around zero instead of up from it: positive
    bars rise in the "over" colour, negative ones hang in the "under" colour.
@@ -191,8 +216,9 @@ function draw(host, cfg){
   }
 
   var w = Math.max(260, Math.round(host.clientWidth || 320));
+  var h = Math.max(H, Math.round(cfg.height || H));
   var pw = w - PAD.l - PAD.r;
-  var ph = H - PAD.t - PAD.b;
+  var ph = h - PAD.t - PAD.b;
 
   var raw = (!banded && cfg.raw) ? cfg.raw : [];
 
@@ -202,7 +228,9 @@ function draw(host, cfg){
                .concat(raw.map(function(p){ return p.y; }));
   var lo = Math.min.apply(null, ys);
   var hi = Math.max.apply(null, ys);
-  var a = diverging ? divergingAxis(lo, hi) : axis(lo, hi, cfg.kind === "column");
+  /* A taller plot gets finer gridlines — one roughly every 40px. */
+  var a = diverging ? divergingAxis(lo, hi)
+                    : axis(lo, hi, cfg.kind === "column", Math.max(4, Math.round(ph / 40)));
   a.fmt = cfg.fmtY;
 
   var Y = function(v){ return PAD.t + ph * (1 - (v - a.lo) / (a.hi - a.lo)); };
@@ -266,13 +294,13 @@ function draw(host, cfg){
     '<div class="chart-read" data-read>' +
       '<b>' + esc(cfg.fmtV(last.y, last)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
     '</div>' +
-    '<svg class="chart" width="' + w + '" height="' + H + '" viewBox="0 0 ' + w + ' ' + H +
+    '<svg class="chart" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h +
       '" role="img" aria-label="' + esc(cfg.label || "chart") + '">' +
       gridHTML(a, Y, w) +
       marks +
-      xLabelsHTML(pts, X, cfg) +
+      xLabelsHTML(pts, X, cfg, pw, h) +
       '<g class="c-cross" data-cross hidden>' +
-        '<line y1="' + PAD.t + '" y2="' + (H - PAD.b) + '"></line>' +
+        '<line y1="' + PAD.t + '" y2="' + (h - PAD.b) + '"></line>' +
         '<circle r="5.5"></circle>' +
       '</g>' +
       '<rect x="' + PAD.l + '" y="' + PAD.t + '" width="' + pw + '" height="' + ph +
