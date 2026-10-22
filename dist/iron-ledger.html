@@ -484,6 +484,17 @@ body.zoomed{overflow:hidden}
   text-transform:uppercase;color:var(--ink-3);
 }
 .lib-group:first-of-type{margin-top:0;padding-top:0;border-top:0}
+/* The suggestions a swap leads with read in the accent, the full library
+   in plain grey under its own divider. */
+.lib-group.lead{color:var(--accent)}
+.lib-all{
+  margin:22px 0 0;padding:10px 0 0;border-top:2px solid var(--line);
+  font-family:var(--font-d);font-size:15px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-2);
+}
+.lib-all + .lib-group{margin-top:6px;padding-top:0;border-top:0}
+.lib-swapping{margin:0 0 10px}
+.lib-swapping b{color:var(--ink)}
 
 /* A row is the pick button plus, for your own exercises, a way into the
    editor. Two buttons rather than one, because a button inside a button is
@@ -792,6 +803,61 @@ input[type="date"]{
 .card > h3{margin-bottom:10px}
 .card select{margin-bottom:4px}
 .card .hint{margin-top:10px}
+
+/* --- Getting stronger? ---------------------------------------------------
+   The verdict answers the question; the chart and the list are how you
+   check it. Direction is always a sign and a word as well as a colour. */
+.lift-verdict{margin:0;font-size:14px;color:var(--ink-2);line-height:1.4}
+.lift-verdict b{
+  font-family:var(--font-d);font-size:26px;font-weight:600;
+  letter-spacing:.02em;color:var(--ink);margin-right:2px;
+}
+.lift-verdict small{display:block;font-size:12px;color:var(--ink-3)}
+.lift-head{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);scroll-margin-top:72px}
+.lift-head h4{
+  margin:0;
+  min-width:0;overflow-wrap:anywhere;
+  font-family:var(--font-d);font-size:18px;font-weight:500;letter-spacing:.01em;
+}
+
+.lifts{display:flex;flex-direction:column;margin-top:12px}
+.lift{
+  display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;
+  min-height:46px;padding:9px 6px;text-align:left;
+  border-top:1px solid var(--line-soft);
+}
+.lift[aria-pressed="true"]{background:var(--surface-2);border-radius:6px}
+.lift-name{min-width:0;overflow-wrap:anywhere;font-size:14px;line-height:1.25}
+.lift-pr{
+  display:inline-block;margin-left:6px;padding:1px 5px;vertical-align:1px;
+  border-radius:4px;background:var(--accent-soft);color:var(--accent);
+  font-family:var(--font-m);font-size:9.5px;font-style:normal;letter-spacing:.1em;
+}
+.lift-chg{
+  font-family:var(--font-m);font-size:12.5px;font-weight:600;text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--ink-3);white-space:nowrap;
+}
+.lift-chg small{display:block;font-size:10px;font-weight:400;color:var(--ink-3)}
+.lift-chg[data-dir="up"]{color:var(--good)}
+.lift-chg[data-dir="down"]{color:var(--danger)}
+.lift-now{
+  min-width:62px;text-align:right;
+  font-family:var(--font-m);font-size:12.5px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+/* The gym, named only when a lift has been done in more than one. */
+.lift-gym{
+  display:block;margin-top:1px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.06em;color:var(--ink-3);
+}
+.lift-head h4 .lift-gym{display:inline;margin:0 0 0 8px;font-size:11px}
+.lifts-older{margin-top:10px}
+.lifts-older summary{
+  cursor:pointer;padding:8px 0;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.lifts-older .lifts{margin-top:0}
 
 
 /* ==========================================================================
@@ -1659,6 +1725,65 @@ var BODYWEIGHT = {
   "45-Degree Back Extension":1
 };
 
+/* Machines and cables: the ones whose numbers don't travel. A pin-loaded
+   stack, a cam or a pulley ratio differs from one building to the next, so
+   the same "100" can be 20lb apart — these get a strength trend per gym. A
+   barbell, a dumbbell or a Smith bar weighs the same everywhere, so those
+   stay one trend wherever you lift them. */
+var MACHINE = {
+  "Seated Chest Press Machine":1,
+  "Incline Chest Press Machine":1,
+  "Chest Fly Machine":1,
+  "Pec Deck":1,
+  "Cable Fly (High to Low)":1,
+  "Cable Fly (Low to High)":1,
+  "T-Bar Row":1,
+  "Seated Cable Low Row":1,
+  "Chest-Supported Row Machine":1,
+  "Seated Row Machine":1,
+  "Cable Lat Pulldown":1,
+  "Lat Pulldown Machine":1,
+  "Close-Grip Lat Pulldown":1,
+  "Single-Arm Lat Pulldown":1,
+  "Straight-Arm Pulldown":1,
+  "Rear Delt Fly Machine":1,
+  "Cable Face Pull":1,
+  "Shoulder Press Machine":1,
+  "Cable Lateral Raise":1,
+  "Lateral Raise Machine":1,
+  "Cable Bicep Curl":1,
+  "Machine Preacher Curl":1,
+  "Cable Tricep Pushdown":1,
+  "Rope Tricep Pushdown":1,
+  "Tricep Pushdown Machine":1,
+  "Overhead Cable Tricep Extension":1,
+  "V-Squat Machine":1,
+  "Hack Squat Machine":1,
+  "Pendulum Squat":1,
+  "Belt Squat":1,
+  "Leg Press":1,
+  "Cable Pull-Through":1,
+  "Leg Extension":1,
+  "Seated Leg Curl":1,
+  "Lying Leg Curl":1,
+  "Standing Leg Curl":1,
+  "Cable Kickback":1,
+  "Machine Hip Thrust":1,
+  "Glute Kickback Machine":1,
+  "Abductor Machine":1,
+  "Cable Hip Abduction":1,
+  "Adductor Machine":1,
+  "Cable Hip Adduction":1,
+  "Calf Raise":1,
+  "Standing Calf Raise":1,
+  "Seated Calf Raise":1,
+  "Leg Press Calf Raise":1,
+  "Cable Crunch":1,
+  "Machine Crunch":1,
+  "Pallof Press":1,
+  "Cable Woodchopper":1
+};
+
 /* --------------------------------------------------------------------------
    The rotation: Upper A, Lower A, Upper B, Lower B.
 
@@ -1746,6 +1871,7 @@ IL.data = {
   LIB: LIB,
   LIB_BY_NAME: LIB_BY_NAME,
   BODYWEIGHT: BODYWEIGHT,
+  MACHINE: MACHINE,
   TEMPLATES: TEMPLATES,
   CUSTOM_DEFAULTS: CUSTOM_DEFAULTS,
   PATTERNS: PATTERNS,
@@ -2077,7 +2203,7 @@ IL.vault = {
 
      exercise = { uid, name, sets, reps, weight, note, log,
                   pin, rotAge, progress }
-     libEntry = { name, group, type, sets, reps, pattern, bw }
+     libEntry = { name, group, type, sets, reps, pattern, bw, machine }
 
    A SET IS NOT A CHECKBOX. log[k] is either null (not done yet) or an array
    of segments — [{ w, r }, ...] — because one set can be several weights.
@@ -2288,7 +2414,8 @@ function addCustomExercise(spec){
     sets: clampSets(spec.sets || d.sets),
     reps: String(spec.reps || d.reps).trim() || d.reps,
     pattern: data.PATTERN_LABEL[spec.pattern] ? spec.pattern : "",
-    bw: !!spec.bw
+    bw: !!spec.bw,
+    machine: !!spec.machine
   };
 
   state.custom = customLib().filter(function(c){ return c.name !== name; });
@@ -2557,6 +2684,12 @@ function isBodyweight(name){
   return !!(data.BODYWEIGHT[name] || libLookup(name).bw);
 }
 
+/* A machine or cable — numbers that don't carry from one gym to another,
+   so its strength trend is kept per gym. See data.MACHINE. */
+function isMachine(name){
+  return !!(data.MACHINE[name] || libLookup(name).machine);
+}
+
 function restFor(name){
   return typeOf(name) === "compound" ? state.prefs.restCompound : state.prefs.restOther;
 }
@@ -2722,6 +2855,19 @@ function removeEntry(id){
 
 /* Move a logged day to a different date, keeping the time of day it was
    finished at — the date is the part you'd want to correct, not the clock. */
+/* Which gym a logged session happened at. Mostly for sessions from before
+   you added gyms, so their numbers join the right place's trend — and the
+   right place's working weights. "" takes the gym off. */
+function setEntryGym(id, gymId){
+  var h = findEntry(id);
+  if(!h) return false;
+  var g = gymId ? gymById(gymId) : null;
+  h.gymId = g ? g.id : "";
+  h.gymName = g ? g.name : "";
+  save();
+  return true;
+}
+
 function setEntryDate(id, key){
   var h = findEntry(id);
   if(!h) return false;
@@ -3298,45 +3444,103 @@ function loggedExercises(){
   });
 }
 
+/* Every movement you've logged. Machines and cables come once per gym
+   you've done them at — a leg press in one building is a different machine
+   from the one across town, and their numbers can sit 20lb apart. For
+   those, sessions with no gym on them (logged before you added gyms) are
+   their own place, gymId "". Everything else — barbell, dumbbell, Smith,
+   bodyweight — is one lift wherever you did it, gymId null.
+
+     { key, name, gymId, gymName, split }
+
+   key is gymId + ":" + name, with "*" for null — gym ids never contain a
+   colon, so it splits back cleanly. split is true when this exercise has
+   been done in more than one place, which is when the gym is worth naming. */
+function liftKey(name, gymId){ return (gymId === null ? "*" : gymId || "") + ":" + name; }
+
+function loggedLifts(){
+  var seen = {};
+  var places = {};
+  var order = [];
+
+  sessionsOnly().forEach(function(h){
+    h.entries.forEach(function(en){
+      if(!en.completed) return;
+      var gymId = isMachine(en.name) ? (h.gymId || "") : null;
+      var key = liftKey(en.name, gymId);
+      if(!seen[key]){
+        seen[key] = { key:key, name:en.name, gymId:gymId, gymName:"", lastAt:0 };
+        order.push(seen[key]);
+        places[en.name] = (places[en.name] || 0) + 1;
+      }
+      /* The gym's name now if it's still on the list; if you've since
+         removed it, the name the session was logged under. */
+      if(gymId !== null) seen[key].gymName = gymName(gymId) || h.gymName || "";
+      seen[key].lastAt = Math.max(seen[key].lastAt, h.at);
+    });
+  });
+
+  /* An exercise's gyms sit together, so the two numbers can be read side by
+     side: exercises by when you last did them anywhere, then its gyms the
+     same way. */
+  var latest = {};
+  order.forEach(function(l){
+    l.split = places[l.name] > 1;
+    latest[l.name] = Math.max(latest[l.name] || 0, l.lastAt);
+  });
+  return order.sort(function(a, b){
+    return latest[b.name] - latest[a.name] || a.name.localeCompare(b.name) || b.lastAt - a.lastAt;
+  });
+}
+
 /* The strength trend for one movement.
 
    metric "load" is an estimated 1RM, and for pull-ups and dips your
    bodyweight at the time (the 7-day average) is added in — a chin-up at
    150lb and the same rep at 190lb are not the same lift. metric "reps" is the fallback for anything
    never logged with a load (and no bodyweight on file to supply one), where
-   more reps IS the progress. */
-function exerciseSeries(name){
+   more reps IS the progress.
+
+   Pass a gymId ("" for sessions with no gym) to keep to one place; leave it
+   out, or pass null, for every session wherever it happened. */
+function exerciseSeries(name, gymId){
   var raw = [];
   var anyLoad = false;
 
   sessionsOnly().forEach(function(h){
+    if(gymId !== undefined && gymId !== null && (h.gymId || "") !== gymId) return;
     h.entries.forEach(function(en){
       if(en.name !== name || !en.completed) return;
 
       var bw = trendWeightAt(h.at);
-      var carried = data.BODYWEIGHT[name] ? bw : 0;
-      var best = 0;
-      var reps = 0;
+      var carried = isBodyweight(name) ? bw : 0;
+      var best = 0, bestSet = null;
+      var reps = 0, repSet = null;
 
       (en.logged || []).forEach(function(item){
         item.segs.forEach(function(s){
-          best = Math.max(best, e1rm((s.w || 0) + carried, s.r));
+          var est = e1rm((s.w || 0) + carried, s.r);
+          if(est > best){ best = est; bestSet = { w:s.w || 0, r:s.r }; }
         });
-        reps = Math.max(reps, totalReps(item.segs));
+        var n = totalReps(item.segs);
+        if(n > reps){ reps = n; repSet = { w:0, r:n }; }
       });
 
       if(best > 0) anyLoad = true;
-      raw.push({ at:h.at, load:best, reps:reps, bw:bw });
+      raw.push({ at:h.at, load:best, reps:reps, bw:bw, loadSet:bestSet, repSet:repSet });
     });
   });
 
   var metric = anyLoad ? "load" : "reps";
   var points = [];
 
+  /* Each point keeps the set that produced it, so the readout can say
+     "185 × 8" — the thing you actually did — next to the estimate. */
   raw.forEach(function(p){
     var v = metric === "load" ? p.load : p.reps;
     if(!v) return;                      /* a session with nothing usable */
-    points.push({ x:p.at, y:Math.round(v * 10) / 10, bw:p.bw });
+    points.push({ x:p.at, y:Math.round(v * 10) / 10, bw:p.bw,
+                  set: metric === "load" ? p.loadSet : p.repSet });
   });
 
   return { name:name, metric:metric, points:points };
@@ -3351,9 +3555,75 @@ function relativeSeries(series){
     name: series.name,
     metric: series.metric,
     points: series.points.filter(function(p){ return p.bw > 0; }).map(function(p){
-      return { x:p.x, y:Math.round(p.y / p.bw * 100) / 100, bw:p.bw };
+      return { x:p.x, y:Math.round(p.y / p.bw * 100) / 100, bw:p.bw, set:p.set };
     })
   };
+}
+
+/* One session's estimate swings with sleep, warm-up and which gym you were
+   at, so the line is the average of the last few sessions and each day's
+   own number stays underneath as a dot — the same treatment as bodyweight.
+   Every point keeps its day's reading as raw. */
+var SMOOTH_SESSIONS = 3;
+
+function smoothSeries(series){
+  var pts = series.points;
+  return {
+    name: series.name,
+    metric: series.metric,
+    points: pts.map(function(p, i){
+      var win = pts.slice(Math.max(0, i - SMOOTH_SESSIONS + 1), i + 1);
+      var avg = win.reduce(function(n, q){ return n + q.y; }, 0) / win.length;
+      return { x:p.x, y:Math.round(avg * 100) / 100, raw:p.y, bw:p.bw, set:p.set };
+    })
+  };
+}
+
+/* "Lately", for the lift list: the change is measured over this window, and
+   a lift you haven't done inside it is filed under "not lately" rather than
+   graded on old news. */
+var LIFT_DAYS = 42;
+var TREND_FLAT = 0.015;       /* inside ±1.5% reads as holding, not a move */
+
+/* Every lift at a glance, most recently trained first: where its trend line
+   is now, and how far it has moved over the last six weeks (or since you
+   started it, if that's sooner). The estimate rises with more weight OR more
+   reps on your best set, so either kind of overload counts. One row per
+   exercise per gym — see loggedLifts(). */
+function liftTrends(){
+  var now = Date.now();
+
+  return loggedLifts().map(function(lift){
+    var line = smoothSeries(exerciseSeries(lift.name, lift.gymId));
+    var pts = line.points;
+    if(!pts.length) return null;
+
+    var last = pts[pts.length - 1];
+    var from = pts[0];
+    for(var i = 0; i < pts.length; i++){
+      if(pts[i].x <= last.x - LIFT_DAYS * DAY_MS) from = pts[i];
+    }
+
+    var change = (pts.length > 1 && from.y) ? (last.y - from.y) / from.y : 0;
+    var best = Math.max.apply(null, pts.map(function(p){ return p.raw; }));
+
+    return {
+      key: lift.key,
+      name: lift.name,
+      gymId: lift.gymId,
+      gymName: lift.gymName,
+      split: lift.split,
+      metric: line.metric,
+      sessions: pts.length,
+      now: last.y,
+      change: change,
+      days: Math.round((last.x - from.x) / DAY_MS),
+      dir: pts.length < 2 ? "new" : change >= TREND_FLAT ? "up" : change <= -TREND_FLAT ? "down" : "flat",
+      pr: pts.length > 1 && last.raw >= best,
+      lastAt: last.x,
+      recent: now - last.x <= LIFT_DAYS * DAY_MS
+    };
+  }).filter(Boolean);
 }
 
 function volumeSeries(){
@@ -3728,6 +3998,7 @@ IL.store = {
   varietyRules: varietyRules,
   typeOf: typeOf,
   isBodyweight: isBodyweight,
+  isMachine: isMachine,
   restFor: restFor,
   doneCount: doneCount,
   dayProgress: dayProgress,
@@ -3757,6 +4028,7 @@ IL.store = {
   findEntry: findEntry,
   removeEntry: removeEntry,
   setEntryDate: setEntryDate,
+  setEntryGym: setEntryGym,
   addSkip: addSkip,
 
   PHASES: PHASES,
@@ -3778,8 +4050,13 @@ IL.store = {
 
   e1rm: e1rm,
   loggedExercises: loggedExercises,
+  loggedLifts: loggedLifts,
+  liftKey: liftKey,
   exerciseSeries: exerciseSeries,
   relativeSeries: relativeSeries,
+  smoothSeries: smoothSeries,
+  liftTrends: liftTrends,
+  LIFT_DAYS: LIFT_DAYS,
   volumeSeries: volumeSeries,
   TREND_DAYS: TREND_DAYS,
   TDEE_NEEDS: TDEE_NEEDS,
@@ -5430,6 +5707,12 @@ function barPathDown(x, y, w, top){
          "V" + top + "Z";
 }
 
+function readHTML(cfg, p){
+  var note = cfg.fmtNote ? cfg.fmtNote(p) : "";
+  return '<b>' + esc(cfg.fmtV(p.y, p)) + '</b><span>' + esc(cfg.fmtX(p.x)) +
+    (note ? ' · ' + esc(note) : '') + '</span>';
+}
+
 /* --------------------------------------------------------------------------
    draw(host, cfg)
 
@@ -5438,6 +5721,8 @@ function barPathDown(x, y, w, top){
      cfg.fmtY     axis tick     -> string
      cfg.fmtV     readout value -> string; gets (y, point)
      cfg.fmtX     timestamp     -> string
+     cfg.fmtNote  optional: point -> a few words after the date in the
+                  readout, for detail too long to sit in the big number
      cfg.empty    what to say when there isn't enough to plot
      cfg.height   optional plot height in px; the cards use the default, the
                   expanded view asks for more
@@ -5545,7 +5830,7 @@ function draw(host, cfg){
 
   host.innerHTML =
     '<div class="chart-read" data-read>' +
-      '<b>' + esc(cfg.fmtV(last.y, last)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
+      readHTML(cfg, last) +
     '</div>' +
     '<svg class="chart" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h +
       '" role="img" aria-label="' + esc(cfg.label || "chart") + '">' +
@@ -5575,7 +5860,7 @@ function wire(host, pts, X, Y, cfg, band){
   var bars = host.querySelectorAll(".c-bar");
 
   function paintRead(p){
-    read.innerHTML = '<b>' + esc(cfg.fmtV(p.y, p)) + '</b><span>' + esc(cfg.fmtX(p.x)) + '</span>';
+    read.innerHTML = readHTML(cfg, p);
   }
 
   /* Matched on the point index each bar was drawn for, not its position in
@@ -5961,6 +6246,27 @@ function dateRow(h){
   '</div>';
 }
 
+/* Which gym, in the same open card. Mostly for sessions from before you
+   added gyms: tagging them puts their numbers on the right gym's strength
+   trend. Only offered once there's a gym to pick. */
+function gymRow(h){
+  var list = store.gyms().slice();
+  /* A gym you've since removed is still where this happened. */
+  if(h.gymId && !store.gymById(h.gymId)) list.push({ id:h.gymId, name:h.gymName || "Removed gym" });
+  if(!list.length) return "";
+
+  return '<div class="sess-date">' +
+    '<label class="lab" for="g-' + esc(h.id) + '">Gym</label>' +
+    '<select id="g-' + esc(h.id) + '" data-sessgym="' + esc(h.id) + '">' +
+      '<option value=""' + (!h.gymId ? ' selected' : '') + '>No gym set</option>' +
+      list.map(function(g){
+        return '<option value="' + esc(g.id) + '"' + (g.id === h.gymId ? ' selected' : '') + '>' +
+          esc(g.name) + '</option>';
+      }).join("") +
+    '</select>' +
+  '</div>';
+}
+
 function sessionCard(h, isOpen){
   var u = h.unit || "lb";
 
@@ -5996,6 +6302,7 @@ function sessionCard(h, isOpen){
       '<div class="sess-detail">' + lines +
         (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
         dateRow(h) +
+        gymRow(h) +
         '<button class="sess-del" data-del="' + esc(h.id) + '">Delete this session</button>' +
       '</div>' : '') +
   '</div>';
@@ -6407,6 +6714,8 @@ function renderLog(openId){
    because a resize has to repaint the same charts without app.js involved.
    -------------------------------------------------------------------------- */
 
+/* ex is a lift key (store.liftKey): the exercise AND the gym it was done
+   at, because the same machine in two buildings is two different lifts. */
 var progress = { ex:null, relative:false };
 
 function compact(v){
@@ -6415,30 +6724,97 @@ function compact(v){
 
 /* The series behind the strength chart, plus how to write its numbers. */
 function strengthView(){
-  var names = store.loggedExercises();
-  if(!names.length) return null;
+  var lifts = store.liftTrends();
+  if(!lifts.length) return null;
 
-  if(names.indexOf(progress.ex) < 0) progress.ex = names[0];
+  var lift = lifts.filter(function(l){ return l.key === progress.ex; })[0];
+  if(!lift){ lift = lifts[0]; progress.ex = lift.key; }
 
-  var series = store.exerciseSeries(progress.ex);
+  var series = store.exerciseSeries(lift.name, lift.gymId);
   var relative = progress.relative && series.metric === "load";
-  var shown = relative ? store.relativeSeries(series) : series;
+  var shown = store.smoothSeries(relative ? store.relativeSeries(series) : series);
+  var bw = store.isBodyweight(lift.name);
+
+  /* What you did that day, in the terms you did it: "185 × 8", "BW+25 × 8". */
+  function setText(s){
+    if(!s) return "";
+    if(series.metric !== "load") return s.r + " reps";
+    return (bw ? (s.w ? "BW+" + s.w : "BW") : s.w) + " × " + s.r;
+  }
+
+  var val = relative
+    ? function(v){ return v.toFixed(2) + "× bw"; }
+    : (series.metric === "load"
+        ? function(v){ return Math.round(v).toLocaleString() + " " + unit(); }
+        : function(v){ return Math.round(v) + " reps"; });
 
   return {
-    names: names,
+    lifts: lifts,
+    lift: lift,
     series: shown,
     metric: series.metric,
     relative: relative,
     canRelate: series.metric === "load" && store.state.body.length > 0,
-    fmtV: relative
-      ? function(v){ return v.toFixed(2) + "× bodyweight"; }
-      : (series.metric === "load"
-          ? function(v){ return Math.round(v).toLocaleString() + " " + unit(); }
-          : function(v){ return Math.round(v) + " reps"; }),
+    val: val,
+    fmtV: function(v){ return val(v); },
+    fmtNote: function(p){
+      return "best set " + setText(p.set) +
+        (series.metric === "load" ? " ≈ " + val(p.raw) : "");
+    },
     fmtY: relative
       ? function(v){ return v.toFixed(2); }
       : function(v){ return compact(v); }
   };
+}
+
+/* One lift in the list: its name, how far it has moved lately, and where
+   it is now. The direction is spelled out in a sign and a word as well as
+   the colour, so it reads the same for anyone. */
+function liftRow(l){
+  var pct = Math.round(Math.abs(l.change) * 100);
+  var chg = {
+    up:   "▲ " + (pct || "<1") + "%",
+    down: "▼ " + (pct || "<1") + "%",
+    flat: "Holding",
+    "new": "1 session"
+  }[l.dir];
+  var span = l.days >= 7 ? Math.round(l.days / 7) + " wk" : l.days + " d";
+  var now = l.metric === "load"
+    ? Math.round(l.now).toLocaleString() + " " + unit()
+    : Math.round(l.now) + " reps";
+
+  return '<button class="lift" data-lift="' + esc(l.key) + '" aria-pressed="' + (l.key === progress.ex) + '">' +
+    '<span class="lift-name">' + esc(l.name) +
+      (l.pr ? '<i class="lift-pr">PR</i>' : '') +
+      (l.split ? '<small class="lift-gym">' + esc(placeName(l)) + '</small>' : '') +
+    '</span>' +
+    '<span class="lift-chg" data-dir="' + l.dir + '">' + esc(chg) +
+      (l.dir === "up" || l.dir === "down" ? '<small>' + esc(span) + '</small>' : '') +
+    '</span>' +
+    '<span class="lift-now">' + esc(now) + '</span>' +
+  '</button>';
+}
+
+/* Where a lift was done, for when it's been done in more than one place. */
+function placeName(l){ return l.gymName || "No gym set"; }
+
+/* The answer first, in one line: of the lifts you're doing lately, how many
+   are going up. */
+function liftVerdict(lifts){
+  var graded = lifts.filter(function(l){ return l.recent && l.dir !== "new"; });
+  if(!graded.length){
+    return '<p class="lift-verdict">Do a lift on two different days and this tells you whether it\'s going up.</p>';
+  }
+  var up = graded.filter(function(l){ return l.dir === "up"; }).length;
+  var flat = graded.filter(function(l){ return l.dir === "flat"; }).length;
+  var down = graded.length - up - flat;
+  var weeks = Math.round(store.LIFT_DAYS / 7);
+
+  return '<p class="lift-verdict"><b>' + up + ' of ' + graded.length + '</b> ' +
+    (graded.length === 1 ? 'lift' : 'lifts') + ' up over the last ' + weeks + ' weeks' +
+    '<small>' +
+      [flat ? flat + ' holding' : '', down ? down + ' down' : ''].filter(Boolean).join(' · ') +
+    '</small></p>';
 }
 
 function statTile(label, value, sub){
@@ -7005,14 +7381,20 @@ function renderProgress(){
     ? "Week " + s.weeks + " · training since " + formatDay(s.since)
     : "Nothing logged yet";
 
-  var picker = view
-    ? '<select id="exPick" aria-label="Which exercise to chart">' +
-        view.names.map(function(n){
-          return '<option value="' + esc(n) + '"' +
-                 (n === progress.ex ? " selected" : "") + '>' + esc(n) + '</option>';
-        }).join("") +
-      '</select>'
-    : "";
+  /* Lifts you're doing now up top; ones you've rotated away from fold away
+     underneath, still there to look back on. */
+  var recent = view ? view.lifts.filter(function(l){ return l.recent; }) : [];
+  var older = view ? view.lifts.filter(function(l){ return !l.recent; }) : [];
+  var olderOpen = older.some(function(l){ return l.key === progress.ex; });
+
+  var liftList = !view ? "" :
+    '<div class="lifts">' + recent.map(liftRow).join("") + '</div>' +
+    (older.length
+      ? '<details class="lifts-older"' + (olderOpen ? ' open' : '') + '>' +
+          '<summary>Not done in the last ' + Math.round(store.LIFT_DAYS / 7) + ' weeks (' + older.length + ')</summary>' +
+          '<div class="lifts">' + older.map(liftRow).join("") + '</div>' +
+        '</details>'
+      : '');
 
   var toggle = (view && view.canRelate)
     ? '<div class="seg">' +
@@ -7023,10 +7405,12 @@ function renderProgress(){
 
   var strengthNote = !view ? "" :
     (view.relative
-      ? "Estimated one-rep max divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
+      ? "Your strength divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
       : view.metric === "load"
-        ? "Estimated one-rep max (Epley) from your best set that day" +
-          (store.isBodyweight(progress.ex) ? ", with your bodyweight added in" : "") + "."
+        ? "Each dot is one session's best set turned into an estimated one-rep max" +
+          (store.isBodyweight(view.lift.name) ? " (bodyweight included)" : "") +
+          " — so more weight or more reps both push it up. The line averages your last " +
+          "three sessions, so one off day can't hide the direction."
         : "This one has never been logged with a load, so it charts your best set's reps instead.");
 
   viewEl.innerHTML =
@@ -7053,13 +7437,19 @@ function renderProgress(){
       maintenanceCard() +
       calorieCard() +
 
-      '<section class="card">' +
-        '<div class="card-head">' +
-          '<h3>Strength trend</h3>' + toggle +
-        '</div>' +
-        picker +
+      '<section class="card" id="strengthCard">' +
+        '<h3>Getting stronger?</h3>' +
+        (view ? liftVerdict(view.lifts) : '') +
+        (view
+          ? '<div class="card-head lift-head">' +
+              '<h4>' + esc(view.lift.name) +
+                (view.lift.split ? '<small class="lift-gym">at ' + esc(placeName(view.lift)) + '</small>' : '') +
+              '</h4>' + toggle +
+            '</div>'
+          : '') +
         '<div class="chart-host hero" id="chStrength"></div>' +
         (strengthNote ? '<p class="hint">' + esc(strengthNote) + '</p>' : '') +
+        liftList +
       '</section>' +
 
       '<section class="card">' +
@@ -7090,8 +7480,10 @@ function paintCharts(){
   IL.chart.draw($("chStrength"), {
     kind: "line",
     points: view ? view.series.points : [],
+    raw: view ? view.series.points.map(function(p){ return { x:p.x, y:p.raw }; }) : [],
     fmtY: view ? view.fmtY : compact,
     fmtV: view ? view.fmtV : compact,
+    fmtNote: view ? view.fmtNote : null,
     fmtX: formatDay,
     label: view ? view.series.name + " over time" : "strength trend",
     empty: "Log the same exercise on two different days and its trend line appears here."
@@ -7657,21 +8049,67 @@ function libRow(x){
   '</div>';
 }
 
-function librarySheet(mode){
+/* Swapping is nearly always "something else that does this job", so a swap
+   opens on exactly that: the same movement pattern first (same weight class
+   ahead of the rest), then the rest of the same muscle group, and only then
+   the whole library. Each exercise appears once, and never the one you're
+   swapping out. */
+function libSections(mode, current){
   var all = store.libAll();
+  var sections = [];
+  var used = {};
+
+  function take(title, rows){
+    rows = rows.filter(function(x){ return !used[x.name]; });
+    rows.forEach(function(x){ used[x.name] = true; });
+    if(rows.length) sections.push({ title:title, rows:rows, lead:true });
+  }
+
+  if(mode === "swap" && current){
+    used[current] = true;
+    var me = store.libLookup(current);
+
+    if(me.pattern){
+      take("Does the same job · " + data.PATTERN_LABEL[me.pattern],
+        all.filter(function(x){ return x.pattern === me.pattern; })
+           .sort(function(a, b){ return (b.type === me.type) - (a.type === me.type); }));
+    }
+    if(me.group){
+      take("More " + me.group, all.filter(function(x){ return x.group === me.group; }));
+    }
+  }
+
   var groups = [];
   all.forEach(function(x){ if(groups.indexOf(x.group) < 0) groups.push(x.group); });
+  groups.forEach(function(g){
+    var rows = all.filter(function(x){ return x.group === g && !used[x.name]; });
+    if(rows.length) sections.push({ title:g, rows:rows });
+  });
+
+  return sections;
+}
+
+function librarySheet(mode, current){
+  var sections = libSections(mode, current);
+  var swapping = mode === "swap" && current;
 
   var html =
+    (swapping
+      ? '<p class="hint lib-swapping">Replacing <b>' + esc(current) + '</b></p>'
+      : '') +
     '<div class="field">' +
       '<input id="libSearch" type="text" placeholder="Search, or type a name of your own" autocomplete="off">' +
     '</div>' +
     '<div id="libCustom"></div>' +
     '<button class="add-btn" id="libNew">+ New exercise</button>' +
     '<div id="libList">' +
-      groups.map(function(g){
-        return '<div class="lib-group">' + esc(g) + '</div>' +
-          all.filter(function(x){ return x.group === g; }).map(libRow).join("");
+      sections.map(function(s, i){
+        /* A divider before the full library, so it's clear where the
+           suggestions stop. */
+        var everything = !s.lead && i > 0 && sections[i - 1].lead;
+        return (everything ? '<div class="lib-all">All exercises</div>' : '') +
+          '<div class="lib-group' + (s.lead ? ' lead' : '') + '">' + esc(s.title) + '</div>' +
+          s.rows.map(libRow).join("");
       }).join("") +
     '</div>';
 
@@ -7704,6 +8142,11 @@ function filterLibrary(){
     heads[j].hidden = !any;
   }
 
+  /* While searching, the list is one set of results — no suggestions to
+     divide it from. */
+  var divider = document.querySelector("#libList .lib-all");
+  if(divider) divider.hidden = !!q;
+
   $("libCustom").innerHTML = (raw && shown === 0)
     ? '<button class="lib-item solo" data-newname="' + esc(raw) + '">' +
         '<strong>Add “' + esc(raw) + '”</strong>' +
@@ -7724,7 +8167,7 @@ function builderSheet(name, existing){
   var d = data.CUSTOM_DEFAULTS;
   var x = existing || {
     name:name || "", group:d.group, type:d.type,
-    sets:d.sets, reps:d.reps, pattern:"", bw:false
+    sets:d.sets, reps:d.reps, pattern:"", bw:false, machine:false
   };
 
   var groups = [];
@@ -7787,6 +8230,14 @@ function builderSheet(name, existing){
       '<div class="seg">' +
         '<button data-nxbw="1" aria-pressed="' + (x.bw === true) + '">Yes</button>' +
         '<button data-nxbw="0" aria-pressed="' + (x.bw !== true) + '">No</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="setrow">' +
+      '<div class="k">Machine or cable<small>Weights differ gym to gym, so its strength is charted per gym</small></div>' +
+      '<div class="seg">' +
+        '<button data-nxmachine="1" aria-pressed="' + (x.machine === true) + '">Yes</button>' +
+        '<button data-nxmachine="0" aria-pressed="' + (x.machine !== true) + '">No</button>' +
       '</div>' +
     '</div>' +
 
@@ -8046,6 +8497,14 @@ function seedFromLog(e){
     e.progress = { kind:res.kind, note:res.note };
   }
   return e;
+}
+
+/* The library sheet, told which exercise a swap is replacing so it can lead
+   with the ones that do the same job. */
+function openLibrary(mode){
+  var day = store.currentDay();
+  var current = (mode === "swap" && editing >= 0 && day.ex[editing]) ? day.ex[editing].name : null;
+  ui.librarySheet(mode, current);
 }
 
 /* Put a chosen exercise into the day — replacing the one being edited, or on
@@ -8494,6 +8953,17 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  /* A lift in the list charts it. The list sits under the chart, so bring
+     the chart back into view rather than leaving you looking at the list. */
+  hit = t.closest("[data-lift]");
+  if(hit){
+    ui.progress.ex = hit.dataset.lift;
+    ui.renderProgress();
+    var head = document.querySelector(".lift-head");
+    if(head) head.scrollIntoView({ block:"nearest", behavior:"smooth" });
+    return;
+  }
+
   if(t.closest("#logWeight")){
     ui.weightSheet();
     return;
@@ -8735,9 +9205,10 @@ $("view").addEventListener("change", function(ev){
     return;
   }
 
-  if(t.id === "exPick"){
-    ui.progress.ex = t.value;
-    ui.renderProgress();
+  if(t.dataset.sessgym){
+    store.setEntryGym(t.dataset.sessgym, t.value);
+    ui.renderLog(openSession);
+    ui.toast(t.value ? "Logged at " + store.gymName(t.value) + "." : "Gym taken off this session.");
     return;
   }
 
@@ -9127,6 +9598,9 @@ $("sheetBody").addEventListener("click", function(ev){
     hit = t.closest("[data-nxbw]");
     if(hit){ toggleGroup(hit, "nxbw"); return; }
 
+    hit = t.closest("[data-nxmachine]");
+    if(hit){ toggleGroup(hit, "nxmachine"); return; }
+
     hit = t.closest("[data-nxdel]");
     if(hit){
       var goner = hit.dataset.nxdel;
@@ -9134,7 +9608,7 @@ $("sheetBody").addEventListener("click", function(ev){
                  "logged against it are untouched.")){
         store.removeCustomExercise(goner);
         builderName = null;
-        ui.librarySheet(builderFrom || "add");
+        openLibrary(builderFrom || "add");
         ui.toast(goner + " removed from the library.");
       }
       return;
@@ -9177,7 +9651,7 @@ $("sheetBody").addEventListener("click", function(ev){
   }
 
   if(t.closest("#swapBtn")){
-    ui.librarySheet("swap");
+    openLibrary("swap");
     return;
   }
 
@@ -9322,7 +9796,8 @@ function saveBuilder(){
     sets: $("nxSets").value,
     reps: $("nxReps").value,
     pattern: $("nxPattern").value,
-    bw: pickedValue("nxbw") === "1"
+    bw: pickedValue("nxbw") === "1",
+    machine: pickedValue("nxmachine") === "1"
   });
 
   /* Renaming leaves the entry it came from behind. */
@@ -9330,7 +9805,7 @@ function saveBuilder(){
 
   if(builderName){
     builderName = null;
-    ui.librarySheet(builderFrom || "add");
+    openLibrary(builderFrom || "add");
     ui.toast(saved.name + " saved to your library.");
     return;
   }

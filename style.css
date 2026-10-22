@@ -468,6 +468,17 @@ body.zoomed{overflow:hidden}
   text-transform:uppercase;color:var(--ink-3);
 }
 .lib-group:first-of-type{margin-top:0;padding-top:0;border-top:0}
+/* The suggestions a swap leads with read in the accent, the full library
+   in plain grey under its own divider. */
+.lib-group.lead{color:var(--accent)}
+.lib-all{
+  margin:22px 0 0;padding:10px 0 0;border-top:2px solid var(--line);
+  font-family:var(--font-d);font-size:15px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-2);
+}
+.lib-all + .lib-group{margin-top:6px;padding-top:0;border-top:0}
+.lib-swapping{margin:0 0 10px}
+.lib-swapping b{color:var(--ink)}
 
 /* A row is the pick button plus, for your own exercises, a way into the
    editor. Two buttons rather than one, because a button inside a button is
@@ -776,6 +787,61 @@ input[type="date"]{
 .card > h3{margin-bottom:10px}
 .card select{margin-bottom:4px}
 .card .hint{margin-top:10px}
+
+/* --- Getting stronger? ---------------------------------------------------
+   The verdict answers the question; the chart and the list are how you
+   check it. Direction is always a sign and a word as well as a colour. */
+.lift-verdict{margin:0;font-size:14px;color:var(--ink-2);line-height:1.4}
+.lift-verdict b{
+  font-family:var(--font-d);font-size:26px;font-weight:600;
+  letter-spacing:.02em;color:var(--ink);margin-right:2px;
+}
+.lift-verdict small{display:block;font-size:12px;color:var(--ink-3)}
+.lift-head{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);scroll-margin-top:72px}
+.lift-head h4{
+  margin:0;
+  min-width:0;overflow-wrap:anywhere;
+  font-family:var(--font-d);font-size:18px;font-weight:500;letter-spacing:.01em;
+}
+
+.lifts{display:flex;flex-direction:column;margin-top:12px}
+.lift{
+  display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;
+  min-height:46px;padding:9px 6px;text-align:left;
+  border-top:1px solid var(--line-soft);
+}
+.lift[aria-pressed="true"]{background:var(--surface-2);border-radius:6px}
+.lift-name{min-width:0;overflow-wrap:anywhere;font-size:14px;line-height:1.25}
+.lift-pr{
+  display:inline-block;margin-left:6px;padding:1px 5px;vertical-align:1px;
+  border-radius:4px;background:var(--accent-soft);color:var(--accent);
+  font-family:var(--font-m);font-size:9.5px;font-style:normal;letter-spacing:.1em;
+}
+.lift-chg{
+  font-family:var(--font-m);font-size:12.5px;font-weight:600;text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--ink-3);white-space:nowrap;
+}
+.lift-chg small{display:block;font-size:10px;font-weight:400;color:var(--ink-3)}
+.lift-chg[data-dir="up"]{color:var(--good)}
+.lift-chg[data-dir="down"]{color:var(--danger)}
+.lift-now{
+  min-width:62px;text-align:right;
+  font-family:var(--font-m);font-size:12.5px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+/* The gym, named only when a lift has been done in more than one. */
+.lift-gym{
+  display:block;margin-top:1px;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.06em;color:var(--ink-3);
+}
+.lift-head h4 .lift-gym{display:inline;margin:0 0 0 8px;font-size:11px}
+.lifts-older{margin-top:10px}
+.lifts-older summary{
+  cursor:pointer;padding:8px 0;
+  font-family:var(--font-m);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.lifts-older .lifts{margin-top:0}
 
 
 /* ==========================================================================

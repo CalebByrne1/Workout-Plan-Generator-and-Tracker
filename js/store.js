@@ -24,7 +24,7 @@
 
      exercise = { uid, name, sets, reps, weight, note, log,
                   pin, rotAge, progress }
-     libEntry = { name, group, type, sets, reps, pattern, bw }
+     libEntry = { name, group, type, sets, reps, pattern, bw, machine }
 
    A SET IS NOT A CHECKBOX. log[k] is either null (not done yet) or an array
    of segments — [{ w, r }, ...] — because one set can be several weights.
@@ -235,7 +235,8 @@ function addCustomExercise(spec){
     sets: clampSets(spec.sets || d.sets),
     reps: String(spec.reps || d.reps).trim() || d.reps,
     pattern: data.PATTERN_LABEL[spec.pattern] ? spec.pattern : "",
-    bw: !!spec.bw
+    bw: !!spec.bw,
+    machine: !!spec.machine
   };
 
   state.custom = customLib().filter(function(c){ return c.name !== name; });
@@ -504,6 +505,12 @@ function isBodyweight(name){
   return !!(data.BODYWEIGHT[name] || libLookup(name).bw);
 }
 
+/* A machine or cable — numbers that don't carry from one gym to another,
+   so its strength trend is kept per gym. See data.MACHINE. */
+function isMachine(name){
+  return !!(data.MACHINE[name] || libLookup(name).machine);
+}
+
 function restFor(name){
   return typeOf(name) === "compound" ? state.prefs.restCompound : state.prefs.restOther;
 }
@@ -669,6 +676,19 @@ function removeEntry(id){
 
 /* Move a logged day to a different date, keeping the time of day it was
    finished at — the date is the part you'd want to correct, not the clock. */
+/* Which gym a logged session happened at. Mostly for sessions from before
+   you added gyms, so their numbers join the right place's trend — and the
+   right place's working weights. "" takes the gym off. */
+function setEntryGym(id, gymId){
+  var h = findEntry(id);
+  if(!h) return false;
+  var g = gymId ? gymById(gymId) : null;
+  h.gymId = g ? g.id : "";
+  h.gymName = g ? g.name : "";
+  save();
+  return true;
+}
+
 function setEntryDate(id, key){
   var h = findEntry(id);
   if(!h) return false;
@@ -1245,45 +1265,103 @@ function loggedExercises(){
   });
 }
 
+/* Every movement you've logged. Machines and cables come once per gym
+   you've done them at — a leg press in one building is a different machine
+   from the one across town, and their numbers can sit 20lb apart. For
+   those, sessions with no gym on them (logged before you added gyms) are
+   their own place, gymId "". Everything else — barbell, dumbbell, Smith,
+   bodyweight — is one lift wherever you did it, gymId null.
+
+     { key, name, gymId, gymName, split }
+
+   key is gymId + ":" + name, with "*" for null — gym ids never contain a
+   colon, so it splits back cleanly. split is true when this exercise has
+   been done in more than one place, which is when the gym is worth naming. */
+function liftKey(name, gymId){ return (gymId === null ? "*" : gymId || "") + ":" + name; }
+
+function loggedLifts(){
+  var seen = {};
+  var places = {};
+  var order = [];
+
+  sessionsOnly().forEach(function(h){
+    h.entries.forEach(function(en){
+      if(!en.completed) return;
+      var gymId = isMachine(en.name) ? (h.gymId || "") : null;
+      var key = liftKey(en.name, gymId);
+      if(!seen[key]){
+        seen[key] = { key:key, name:en.name, gymId:gymId, gymName:"", lastAt:0 };
+        order.push(seen[key]);
+        places[en.name] = (places[en.name] || 0) + 1;
+      }
+      /* The gym's name now if it's still on the list; if you've since
+         removed it, the name the session was logged under. */
+      if(gymId !== null) seen[key].gymName = gymName(gymId) || h.gymName || "";
+      seen[key].lastAt = Math.max(seen[key].lastAt, h.at);
+    });
+  });
+
+  /* An exercise's gyms sit together, so the two numbers can be read side by
+     side: exercises by when you last did them anywhere, then its gyms the
+     same way. */
+  var latest = {};
+  order.forEach(function(l){
+    l.split = places[l.name] > 1;
+    latest[l.name] = Math.max(latest[l.name] || 0, l.lastAt);
+  });
+  return order.sort(function(a, b){
+    return latest[b.name] - latest[a.name] || a.name.localeCompare(b.name) || b.lastAt - a.lastAt;
+  });
+}
+
 /* The strength trend for one movement.
 
    metric "load" is an estimated 1RM, and for pull-ups and dips your
    bodyweight at the time (the 7-day average) is added in — a chin-up at
    150lb and the same rep at 190lb are not the same lift. metric "reps" is the fallback for anything
    never logged with a load (and no bodyweight on file to supply one), where
-   more reps IS the progress. */
-function exerciseSeries(name){
+   more reps IS the progress.
+
+   Pass a gymId ("" for sessions with no gym) to keep to one place; leave it
+   out, or pass null, for every session wherever it happened. */
+function exerciseSeries(name, gymId){
   var raw = [];
   var anyLoad = false;
 
   sessionsOnly().forEach(function(h){
+    if(gymId !== undefined && gymId !== null && (h.gymId || "") !== gymId) return;
     h.entries.forEach(function(en){
       if(en.name !== name || !en.completed) return;
 
       var bw = trendWeightAt(h.at);
-      var carried = data.BODYWEIGHT[name] ? bw : 0;
-      var best = 0;
-      var reps = 0;
+      var carried = isBodyweight(name) ? bw : 0;
+      var best = 0, bestSet = null;
+      var reps = 0, repSet = null;
 
       (en.logged || []).forEach(function(item){
         item.segs.forEach(function(s){
-          best = Math.max(best, e1rm((s.w || 0) + carried, s.r));
+          var est = e1rm((s.w || 0) + carried, s.r);
+          if(est > best){ best = est; bestSet = { w:s.w || 0, r:s.r }; }
         });
-        reps = Math.max(reps, totalReps(item.segs));
+        var n = totalReps(item.segs);
+        if(n > reps){ reps = n; repSet = { w:0, r:n }; }
       });
 
       if(best > 0) anyLoad = true;
-      raw.push({ at:h.at, load:best, reps:reps, bw:bw });
+      raw.push({ at:h.at, load:best, reps:reps, bw:bw, loadSet:bestSet, repSet:repSet });
     });
   });
 
   var metric = anyLoad ? "load" : "reps";
   var points = [];
 
+  /* Each point keeps the set that produced it, so the readout can say
+     "185 × 8" — the thing you actually did — next to the estimate. */
   raw.forEach(function(p){
     var v = metric === "load" ? p.load : p.reps;
     if(!v) return;                      /* a session with nothing usable */
-    points.push({ x:p.at, y:Math.round(v * 10) / 10, bw:p.bw });
+    points.push({ x:p.at, y:Math.round(v * 10) / 10, bw:p.bw,
+                  set: metric === "load" ? p.loadSet : p.repSet });
   });
 
   return { name:name, metric:metric, points:points };
@@ -1298,9 +1376,75 @@ function relativeSeries(series){
     name: series.name,
     metric: series.metric,
     points: series.points.filter(function(p){ return p.bw > 0; }).map(function(p){
-      return { x:p.x, y:Math.round(p.y / p.bw * 100) / 100, bw:p.bw };
+      return { x:p.x, y:Math.round(p.y / p.bw * 100) / 100, bw:p.bw, set:p.set };
     })
   };
+}
+
+/* One session's estimate swings with sleep, warm-up and which gym you were
+   at, so the line is the average of the last few sessions and each day's
+   own number stays underneath as a dot — the same treatment as bodyweight.
+   Every point keeps its day's reading as raw. */
+var SMOOTH_SESSIONS = 3;
+
+function smoothSeries(series){
+  var pts = series.points;
+  return {
+    name: series.name,
+    metric: series.metric,
+    points: pts.map(function(p, i){
+      var win = pts.slice(Math.max(0, i - SMOOTH_SESSIONS + 1), i + 1);
+      var avg = win.reduce(function(n, q){ return n + q.y; }, 0) / win.length;
+      return { x:p.x, y:Math.round(avg * 100) / 100, raw:p.y, bw:p.bw, set:p.set };
+    })
+  };
+}
+
+/* "Lately", for the lift list: the change is measured over this window, and
+   a lift you haven't done inside it is filed under "not lately" rather than
+   graded on old news. */
+var LIFT_DAYS = 42;
+var TREND_FLAT = 0.015;       /* inside ±1.5% reads as holding, not a move */
+
+/* Every lift at a glance, most recently trained first: where its trend line
+   is now, and how far it has moved over the last six weeks (or since you
+   started it, if that's sooner). The estimate rises with more weight OR more
+   reps on your best set, so either kind of overload counts. One row per
+   exercise per gym — see loggedLifts(). */
+function liftTrends(){
+  var now = Date.now();
+
+  return loggedLifts().map(function(lift){
+    var line = smoothSeries(exerciseSeries(lift.name, lift.gymId));
+    var pts = line.points;
+    if(!pts.length) return null;
+
+    var last = pts[pts.length - 1];
+    var from = pts[0];
+    for(var i = 0; i < pts.length; i++){
+      if(pts[i].x <= last.x - LIFT_DAYS * DAY_MS) from = pts[i];
+    }
+
+    var change = (pts.length > 1 && from.y) ? (last.y - from.y) / from.y : 0;
+    var best = Math.max.apply(null, pts.map(function(p){ return p.raw; }));
+
+    return {
+      key: lift.key,
+      name: lift.name,
+      gymId: lift.gymId,
+      gymName: lift.gymName,
+      split: lift.split,
+      metric: line.metric,
+      sessions: pts.length,
+      now: last.y,
+      change: change,
+      days: Math.round((last.x - from.x) / DAY_MS),
+      dir: pts.length < 2 ? "new" : change >= TREND_FLAT ? "up" : change <= -TREND_FLAT ? "down" : "flat",
+      pr: pts.length > 1 && last.raw >= best,
+      lastAt: last.x,
+      recent: now - last.x <= LIFT_DAYS * DAY_MS
+    };
+  }).filter(Boolean);
 }
 
 function volumeSeries(){
@@ -1675,6 +1819,7 @@ IL.store = {
   varietyRules: varietyRules,
   typeOf: typeOf,
   isBodyweight: isBodyweight,
+  isMachine: isMachine,
   restFor: restFor,
   doneCount: doneCount,
   dayProgress: dayProgress,
@@ -1704,6 +1849,7 @@ IL.store = {
   findEntry: findEntry,
   removeEntry: removeEntry,
   setEntryDate: setEntryDate,
+  setEntryGym: setEntryGym,
   addSkip: addSkip,
 
   PHASES: PHASES,
@@ -1725,8 +1871,13 @@ IL.store = {
 
   e1rm: e1rm,
   loggedExercises: loggedExercises,
+  loggedLifts: loggedLifts,
+  liftKey: liftKey,
   exerciseSeries: exerciseSeries,
   relativeSeries: relativeSeries,
+  smoothSeries: smoothSeries,
+  liftTrends: liftTrends,
+  LIFT_DAYS: LIFT_DAYS,
   volumeSeries: volumeSeries,
   TREND_DAYS: TREND_DAYS,
   TDEE_NEEDS: TDEE_NEEDS,

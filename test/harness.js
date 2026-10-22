@@ -184,6 +184,12 @@ step(function(){
 
 step(function(){
   ok("library rows rendered", qa(".lib-row").length > 100, qa(".lib-row").length);
+  var swapped = q(".lib-swapping b").textContent;
+  ok("a swap names what it replaces", swapped.length > 0, swapped);
+  ok("and leads with the same job", /Does the same job/.test(q(".lib-group").textContent), q(".lib-group").textContent);
+  ok("never offering the same exercise back", !qa("[data-pick]").some(function(b){
+    return b.dataset.pick === swapped;
+  }));
   ok("hack squat is there", qa(".lib-row").some(function(r){
     return /Hack Squat Machine/.test(r.textContent);
   }));
@@ -768,13 +774,44 @@ step(function(){
   });
 });
 
+step(function(){
+  head("gyms: tagging a logged session");
+  click("#tabLog");
+  return wait(120);
+});
+
+step(function(){
+  var h = IL.store.state.history.filter(function(x){ return x.kind === "session" && x.gymId; })[0];
+  stash.tagId = h.id;
+  stash.tagGym = h.gymId;
+  click('[data-open="' + h.id + '"]');
+  ok("an open card offers its gym", !!q('[data-sessgym="' + h.id + '"]'));
+  eq("set to where it happened", q('[data-sessgym="' + h.id + '"]').value, h.gymId);
+  change('[data-sessgym="' + h.id + '"]', "");
+  eq("the gym can come off", IL.store.state.history.filter(function(x){ return x.id === stash.tagId; })[0].gymId, "");
+  change('[data-sessgym="' + stash.tagId + '"]', stash.tagGym);
+  eq("and go back on", IL.store.state.history.filter(function(x){ return x.id === stash.tagId; })[0].gymId, stash.tagGym);
+});
+
 /* ------------------------------------------------------------- progress */
 step(function(){
   head("progress tab");
   click("#tabProgress");
-  ok("progress rendered", /Strength trend/.test($("view").textContent));
+  ok("progress rendered", /Getting stronger/.test($("view").textContent));
   ok("charts drawn", qa(".chart").length >= 1, qa(".chart").length);
   ok("calendar drawn", qa(".cal-c").length > 60, qa(".cal-c").length);
+  var lifts = qa("[data-lift]");
+  ok("every lift listed", lifts.length >= 1, lifts.length);
+  ok("one of them charted", qa('[data-lift][aria-pressed="true"]').length === 1);
+  if(lifts.length > 1){
+    var other = lifts[lifts.length - 1].dataset.lift;
+    click(lifts[lifts.length - 1]);
+    /* The key is "gymId:name"; the heading shows the name. */
+    ok("tapping a lift charts it",
+       q(".lift-head h4").textContent.indexOf(other.slice(other.indexOf(":") + 1)) === 0,
+       q(".lift-head h4").textContent);
+    eq("and marks it", q('[data-lift][aria-pressed="true"]').dataset.lift, other);
+  }
 });
 
 step(function(){

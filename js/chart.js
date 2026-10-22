@@ -177,6 +177,12 @@ function barPathDown(x, y, w, top){
          "V" + top + "Z";
 }
 
+function readHTML(cfg, p){
+  var note = cfg.fmtNote ? cfg.fmtNote(p) : "";
+  return '<b>' + esc(cfg.fmtV(p.y, p)) + '</b><span>' + esc(cfg.fmtX(p.x)) +
+    (note ? ' · ' + esc(note) : '') + '</span>';
+}
+
 /* --------------------------------------------------------------------------
    draw(host, cfg)
 
@@ -185,6 +191,8 @@ function barPathDown(x, y, w, top){
      cfg.fmtY     axis tick     -> string
      cfg.fmtV     readout value -> string; gets (y, point)
      cfg.fmtX     timestamp     -> string
+     cfg.fmtNote  optional: point -> a few words after the date in the
+                  readout, for detail too long to sit in the big number
      cfg.empty    what to say when there isn't enough to plot
      cfg.height   optional plot height in px; the cards use the default, the
                   expanded view asks for more
@@ -292,7 +300,7 @@ function draw(host, cfg){
 
   host.innerHTML =
     '<div class="chart-read" data-read>' +
-      '<b>' + esc(cfg.fmtV(last.y, last)) + '</b><span>' + esc(cfg.fmtX(last.x)) + '</span>' +
+      readHTML(cfg, last) +
     '</div>' +
     '<svg class="chart" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h +
       '" role="img" aria-label="' + esc(cfg.label || "chart") + '">' +
@@ -322,7 +330,7 @@ function wire(host, pts, X, Y, cfg, band){
   var bars = host.querySelectorAll(".c-bar");
 
   function paintRead(p){
-    read.innerHTML = '<b>' + esc(cfg.fmtV(p.y, p)) + '</b><span>' + esc(cfg.fmtX(p.x)) + '</span>';
+    read.innerHTML = readHTML(cfg, p);
   }
 
   /* Matched on the point index each bar was drawn for, not its position in

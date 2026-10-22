@@ -230,6 +230,65 @@ var BODYWEIGHT = {
   "45-Degree Back Extension":1
 };
 
+/* Machines and cables: the ones whose numbers don't travel. A pin-loaded
+   stack, a cam or a pulley ratio differs from one building to the next, so
+   the same "100" can be 20lb apart — these get a strength trend per gym. A
+   barbell, a dumbbell or a Smith bar weighs the same everywhere, so those
+   stay one trend wherever you lift them. */
+var MACHINE = {
+  "Seated Chest Press Machine":1,
+  "Incline Chest Press Machine":1,
+  "Chest Fly Machine":1,
+  "Pec Deck":1,
+  "Cable Fly (High to Low)":1,
+  "Cable Fly (Low to High)":1,
+  "T-Bar Row":1,
+  "Seated Cable Low Row":1,
+  "Chest-Supported Row Machine":1,
+  "Seated Row Machine":1,
+  "Cable Lat Pulldown":1,
+  "Lat Pulldown Machine":1,
+  "Close-Grip Lat Pulldown":1,
+  "Single-Arm Lat Pulldown":1,
+  "Straight-Arm Pulldown":1,
+  "Rear Delt Fly Machine":1,
+  "Cable Face Pull":1,
+  "Shoulder Press Machine":1,
+  "Cable Lateral Raise":1,
+  "Lateral Raise Machine":1,
+  "Cable Bicep Curl":1,
+  "Machine Preacher Curl":1,
+  "Cable Tricep Pushdown":1,
+  "Rope Tricep Pushdown":1,
+  "Tricep Pushdown Machine":1,
+  "Overhead Cable Tricep Extension":1,
+  "V-Squat Machine":1,
+  "Hack Squat Machine":1,
+  "Pendulum Squat":1,
+  "Belt Squat":1,
+  "Leg Press":1,
+  "Cable Pull-Through":1,
+  "Leg Extension":1,
+  "Seated Leg Curl":1,
+  "Lying Leg Curl":1,
+  "Standing Leg Curl":1,
+  "Cable Kickback":1,
+  "Machine Hip Thrust":1,
+  "Glute Kickback Machine":1,
+  "Abductor Machine":1,
+  "Cable Hip Abduction":1,
+  "Adductor Machine":1,
+  "Cable Hip Adduction":1,
+  "Calf Raise":1,
+  "Standing Calf Raise":1,
+  "Seated Calf Raise":1,
+  "Leg Press Calf Raise":1,
+  "Cable Crunch":1,
+  "Machine Crunch":1,
+  "Pallof Press":1,
+  "Cable Woodchopper":1
+};
+
 /* --------------------------------------------------------------------------
    The rotation: Upper A, Lower A, Upper B, Lower B.
 
@@ -317,6 +376,7 @@ IL.data = {
   LIB: LIB,
   LIB_BY_NAME: LIB_BY_NAME,
   BODYWEIGHT: BODYWEIGHT,
+  MACHINE: MACHINE,
   TEMPLATES: TEMPLATES,
   CUSTOM_DEFAULTS: CUSTOM_DEFAULTS,
   PATTERNS: PATTERNS,

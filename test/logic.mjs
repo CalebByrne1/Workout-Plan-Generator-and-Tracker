@@ -648,6 +648,60 @@ store.setGym(town.id);
 plan.reseed();
 eq("at Downtown it comes from Downtown", store.state.days[0].ex[0].weight, 105);
 
+group("gyms: each gym gets its own strength trend");
+{
+  const lifts = store.liftTrends().filter((l) => l.name === PULL);
+  eq("one row per gym", lifts.map((l) => l.gymName).sort(), ["Downtown", "Westside"]);
+  ok("both flagged as split, so the gym gets named", lifts.every((l) => l.split));
+  const westSeries = store.exerciseSeries(PULL, west.id).points.map((p) => p.y);
+  eq("a gym's series holds only that gym's sessions", westSeries, [Math.round(store.e1rm(120, 8) * 10) / 10]);
+  eq("with no gym given, every session counts", store.exerciseSeries(PULL).points.length, 2);
+
+  /* A session from before gyms existed is its own place until you say
+     where it was. */
+  trainAt(west.id, PULL, 125, 8);
+  const old = store.state.history[store.state.history.length - 1];
+  store.setEntryGym(old.id, "");
+  eq("taking the gym off makes it its own row",
+     store.liftTrends().filter((l) => l.name === PULL).length, 3);
+  ok("named as having no gym", store.liftTrends().some((l) => l.name === PULL && l.gymId === "" && !l.gymName));
+  store.setEntryGym(old.id, west.id);
+  eq("tagging it puts it back with its gym", store.exerciseSeries(PULL, west.id).points.length, 2);
+  eq("and stamps the gym's name on it", old.gymName, "Westside");
+  eq("an unknown gym id is no gym", (store.setEntryGym(old.id, "g-nope"), old.gymId), "");
+  store.setEntryGym(old.id, west.id);
+  eq("tagging feeds working weights too", (store.setGym(west.id), store.lastEntryFor(PULL).entry.topWeight), 125);
+  /* Put things back the way the groups below expect them. */
+  store.state.history = store.state.history.filter((h) => h.id !== old.id);
+
+  /* A barbell, a dumbbell or a Smith bar weighs the same in every gym, so
+     those stay one trend; only machines and cables split. */
+  const BENCH = "Flat Barbell Bench Press";
+  const SMITH = "Incline Smith Press";
+  const mark = store.state.history.length;
+  trainAt(west.id, BENCH, 185, 6);
+  trainAt(town.id, BENCH, 185, 7);
+  trainAt(west.id, SMITH, 135, 8);
+  trainAt(town.id, SMITH, 135, 8);
+  ok("a cable pulldown is a machine", store.isMachine(PULL));
+  ok("a barbell bench isn't", !store.isMachine(BENCH));
+  ok("nor is a Smith press", !store.isMachine(SMITH));
+  const bench = store.liftTrends().filter((l) => l.name === BENCH);
+  eq("a barbell lift at two gyms is one row", bench.length, 1);
+  eq("holding both sessions", bench[0].sessions, 2);
+  ok("with no gym to name", !bench[0].split && bench[0].gymId === null);
+  eq("and so is a Smith press", store.liftTrends().filter((l) => l.name === SMITH).length, 1);
+
+  const custom = store.addCustomExercise({ name: "Plate-Loaded Row", machine: true });
+  ok("a custom exercise can be marked a machine", custom.machine && store.isMachine("Plate-Loaded Row"));
+  trainAt(west.id, "Plate-Loaded Row", 90, 10);
+  trainAt(town.id, "Plate-Loaded Row", 70, 10);
+  eq("and then it splits by gym too",
+     store.liftTrends().filter((l) => l.name === "Plate-Loaded Row").length, 2);
+  store.removeCustomExercise("Plate-Loaded Row");
+  store.state.history = store.state.history.slice(0, mark);
+}
+
 group("gyms: renaming and removing");
 store.renameGym(west.id, "Westside Barbell");
 eq("the list is renamed", store.gymById(west.id).name, "Westside Barbell");

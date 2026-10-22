@@ -52,6 +52,16 @@ Tap the **Gym** chip under the day's name to add a gym or switch to one. Then:
   those sessions exactly as they are; only the list forgets it.
 - Sessions logged before you added any gyms aren't tied to a place, so they
   stand in anywhere until you've logged that exercise at a gym.
+- **Machines and cables are charted per gym.** A leg press or a cable
+  pulldown you've done in two places gets two rows on the Progress tab, each
+  named with its gym, because a stack that reads 20lb lighter across town
+  isn't you getting weaker. Barbell, dumbbell, Smith and bodyweight lifts
+  weigh the same everywhere, so they stay one row. The list of which is
+  which is `MACHINE` in `js/data.js`; for your own exercises it's the
+  **Machine or cable** switch when you create or edit one.
+- **Open a session in the Log to change its gym.** That's how sessions from
+  before you added gyms join the right gym's trend (and its working
+  weights); until then they're their own row, *No gym set*.
 
 **Not at any of these today** covers a hotel or a friend's garage: no gym is
 set, and the numbers fall back to wherever you last trained.
@@ -78,8 +88,20 @@ all.
 
 The third tab turns the log into four things worth looking at.
 
-- **Strength trend** — an estimated one-rep max (Epley, from your best set
-  that day) for whichever movement you pick. For pull-ups and dips your
+- **Getting stronger?** — one line answers it ("3 of 5 lifts up over the
+  last 6 weeks"), then every lift is listed with how far it has moved over
+  those six weeks (▲/▼ and a %, or *Holding* inside ±1.5%), where it is now,
+  and a **PR** tag when the latest session was its best ever. Lifts you
+  haven't done in six weeks fold away underneath. Tap one to chart it.
+  A machine or cable done at more than one gym gets a row per gym (see
+  **Gyms**).
+  Progressive overload is any of more weight, more reps or more sets, and
+  the number here is built to rise with the first two: it's an estimated
+  one-rep max (Epley, from your best set that day), so 185 × 6 → 185 × 8
+  counts just as much as 185 → 190. Sets show up in **Volume** instead.
+  The chart draws each session's estimate as a dot and the average of the
+  last three sessions as the line, so one bad day doesn't read as a
+  regression; tap a point for the set behind it. For pull-ups and dips your
   bodyweight at the time (the 7-day average) is added in, because a chin-up at
   150lb and the same rep at 190lb are not the same lift. Anything you've never
   logged with a load charts your best set's *reps* instead, where that IS the
@@ -252,6 +274,11 @@ A swapped-in exercise opens at whatever your log says you last did on it. If
 it's genuinely new, it opens blank and says so.
 
 ## Adding exercises
+
+**Swap** opens on what you most likely want: the exercises that **do the same
+job** (same movement pattern, same weight class first), then the rest of that
+muscle group, then the whole library under **All exercises**. The exercise
+you're replacing is never offered back. Typing searches all of it.
 
 **Log → any exercise → Edit → Swap**, or **+ Add exercise**, then type a name.
 If nothing in the library matches, you get **Add "…"**, which opens a short

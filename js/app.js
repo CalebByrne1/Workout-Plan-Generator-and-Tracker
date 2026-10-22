@@ -64,6 +64,14 @@ function seedFromLog(e){
   return e;
 }
 
+/* The library sheet, told which exercise a swap is replacing so it can lead
+   with the ones that do the same job. */
+function openLibrary(mode){
+  var day = store.currentDay();
+  var current = (mode === "swap" && editing >= 0 && day.ex[editing]) ? day.ex[editing].name : null;
+  ui.librarySheet(mode, current);
+}
+
 /* Put a chosen exercise into the day — replacing the one being edited, or on
    the end. Shared by the library picker and by saving a brand-new exercise,
    which both finish the same way. */
@@ -510,6 +518,17 @@ $("view").addEventListener("click", function(ev){
     return;
   }
 
+  /* A lift in the list charts it. The list sits under the chart, so bring
+     the chart back into view rather than leaving you looking at the list. */
+  hit = t.closest("[data-lift]");
+  if(hit){
+    ui.progress.ex = hit.dataset.lift;
+    ui.renderProgress();
+    var head = document.querySelector(".lift-head");
+    if(head) head.scrollIntoView({ block:"nearest", behavior:"smooth" });
+    return;
+  }
+
   if(t.closest("#logWeight")){
     ui.weightSheet();
     return;
@@ -751,9 +770,10 @@ $("view").addEventListener("change", function(ev){
     return;
   }
 
-  if(t.id === "exPick"){
-    ui.progress.ex = t.value;
-    ui.renderProgress();
+  if(t.dataset.sessgym){
+    store.setEntryGym(t.dataset.sessgym, t.value);
+    ui.renderLog(openSession);
+    ui.toast(t.value ? "Logged at " + store.gymName(t.value) + "." : "Gym taken off this session.");
     return;
   }
 
@@ -1143,6 +1163,9 @@ $("sheetBody").addEventListener("click", function(ev){
     hit = t.closest("[data-nxbw]");
     if(hit){ toggleGroup(hit, "nxbw"); return; }
 
+    hit = t.closest("[data-nxmachine]");
+    if(hit){ toggleGroup(hit, "nxmachine"); return; }
+
     hit = t.closest("[data-nxdel]");
     if(hit){
       var goner = hit.dataset.nxdel;
@@ -1150,7 +1173,7 @@ $("sheetBody").addEventListener("click", function(ev){
                  "logged against it are untouched.")){
         store.removeCustomExercise(goner);
         builderName = null;
-        ui.librarySheet(builderFrom || "add");
+        openLibrary(builderFrom || "add");
         ui.toast(goner + " removed from the library.");
       }
       return;
@@ -1193,7 +1216,7 @@ $("sheetBody").addEventListener("click", function(ev){
   }
 
   if(t.closest("#swapBtn")){
-    ui.librarySheet("swap");
+    openLibrary("swap");
     return;
   }
 
@@ -1338,7 +1361,8 @@ function saveBuilder(){
     sets: $("nxSets").value,
     reps: $("nxReps").value,
     pattern: $("nxPattern").value,
-    bw: pickedValue("nxbw") === "1"
+    bw: pickedValue("nxbw") === "1",
+    machine: pickedValue("nxmachine") === "1"
   });
 
   /* Renaming leaves the entry it came from behind. */
@@ -1346,7 +1370,7 @@ function saveBuilder(){
 
   if(builderName){
     builderName = null;
-    ui.librarySheet(builderFrom || "add");
+    openLibrary(builderFrom || "add");
     ui.toast(saved.name + " saved to your library.");
     return;
   }

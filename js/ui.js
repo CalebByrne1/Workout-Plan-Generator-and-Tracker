@@ -301,6 +301,27 @@ function dateRow(h){
   '</div>';
 }
 
+/* Which gym, in the same open card. Mostly for sessions from before you
+   added gyms: tagging them puts their numbers on the right gym's strength
+   trend. Only offered once there's a gym to pick. */
+function gymRow(h){
+  var list = store.gyms().slice();
+  /* A gym you've since removed is still where this happened. */
+  if(h.gymId && !store.gymById(h.gymId)) list.push({ id:h.gymId, name:h.gymName || "Removed gym" });
+  if(!list.length) return "";
+
+  return '<div class="sess-date">' +
+    '<label class="lab" for="g-' + esc(h.id) + '">Gym</label>' +
+    '<select id="g-' + esc(h.id) + '" data-sessgym="' + esc(h.id) + '">' +
+      '<option value=""' + (!h.gymId ? ' selected' : '') + '>No gym set</option>' +
+      list.map(function(g){
+        return '<option value="' + esc(g.id) + '"' + (g.id === h.gymId ? ' selected' : '') + '>' +
+          esc(g.name) + '</option>';
+      }).join("") +
+    '</select>' +
+  '</div>';
+}
+
 function sessionCard(h, isOpen){
   var u = h.unit || "lb";
 
@@ -336,6 +357,7 @@ function sessionCard(h, isOpen){
       '<div class="sess-detail">' + lines +
         (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
         dateRow(h) +
+        gymRow(h) +
         '<button class="sess-del" data-del="' + esc(h.id) + '">Delete this session</button>' +
       '</div>' : '') +
   '</div>';
@@ -747,6 +769,8 @@ function renderLog(openId){
    because a resize has to repaint the same charts without app.js involved.
    -------------------------------------------------------------------------- */
 
+/* ex is a lift key (store.liftKey): the exercise AND the gym it was done
+   at, because the same machine in two buildings is two different lifts. */
 var progress = { ex:null, relative:false };
 
 function compact(v){
@@ -755,30 +779,97 @@ function compact(v){
 
 /* The series behind the strength chart, plus how to write its numbers. */
 function strengthView(){
-  var names = store.loggedExercises();
-  if(!names.length) return null;
+  var lifts = store.liftTrends();
+  if(!lifts.length) return null;
 
-  if(names.indexOf(progress.ex) < 0) progress.ex = names[0];
+  var lift = lifts.filter(function(l){ return l.key === progress.ex; })[0];
+  if(!lift){ lift = lifts[0]; progress.ex = lift.key; }
 
-  var series = store.exerciseSeries(progress.ex);
+  var series = store.exerciseSeries(lift.name, lift.gymId);
   var relative = progress.relative && series.metric === "load";
-  var shown = relative ? store.relativeSeries(series) : series;
+  var shown = store.smoothSeries(relative ? store.relativeSeries(series) : series);
+  var bw = store.isBodyweight(lift.name);
+
+  /* What you did that day, in the terms you did it: "185 × 8", "BW+25 × 8". */
+  function setText(s){
+    if(!s) return "";
+    if(series.metric !== "load") return s.r + " reps";
+    return (bw ? (s.w ? "BW+" + s.w : "BW") : s.w) + " × " + s.r;
+  }
+
+  var val = relative
+    ? function(v){ return v.toFixed(2) + "× bw"; }
+    : (series.metric === "load"
+        ? function(v){ return Math.round(v).toLocaleString() + " " + unit(); }
+        : function(v){ return Math.round(v) + " reps"; });
 
   return {
-    names: names,
+    lifts: lifts,
+    lift: lift,
     series: shown,
     metric: series.metric,
     relative: relative,
     canRelate: series.metric === "load" && store.state.body.length > 0,
-    fmtV: relative
-      ? function(v){ return v.toFixed(2) + "× bodyweight"; }
-      : (series.metric === "load"
-          ? function(v){ return Math.round(v).toLocaleString() + " " + unit(); }
-          : function(v){ return Math.round(v) + " reps"; }),
+    val: val,
+    fmtV: function(v){ return val(v); },
+    fmtNote: function(p){
+      return "best set " + setText(p.set) +
+        (series.metric === "load" ? " ≈ " + val(p.raw) : "");
+    },
     fmtY: relative
       ? function(v){ return v.toFixed(2); }
       : function(v){ return compact(v); }
   };
+}
+
+/* One lift in the list: its name, how far it has moved lately, and where
+   it is now. The direction is spelled out in a sign and a word as well as
+   the colour, so it reads the same for anyone. */
+function liftRow(l){
+  var pct = Math.round(Math.abs(l.change) * 100);
+  var chg = {
+    up:   "▲ " + (pct || "<1") + "%",
+    down: "▼ " + (pct || "<1") + "%",
+    flat: "Holding",
+    "new": "1 session"
+  }[l.dir];
+  var span = l.days >= 7 ? Math.round(l.days / 7) + " wk" : l.days + " d";
+  var now = l.metric === "load"
+    ? Math.round(l.now).toLocaleString() + " " + unit()
+    : Math.round(l.now) + " reps";
+
+  return '<button class="lift" data-lift="' + esc(l.key) + '" aria-pressed="' + (l.key === progress.ex) + '">' +
+    '<span class="lift-name">' + esc(l.name) +
+      (l.pr ? '<i class="lift-pr">PR</i>' : '') +
+      (l.split ? '<small class="lift-gym">' + esc(placeName(l)) + '</small>' : '') +
+    '</span>' +
+    '<span class="lift-chg" data-dir="' + l.dir + '">' + esc(chg) +
+      (l.dir === "up" || l.dir === "down" ? '<small>' + esc(span) + '</small>' : '') +
+    '</span>' +
+    '<span class="lift-now">' + esc(now) + '</span>' +
+  '</button>';
+}
+
+/* Where a lift was done, for when it's been done in more than one place. */
+function placeName(l){ return l.gymName || "No gym set"; }
+
+/* The answer first, in one line: of the lifts you're doing lately, how many
+   are going up. */
+function liftVerdict(lifts){
+  var graded = lifts.filter(function(l){ return l.recent && l.dir !== "new"; });
+  if(!graded.length){
+    return '<p class="lift-verdict">Do a lift on two different days and this tells you whether it\'s going up.</p>';
+  }
+  var up = graded.filter(function(l){ return l.dir === "up"; }).length;
+  var flat = graded.filter(function(l){ return l.dir === "flat"; }).length;
+  var down = graded.length - up - flat;
+  var weeks = Math.round(store.LIFT_DAYS / 7);
+
+  return '<p class="lift-verdict"><b>' + up + ' of ' + graded.length + '</b> ' +
+    (graded.length === 1 ? 'lift' : 'lifts') + ' up over the last ' + weeks + ' weeks' +
+    '<small>' +
+      [flat ? flat + ' holding' : '', down ? down + ' down' : ''].filter(Boolean).join(' · ') +
+    '</small></p>';
 }
 
 function statTile(label, value, sub){
@@ -1345,14 +1436,20 @@ function renderProgress(){
     ? "Week " + s.weeks + " · training since " + formatDay(s.since)
     : "Nothing logged yet";
 
-  var picker = view
-    ? '<select id="exPick" aria-label="Which exercise to chart">' +
-        view.names.map(function(n){
-          return '<option value="' + esc(n) + '"' +
-                 (n === progress.ex ? " selected" : "") + '>' + esc(n) + '</option>';
-        }).join("") +
-      '</select>'
-    : "";
+  /* Lifts you're doing now up top; ones you've rotated away from fold away
+     underneath, still there to look back on. */
+  var recent = view ? view.lifts.filter(function(l){ return l.recent; }) : [];
+  var older = view ? view.lifts.filter(function(l){ return !l.recent; }) : [];
+  var olderOpen = older.some(function(l){ return l.key === progress.ex; });
+
+  var liftList = !view ? "" :
+    '<div class="lifts">' + recent.map(liftRow).join("") + '</div>' +
+    (older.length
+      ? '<details class="lifts-older"' + (olderOpen ? ' open' : '') + '>' +
+          '<summary>Not done in the last ' + Math.round(store.LIFT_DAYS / 7) + ' weeks (' + older.length + ')</summary>' +
+          '<div class="lifts">' + older.map(liftRow).join("") + '</div>' +
+        '</details>'
+      : '');
 
   var toggle = (view && view.canRelate)
     ? '<div class="seg">' +
@@ -1363,10 +1460,12 @@ function renderProgress(){
 
   var strengthNote = !view ? "" :
     (view.relative
-      ? "Estimated one-rep max divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
+      ? "Your strength divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
       : view.metric === "load"
-        ? "Estimated one-rep max (Epley) from your best set that day" +
-          (store.isBodyweight(progress.ex) ? ", with your bodyweight added in" : "") + "."
+        ? "Each dot is one session's best set turned into an estimated one-rep max" +
+          (store.isBodyweight(view.lift.name) ? " (bodyweight included)" : "") +
+          " — so more weight or more reps both push it up. The line averages your last " +
+          "three sessions, so one off day can't hide the direction."
         : "This one has never been logged with a load, so it charts your best set's reps instead.");
 
   viewEl.innerHTML =
@@ -1393,13 +1492,19 @@ function renderProgress(){
       maintenanceCard() +
       calorieCard() +
 
-      '<section class="card">' +
-        '<div class="card-head">' +
-          '<h3>Strength trend</h3>' + toggle +
-        '</div>' +
-        picker +
+      '<section class="card" id="strengthCard">' +
+        '<h3>Getting stronger?</h3>' +
+        (view ? liftVerdict(view.lifts) : '') +
+        (view
+          ? '<div class="card-head lift-head">' +
+              '<h4>' + esc(view.lift.name) +
+                (view.lift.split ? '<small class="lift-gym">at ' + esc(placeName(view.lift)) + '</small>' : '') +
+              '</h4>' + toggle +
+            '</div>'
+          : '') +
         '<div class="chart-host hero" id="chStrength"></div>' +
         (strengthNote ? '<p class="hint">' + esc(strengthNote) + '</p>' : '') +
+        liftList +
       '</section>' +
 
       '<section class="card">' +
@@ -1430,8 +1535,10 @@ function paintCharts(){
   IL.chart.draw($("chStrength"), {
     kind: "line",
     points: view ? view.series.points : [],
+    raw: view ? view.series.points.map(function(p){ return { x:p.x, y:p.raw }; }) : [],
     fmtY: view ? view.fmtY : compact,
     fmtV: view ? view.fmtV : compact,
+    fmtNote: view ? view.fmtNote : null,
     fmtX: formatDay,
     label: view ? view.series.name + " over time" : "strength trend",
     empty: "Log the same exercise on two different days and its trend line appears here."
@@ -1997,21 +2104,67 @@ function libRow(x){
   '</div>';
 }
 
-function librarySheet(mode){
+/* Swapping is nearly always "something else that does this job", so a swap
+   opens on exactly that: the same movement pattern first (same weight class
+   ahead of the rest), then the rest of the same muscle group, and only then
+   the whole library. Each exercise appears once, and never the one you're
+   swapping out. */
+function libSections(mode, current){
   var all = store.libAll();
+  var sections = [];
+  var used = {};
+
+  function take(title, rows){
+    rows = rows.filter(function(x){ return !used[x.name]; });
+    rows.forEach(function(x){ used[x.name] = true; });
+    if(rows.length) sections.push({ title:title, rows:rows, lead:true });
+  }
+
+  if(mode === "swap" && current){
+    used[current] = true;
+    var me = store.libLookup(current);
+
+    if(me.pattern){
+      take("Does the same job · " + data.PATTERN_LABEL[me.pattern],
+        all.filter(function(x){ return x.pattern === me.pattern; })
+           .sort(function(a, b){ return (b.type === me.type) - (a.type === me.type); }));
+    }
+    if(me.group){
+      take("More " + me.group, all.filter(function(x){ return x.group === me.group; }));
+    }
+  }
+
   var groups = [];
   all.forEach(function(x){ if(groups.indexOf(x.group) < 0) groups.push(x.group); });
+  groups.forEach(function(g){
+    var rows = all.filter(function(x){ return x.group === g && !used[x.name]; });
+    if(rows.length) sections.push({ title:g, rows:rows });
+  });
+
+  return sections;
+}
+
+function librarySheet(mode, current){
+  var sections = libSections(mode, current);
+  var swapping = mode === "swap" && current;
 
   var html =
+    (swapping
+      ? '<p class="hint lib-swapping">Replacing <b>' + esc(current) + '</b></p>'
+      : '') +
     '<div class="field">' +
       '<input id="libSearch" type="text" placeholder="Search, or type a name of your own" autocomplete="off">' +
     '</div>' +
     '<div id="libCustom"></div>' +
     '<button class="add-btn" id="libNew">+ New exercise</button>' +
     '<div id="libList">' +
-      groups.map(function(g){
-        return '<div class="lib-group">' + esc(g) + '</div>' +
-          all.filter(function(x){ return x.group === g; }).map(libRow).join("");
+      sections.map(function(s, i){
+        /* A divider before the full library, so it's clear where the
+           suggestions stop. */
+        var everything = !s.lead && i > 0 && sections[i - 1].lead;
+        return (everything ? '<div class="lib-all">All exercises</div>' : '') +
+          '<div class="lib-group' + (s.lead ? ' lead' : '') + '">' + esc(s.title) + '</div>' +
+          s.rows.map(libRow).join("");
       }).join("") +
     '</div>';
 
@@ -2044,6 +2197,11 @@ function filterLibrary(){
     heads[j].hidden = !any;
   }
 
+  /* While searching, the list is one set of results — no suggestions to
+     divide it from. */
+  var divider = document.querySelector("#libList .lib-all");
+  if(divider) divider.hidden = !!q;
+
   $("libCustom").innerHTML = (raw && shown === 0)
     ? '<button class="lib-item solo" data-newname="' + esc(raw) + '">' +
         '<strong>Add “' + esc(raw) + '”</strong>' +
@@ -2064,7 +2222,7 @@ function builderSheet(name, existing){
   var d = data.CUSTOM_DEFAULTS;
   var x = existing || {
     name:name || "", group:d.group, type:d.type,
-    sets:d.sets, reps:d.reps, pattern:"", bw:false
+    sets:d.sets, reps:d.reps, pattern:"", bw:false, machine:false
   };
 
   var groups = [];
@@ -2127,6 +2285,14 @@ function builderSheet(name, existing){
       '<div class="seg">' +
         '<button data-nxbw="1" aria-pressed="' + (x.bw === true) + '">Yes</button>' +
         '<button data-nxbw="0" aria-pressed="' + (x.bw !== true) + '">No</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="setrow">' +
+      '<div class="k">Machine or cable<small>Weights differ gym to gym, so its strength is charted per gym</small></div>' +
+      '<div class="seg">' +
+        '<button data-nxmachine="1" aria-pressed="' + (x.machine === true) + '">Yes</button>' +
+        '<button data-nxmachine="0" aria-pressed="' + (x.machine !== true) + '">No</button>' +
       '</div>' +
     '</div>' +
 
