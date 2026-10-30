@@ -30,6 +30,12 @@
   --over:#A85F00;
   --under:#2F6FB3;
   --under-soft:#DCE7F4;
+  /* a training partner — the same blue as "under", so it carries the same
+     checked separation from the amber that marks your own sets. Its own
+     tokens all the same, so the two can part ways. */
+  --partner:#2F6FB3;
+  --partner-ink:#FFFFFF;
+  --partner-soft:#DCE7F4;
 
   --shadow:0 1px 2px rgba(16,26,26,.10), 0 12px 28px -12px rgba(16,26,26,.28);
   --r:10px;
@@ -59,6 +65,9 @@
     --over:#C27A18;
     --under:#4F8ACB;
     --under-soft:#1C2A38;
+    --partner:#4F8ACB;
+    --partner-ink:#08131F;
+    --partner-soft:#1C2A38;
     --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
   }
 }
@@ -82,6 +91,9 @@
   --over:#C27A18;
   --under:#4F8ACB;
   --under-soft:#1C2A38;
+  --partner:#4F8ACB;
+  --partner-ink:#08131F;
+  --partner-soft:#1C2A38;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
 }
 
@@ -1382,7 +1394,10 @@ textarea.tall{
    Gyms
    ========================================================================== */
 
-.gymrow{padding:0 14px 12px;margin-top:-4px}
+.gymrow{
+  display:flex;flex-wrap:wrap;gap:8px;
+  padding:0 14px 12px;margin-top:-4px;
+}
 
 .gymchip{
   display:flex;align-items:baseline;gap:8px;
@@ -1419,3 +1434,76 @@ textarea.tall{
 }
 .gymrow-item.here .gympick b{color:var(--accent)}
 .gymrow-item .lib-edit{align-self:center}
+
+
+/* ==========================================================================
+   Training partner
+   ========================================================================== */
+
+/* Their sets sit under yours behind a dashed rule, with their name and
+   colour leading — two people's sets, never one person doing double. Their
+   boxes are a little shorter, so yours still read as the main row. */
+.ex-partner{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.ex-partner .ex-meta{margin-top:0}
+.ex-partner .sets{margin-top:8px}
+.ex-partner .set{height:42px}
+.ex-partner .set[aria-pressed="true"]{background:var(--partner);border-color:var(--partner)}
+.ex-partner .set[aria-pressed="true"] .s,
+.ex-partner .set[aria-pressed="true"] .r{color:var(--partner-ink)}
+.ex-partner .chip.load{
+  background:var(--partner-soft);color:var(--partner);
+  border:1px solid var(--partner);       /* it's a button: where their sets start */
+}
+
+/* A name in their colour, with a dot, wherever their sets are shown. */
+.pname{
+  display:inline-flex;align-items:center;gap:6px;min-width:0;
+  font-family:var(--font-d);font-size:14px;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--partner);
+  overflow-wrap:anywhere;
+}
+.pname::before{
+  content:"";flex:none;width:8px;height:8px;border-radius:50%;
+  background:var(--partner);
+}
+
+.partnerchip[data-here="1"]{border-color:var(--partner)}
+.partnerchip[data-here="1"] b{color:var(--partner)}
+.partnerchip[data-here="0"] b{color:var(--ink-3)}
+
+/* Their half of a logged session, under yours. */
+.sess-partner{margin-top:8px}
+.sess-partner-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:4px 0 2px;
+}
+.sess-partner-head small{
+  font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+
+/* A sheet about their sets says so before anything else does: their colour
+   in the title and, through --accent, on the drop rails and rep chips. */
+.sheet[data-who="partner"]{
+  --accent:var(--partner);
+  --accent-hi:var(--partner);
+  --accent-ink:var(--partner-ink);
+  --accent-soft:var(--partner-soft);
+}
+.sheet[data-who="partner"] .sheet-head h3{color:var(--partner)}
+
+/* Whose Progress page. Their button wears their colour when it's theirs. */
+.seg.who{align-self:center}
+.seg.who button{max-width:9.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg.who button[data-who="partner"][aria-pressed="true"]{
+  background:var(--partner);color:var(--partner-ink);
+}
+
+/* Their page in their colour — the charts, the grid and the PR tags all
+   read --accent, so redefining it here recolours the lot. */
+.prog-wrap[data-who="partner"]{
+  --accent:var(--partner);
+  --accent-hi:var(--partner);
+  --accent-ink:var(--partner-ink);
+  --accent-soft:var(--partner-soft);
+}

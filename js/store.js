@@ -14,6 +14,7 @@
        custom:  [ libEntry ]              exercises you added on the phone
        gyms:    [ { id, name } ]          the places you train
        gym:     id of the one you're at now, or ""
+       partner: { name, here } or null    someone you train with — see below
        nutrition: { days:{ "YYYY-MM-DD": food }, goals:[ goal ] }
        prefs:   { unit, step, autoRest, restCompound, restOther,
                   autoProgress, variety, lastExport }
@@ -23,7 +24,7 @@
      goal = { from:"YYYY-MM-DD", kcal, phase:"cut"|"maintain"|"bulk"|"" }
 
      exercise = { uid, name, sets, reps, weight, note, log,
-                  pin, rotAge, progress }
+                  pin, rotAge, progress, partner:{ weight, log } }
      libEntry = { name, group, type, sets, reps, pattern, bw, machine }
 
    A SET IS NOT A CHECKBOX. log[k] is either null (not done yet) or an array
@@ -32,7 +33,7 @@
    set, and it's stored as [{w:185,r:5},{w:155,r:3}].
 
      session = { id, at, kind:"session", dayId, dayName, notes, unit,
-                 volume, entries }
+                 volume, entries, partner?:{ name, volume, entries } }
      entry   = { name, sets, target, completed, topWeight, volume,
                  logged: [ { set, segs } ] }
      skip    = { id, at, kind:"skip", skipType:"missed"|"rest", dayId,
@@ -51,7 +52,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 6;
+var SCHEMA = 7;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -284,7 +285,8 @@ function varietyRules(){
 
    pin       keeps auto-rotation off this slot
    rotAge    visits to this day since the slot last changed hands
-   progress  what the last finish decided — the chip on the row */
+   progress  what the last finish decided — the chip on the row
+   partner   your training partner's side of it: see partnerSide() */
 function planned(name, sets, reps){
   var def = libLookup(name);
   return {
@@ -297,9 +299,13 @@ function planned(name, sets, reps){
     log: [],
     pin: false,
     rotAge: 0,
-    progress: null
+    progress: null,
+    partner: blankPartner()
   };
 }
+
+/* weight null means "whatever their log says" — see partnerWeight(). */
+function blankPartner(){ return { weight:null, log:[] }; }
 
 function seed(){
   return {
@@ -322,6 +328,7 @@ function seed(){
     custom: [],
     gyms: [],
     gym: "",
+    partner: null,
     nutrition: { days:{}, goals:[] },
     prefs: {
       unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
@@ -405,6 +412,14 @@ function migrateToV6(saved){
   return saved;
 }
 
+/* schema 6 had no training partner. Nothing to convert — every session
+   logged so far was yours alone, which is exactly what it says. */
+function migrateToV7(saved){
+  saved.partner = saved.partner || null;
+  saved.schema = 7;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
@@ -421,11 +436,17 @@ function normalize(saved){
   if(saved.schema < 4) migrateToV4(saved);
   if(saved.schema < 5) migrateToV5(saved);
   if(saved.schema < 6) migrateToV6(saved);
+  if(saved.schema < 7) migrateToV7(saved);
 
   saved.gyms = Array.isArray(saved.gyms) ? saved.gyms : [];
   if(typeof saved.gym !== "string") saved.gym = "";
   /* A current gym that has since been deleted is no gym at all. */
   if(saved.gym && !saved.gyms.some(function(g){ return g.id === saved.gym; })) saved.gym = "";
+
+  var mate = saved.partner;
+  saved.partner = (mate && typeof mate === "object" && String(mate.name || "").trim())
+    ? { name: String(mate.name).trim(), here: mate.here !== false }
+    : null;
 
   /* Whatever arrived, leave nutrition in exactly one shape: days as a map,
      goals as a list in date order. A hand-edited backup can't break it. */
@@ -443,6 +464,8 @@ function normalize(saved){
       if(typeof e.pin !== "boolean") e.pin = false;
       if(typeof e.rotAge !== "number") e.rotAge = 0;
       if(e.progress === undefined) e.progress = null;
+      if(!e.partner || !Array.isArray(e.partner.log)) e.partner = blankPartner();
+      if(typeof e.partner.weight !== "number") e.partner.weight = null;
     });
   });
   saved.history.sort(function(a, b){ return a.at - b.at; });
@@ -521,9 +544,12 @@ function doneCount(e){
   return n;
 }
 
-function dayProgress(day){
+function dayProgress(day, who){
   var total = 0, done = 0;
-  day.ex.forEach(function(e){ total += e.sets; done += doneCount(e); });
+  day.ex.forEach(function(e){
+    total += e.sets;
+    done += doneCount(who === "partner" ? partnerSide(e) : e);
+  });
   return { done:done, total:total };
 }
 
@@ -535,15 +561,16 @@ function exerciseVolume(e){
 
 /* Most recent logged performance per movement, for the "last ..." line.
    Gym-aware in the same way as lastEntryFor: what you did HERE, falling
-   back to anywhere, flagged so the row can say which. */
-function lastPerformed(){
+   back to anywhere, flagged so the row can say which. Pass "partner" for
+   theirs. */
+function lastPerformed(who){
   var here = {};
   var anywhere = {};
   var at = state.gym;
+  var sessions = sessionsFor(who);
 
-  for(var i = state.history.length - 1; i >= 0; i--){
-    var h = state.history[i];
-    if(isSkip(h)) continue;
+  for(var i = sessions.length - 1; i >= 0; i--){
+    var h = sessions[i];
 
     for(var j = 0; j < h.entries.length; j++){
       var en = h.entries[j];
@@ -581,14 +608,14 @@ function lastPerformed(){
 
    Prefers the gym you're at. The elsewhere flag tells the caller the numbers came
    from a different building, which is worth saying out loud before anyone
-   plans a personal best on them. */
-function lastEntryFor(name){
+   plans a personal best on them. Pass "partner" for theirs. */
+function lastEntryFor(name, who){
   var at = state.gym;
   var fallback = null;
+  var sessions = sessionsFor(who);
 
-  for(var i = state.history.length - 1; i >= 0; i--){
-    var h = state.history[i];
-    if(isSkip(h)) continue;
+  for(var i = sessions.length - 1; i >= 0; i--){
+    var h = sessions[i];
 
     for(var j = 0; j < h.entries.length; j++){
       var en = h.entries[j];
@@ -633,6 +660,30 @@ function isSkip(h){ return h.kind === "skip"; }
 
 function sessionsOnly(){
   return state.history.filter(function(h){ return !isSkip(h); });
+}
+
+/* The sessions one person trained in, oldest first, each carrying that
+   person's own entries and volume. Yours are the history itself; your
+   partner's are lifted out of the sessions they joined (h.partner) into
+   the same shape, which is what lets every question below — last time,
+   working weight, the strength trend — be asked of either of you. */
+function sessionsFor(who){
+  if(who !== "partner") return sessionsOnly();
+
+  return sessionsOnly().filter(function(h){ return h.partner; }).map(function(h){
+    return {
+      id: h.id,
+      at: h.at,
+      kind: "session",
+      dayId: h.dayId,
+      dayName: h.dayName,
+      gymId: h.gymId,
+      gymName: h.gymName,
+      unit: h.unit,
+      volume: h.partner.volume || 0,
+      entries: h.partner.entries || []
+    };
+  });
 }
 
 /* Which calendar days have a logged workout on them. */
@@ -847,6 +898,108 @@ function setGym(id){
   state.gym = gymById(id) ? id : "";
   save();
   return currentGym();
+}
+
+/* --------------------------------------------------------------------------
+   Training partner
+
+   Someone you train alongside, logged on your phone so neither of you has
+   to guess what they lifted last time.
+
+   THEIR SETS RIDE INSIDE YOUR SESSIONS — h.partner = { name, volume,
+   entries }, with entries in exactly the shape of yours — rather than in a
+   history of their own. You trained together, so it is one session: moving
+   its date or its gym moves theirs too, deleting it deletes both, and there
+   are never two logs to keep in step. sessionsFor("partner") lifts them
+   back out whenever a question is about them.
+
+   In the plan, each exercise holds their side in e.partner: today's log,
+   and a working weight that stays null until something sets it (their
+   weight chip, or changing the weight on one of their sets) — null meaning
+   "what they lifted last time", read from their own history at this gym.
+   They share your exercise, sets and rep target; the weights are theirs.
+   Nothing progresses on its own for them. The point is remembering what
+   they did, not programming it.
+
+   `here` is whether they're training with you today. It only hides their
+   rows, and it stays put from one session to the next.
+   -------------------------------------------------------------------------- */
+
+function partner(){ return state.partner; }
+
+function partnerHere(){ return !!(state.partner && state.partner.here); }
+
+/* Add a partner, or rename the one you have. A rename carries through to
+   the sessions they've already logged, the way renaming a gym does. */
+function setPartner(name){
+  var clean = String(name || "").trim().replace(/\s+/g, " ");
+  if(!clean) return null;
+
+  if(state.partner){
+    state.partner.name = clean;
+    state.history.forEach(function(h){ if(h.partner) h.partner.name = clean; });
+  }else{
+    state.partner = { name:clean, here:true };
+  }
+  save();
+  return state.partner;
+}
+
+function setPartnerHere(here){
+  if(!state.partner) return false;
+  state.partner.here = !!here;
+  save();
+  return state.partner.here;
+}
+
+/* Only the partner goes. Every session they logged stays exactly as it is,
+   and adding a partner again picks that history back up. Sets logged for
+   them in a session you haven't finished go with them. */
+function removePartner(){
+  if(!state.partner) return false;
+  state.partner = null;
+  state.days.forEach(function(d){
+    d.ex.forEach(function(e){ e.partner = blankPartner(); });
+  });
+  save();
+  return true;
+}
+
+/* Where their sets start: the weight you set for them today, or else the
+   heaviest they lifted on it last time — here if they've done it here,
+   the same rule as yours. 0 for something they've never done. */
+function partnerWeight(e){
+  if(e.partner && typeof e.partner.weight === "number") return e.partner.weight;
+  var last = lastEntryFor(e.name, "partner");
+  return last ? (last.entry.topWeight || 0) : 0;
+}
+
+/* A blank goes back to last time's weight rather than to zero. */
+function setPartnerWeight(e, value){
+  if(!e.partner) e.partner = blankPartner();
+  if(value === null || value === undefined || String(value).trim() === ""){
+    e.partner.weight = null;
+  }else{
+    e.partner.weight = Math.max(0, Math.round((parseFloat(value) || 0) * 100) / 100);
+  }
+  return partnerWeight(e);
+}
+
+/* Their side of an exercise in the same shape as yours: the shared name,
+   sets and rep target, with their own log and weight. Every set function in
+   this file takes either — quickLog, addSegment, clearSet, doneCount — so
+   logging a set for them is the same code as logging one for you. The log
+   is their real array, not a copy, so writing through this writes the save. */
+function partnerSide(e){
+  if(!e.partner) e.partner = blankPartner();
+  return {
+    name: e.name,
+    sets: e.sets,
+    reps: e.reps,
+    weight: partnerWeight(e),
+    log: e.partner.log,
+    who: "partner"
+  };
 }
 
 /* --------------------------------------------------------------------------
@@ -1276,15 +1429,18 @@ function loggedExercises(){
 
    key is gymId + ":" + name, with "*" for null — gym ids never contain a
    colon, so it splits back cleanly. split is true when this exercise has
-   been done in more than one place, which is when the gym is worth naming. */
+   been done in more than one place, which is when the gym is worth naming.
+
+   Yours unless who is "partner" — and the same goes for every Progress
+   question below. */
 function liftKey(name, gymId){ return (gymId === null ? "*" : gymId || "") + ":" + name; }
 
-function loggedLifts(){
+function loggedLifts(who){
   var seen = {};
   var places = {};
   var order = [];
 
-  sessionsOnly().forEach(function(h){
+  sessionsFor(who).forEach(function(h){
     h.entries.forEach(function(en){
       if(!en.completed) return;
       var gymId = isMachine(en.name) ? (h.gymId || "") : null;
@@ -1323,17 +1479,20 @@ function loggedLifts(){
    more reps IS the progress.
 
    Pass a gymId ("" for sessions with no gym) to keep to one place; leave it
-   out, or pass null, for every session wherever it happened. */
-function exerciseSeries(name, gymId){
+   out, or pass null, for every session wherever it happened.
+
+   The bodyweight log is yours alone, so a partner's lifts are charted on
+   the load by itself: their pull-ups chart reps, not your weight. */
+function exerciseSeries(name, gymId, who){
   var raw = [];
   var anyLoad = false;
 
-  sessionsOnly().forEach(function(h){
+  sessionsFor(who).forEach(function(h){
     if(gymId !== undefined && gymId !== null && (h.gymId || "") !== gymId) return;
     h.entries.forEach(function(en){
       if(en.name !== name || !en.completed) return;
 
-      var bw = trendWeightAt(h.at);
+      var bw = who === "partner" ? 0 : trendWeightAt(h.at);
       var carried = isBodyweight(name) ? bw : 0;
       var best = 0, bestSet = null;
       var reps = 0, repSet = null;
@@ -1411,11 +1570,11 @@ var TREND_FLAT = 0.015;       /* inside ±1.5% reads as holding, not a move */
    started it, if that's sooner). The estimate rises with more weight OR more
    reps on your best set, so either kind of overload counts. One row per
    exercise per gym — see loggedLifts(). */
-function liftTrends(){
+function liftTrends(who){
   var now = Date.now();
 
-  return loggedLifts().map(function(lift){
-    var line = smoothSeries(exerciseSeries(lift.name, lift.gymId));
+  return loggedLifts(who).map(function(lift){
+    var line = smoothSeries(exerciseSeries(lift.name, lift.gymId, who));
     var pts = line.points;
     if(!pts.length) return null;
 
@@ -1447,17 +1606,18 @@ function liftTrends(){
   }).filter(Boolean);
 }
 
-function volumeSeries(){
-  return sessionsOnly().map(function(h){
+function volumeSeries(who){
+  return sessionsFor(who).map(function(h){
     return { x:h.at, y:h.volume || 0 };
   });
 }
 
 /* One row per calendar day for the consistency grid, oldest first, always
-   starting on a Sunday so the columns line up as weeks. */
-function calendar(weeks){
+   starting on a Sunday so the columns line up as weeks. A partner's grid is
+   the days they trained with you — the days off you marked are yours. */
+function calendar(weeks, who){
   var byDay = {};
-  state.history.forEach(function(h){
+  (who === "partner" ? sessionsFor(who) : state.history).forEach(function(h){
     var k = dayKey(h.at);
     /* A session outranks a skip on the same date — if you logged a workout,
        that day counts as trained whatever else got recorded. */
@@ -1469,7 +1629,7 @@ function calendar(weeks){
   cursor.setDate(cursor.getDate() - (weeks * 7 - 1));
   cursor.setDate(cursor.getDate() - cursor.getDay());     /* back to Sunday */
 
-  var volumes = sessionsOnly().map(function(h){ return h.volume || 0; })
+  var volumes = sessionsFor(who).map(function(h){ return h.volume || 0; })
                               .filter(function(v){ return v > 0; })
                               .sort(function(a, b){ return a - b; });
   var mid = volumes.length ? volumes[Math.floor(volumes.length / 2)] : 0;
@@ -1501,15 +1661,18 @@ function calendar(weeks){
   return cells;
 }
 
-/* The headline numbers above the charts. */
-function summary(){
-  var sessions = sessionsOnly();
-  var first = state.history.length ? state.history[0].at : null;
+/* The headline numbers above the charts. A partner's start from their
+   first session with you, and have no missed days — those are yours. */
+function summary(who){
+  var sessions = sessionsFor(who);
+  var mine = who !== "partner";
+  var from = mine ? state.history : sessions;
+  var first = from.length ? from[0].at : null;
   var since = first ? Math.max(1, Math.ceil((daysBetween(first, Date.now()) + 1) / 7)) : 0;
 
   var monthAgo = Date.now() - 30 * DAY_MS;
   var recent = sessions.filter(function(h){ return h.at >= monthAgo; });
-  var missed = skipsOnly().filter(function(h){
+  var missed = !mine ? [] : skipsOnly().filter(function(h){
     return h.skipType === "missed" && h.at >= monthAgo;
   });
 
@@ -1538,6 +1701,7 @@ function clampSets(n){
 function setSets(e, n){
   e.sets = clampSets(n);
   e.log.length = e.sets;   /* drop logs for sets that no longer exist */
+  if(e.partner && e.partner.log.length > e.sets) e.partner.log.length = e.sets;
   return e.sets;
 }
 
@@ -1596,36 +1760,48 @@ function moveExercise(day, from, to){
   return true;
 }
 
+/* One exercise as it goes into the history: every logged set copied, with
+   its totals. Takes your side of an exercise or your partner's, and adds
+   its volume, unrounded, to tally. */
+function toEntry(e, tally){
+  var logged = [];
+  var heaviest = 0;
+  var exVolume = 0;
+
+  for(var k = 0; k < e.sets; k++){
+    if(!isLogged(e, k)) continue;
+    var segs = e.log[k].map(function(s){ return { w:s.w, r:s.r }; });
+    logged.push({ set:k + 1, segs:segs });
+    heaviest = Math.max(heaviest, topWeight(segs));
+    exVolume += segmentVolume(segs);
+  }
+
+  tally.volume += exVolume;
+  return {
+    name: e.name,
+    sets: e.sets,
+    target: e.reps,
+    completed: logged.length,
+    topWeight: heaviest,
+    volume: Math.round(exVolume),
+    logged: logged
+  };
+}
+
 /* Log the session, clear the sets, advance the rotation.
    Returns the finished day so the caller can report on it. */
 function finishSession(){
   var day = currentDay();
-  var volume = 0;
+  var mine = { volume:0 };
+  var entries = day.ex.map(function(e){ return toEntry(e, mine); });
+  var volume = mine.volume;
 
-  var entries = day.ex.map(function(e){
-    var logged = [];
-    var heaviest = 0;
-    var exVolume = 0;
-
-    for(var k = 0; k < e.sets; k++){
-      if(!isLogged(e, k)) continue;
-      var segs = e.log[k].map(function(s){ return { w:s.w, r:s.r }; });
-      logged.push({ set:k + 1, segs:segs });
-      heaviest = Math.max(heaviest, topWeight(segs));
-      exVolume += segmentVolume(segs);
-    }
-
-    volume += exVolume;
-    return {
-      name: e.name,
-      sets: e.sets,
-      target: e.reps,
-      completed: logged.length,
-      topWeight: heaviest,
-      volume: Math.round(exVolume),
-      logged: logged
-    };
-  });
+  /* A partner's side lists only what they did, and goes in only if they did
+     something — a session they sat out simply has no partner on it. */
+  var theirs = { volume:0 };
+  var partnerEntries = !state.partner ? [] : day.ex.map(function(e){
+    return toEntry(partnerSide(e), theirs);
+  }).filter(function(en){ return en.completed > 0; });
 
   var here = currentGym();
   var record = {
@@ -1641,11 +1817,19 @@ function finishSession(){
     volume: Math.round(volume),
     entries: entries
   };
+  if(partnerEntries.length){
+    record.partner = {
+      name: state.partner.name,
+      volume: Math.round(theirs.volume),
+      entries: partnerEntries
+    };
+  }
 
   state.history.push(record);
   sortHistory();   /* a backdated skip may already sit after "now" */
 
-  day.ex.forEach(function(e){ e.log = []; });
+  /* Their weight goes back to "last time", which is now today. */
+  day.ex.forEach(function(e){ e.log = []; e.partner = blankPartner(); });
   day.notes = "";
 
   /* Set the day up for next time while the session is still in hand: loads
@@ -1680,7 +1864,7 @@ function toCSV(){
   var header = [
     "date","time","day","gym","type","exercise","set","segment",
     "weight","reps","unit","volume","bodyweight","notes",
-    "calories","calorie_target","protein_g","fiber_g"
+    "calories","calorie_target","protein_g","fiber_g","person"
   ];
   var rows = [header];
 
@@ -1719,6 +1903,26 @@ function toCSV(){
         });
       });
     });
+
+    /* A partner's sets follow yours: same session, so the same date, day
+       and gym, with their name in the last column and none of your
+       bodyweight. Your rows leave that column blank. */
+    if(h.partner){
+      h.partner.entries.forEach(function(en){
+        (en.logged || []).forEach(function(item){
+          item.segs.forEach(function(s, i){
+            var row = [
+              date, time, h.dayName, h.gymName || "", "set", en.name, item.set, i + 1,
+              s.w || 0, s.r || 0, h.unit || "lb",
+              Math.round((s.w || 0) * (s.r || 0)), "", ""
+            ];
+            while(row.length < header.length - 1) row.push("");
+            row.push(h.partner.name);
+            rows.push(row);
+          });
+        });
+      });
+    }
   });
 
   /* Weigh-ins ride along in the same file, so one export is the whole story. */
@@ -1807,6 +2011,15 @@ IL.store = {
   renameGym: renameGym,
   removeGym: removeGym,
   setGym: setGym,
+  partner: partner,
+  partnerHere: partnerHere,
+  setPartner: setPartner,
+  setPartnerHere: setPartnerHere,
+  removePartner: removePartner,
+  partnerSide: partnerSide,
+  partnerWeight: partnerWeight,
+  setPartnerWeight: setPartnerWeight,
+  blankPartner: blankPartner,
   customLib: customLib,
   libLookup: libLookup,
   libAll: libAll,
@@ -1845,6 +2058,7 @@ IL.store = {
   lastEntryFor: lastEntryFor,
   lastTouchedAt: lastTouchedAt,
   sessionsOnly: sessionsOnly,
+  sessionsFor: sessionsFor,
   skipsOnly: skipsOnly,
   findEntry: findEntry,
   removeEntry: removeEntry,

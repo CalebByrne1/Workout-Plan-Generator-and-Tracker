@@ -154,25 +154,34 @@ function renderRail(activeView){
    Training day
    -------------------------------------------------------------------------- */
 
+function partnerName(){
+  var p = store.partner();
+  return p ? p.name : "Partner";
+}
+
 /* Unlogged: "Set 2" over the rep target.
    Logged:   the weight over the reps you actually got, with a ▾ when the set
-             had drops in it. */
+             had drops in it.
+   e is your side of the exercise or your partner's (store.partnerSide), and
+   theirs carry ",partner" on the end of data-set so a tap knows whose it is. */
 function setButton(e, row, k){
   var segs = e.log[k];
   var logged = store.isLogged(e, k);
+  var theirs = e.who === "partner";
+  var whose = theirs ? partnerName() + "'s set " : "set ";
   var top, big, label;
 
   if(logged){
     top = formatWeight(store.topWeight(segs), e.name) + (segs.length > 1 ? " ▾" : "");
     big = store.totalReps(segs);
-    label = "Set " + (k + 1) + ", " + segsDetail(segs, e.name) + ". Edit.";
+    label = (theirs ? whose : "Set ") + (k + 1) + ", " + segsDetail(segs, e.name) + ". Edit.";
   }else{
     top = "Set " + (k + 1);
     big = e.reps;
-    label = "Log set " + (k + 1) + " of " + e.name;
+    label = "Log " + whose + (k + 1) + " of " + e.name;
   }
 
-  return '<button class="set" data-set="' + row + ',' + k + '"' +
+  return '<button class="set" data-set="' + row + ',' + k + (theirs ? ',partner' : '') + '"' +
            ' aria-pressed="' + (logged ? "true" : "false") + '"' +
            ' aria-label="' + esc(label) + '">' +
            '<span class="s">' + esc(top) + '</span>' +
@@ -180,23 +189,50 @@ function setButton(e, row, k){
          '</button>';
 }
 
-function exerciseRow(e, i, last){
+/* Where it was lifted matters as much as what: the same machine in another
+   building doesn't take the same pin. When the number comes from a
+   different gym, the line says so rather than quietly implying it can be
+   lifted here. */
+function lastLine(last, name){
+  return (last && last.logged.length)
+    ? '<span class="last' + (last.elsewhere ? " away" : "") + '">last ' +
+      formatWeight(last.topWeight, name) + " " + esc(last.unit) +
+      ' · ' + esc(repsSummary(last.logged)) +
+      (last.elsewhere && last.gymName ? ' · at ' + esc(last.gymName) : '') + '</span>'
+    : '';
+}
+
+/* Your partner's sets, under yours. Their own name, colour, weight and
+   "last" line, behind a rule — so the two rows read as two people, never as
+   one person with twice the sets. Their weight chip is a button: it's how
+   you set where their sets start today. */
+function partnerRow(e, i, last){
+  var side = store.partnerSide(e);
+  var name = partnerName();
+
+  var sets = "";
+  for(var k = 0; k < e.sets; k++) sets += setButton(side, i, k);
+
+  return '<div class="ex-partner">' +
+    '<div class="ex-meta">' +
+      '<span class="pname">' + esc(name) + '</span>' +
+      '<button class="chip load" data-pweight="' + i + '"' +
+        ' aria-label="' + esc(name + "'s starting weight, " + formatLoad(side) + ". Change it.") + '">' +
+        esc(formatLoad(side)) + '</button>' +
+      (lastLine(last, e.name) || '<span class="last">first time</span>') +
+    '</div>' +
+    '<div class="sets">' + sets + '</div>' +
+  '</div>';
+}
+
+/* theirLast is the partner's "last" for this exercise; leave it out when
+   they aren't training today and their row isn't drawn at all. */
+function exerciseRow(e, i, last, theirLast){
   var completed = store.doneCount(e);
   var pct = e.sets ? Math.round(completed / e.sets * 100) : 0;
 
   var sets = "";
   for(var k = 0; k < e.sets; k++) sets += setButton(e, i, k);
-
-  /* Where it was lifted matters as much as what: the same machine in
-     another building doesn't take the same pin. When the number comes from
-     a different gym, the line says so rather than quietly implying you can
-     lift it here. */
-  var lastLine = (last && last.logged.length)
-    ? '<span class="last' + (last.elsewhere ? " away" : "") + '">last ' +
-      formatWeight(last.topWeight, e.name) + " " + esc(last.unit) +
-      ' · ' + esc(repsSummary(last.logged)) +
-      (last.elsewhere && last.gymName ? ' · at ' + esc(last.gymName) : '') + '</span>'
-    : '';
 
   return '<article class="ex" data-row="' + i + '"' +
            ' data-complete="' + (e.sets > 0 && completed === e.sets ? "1" : "0") + '">' +
@@ -209,11 +245,12 @@ function exerciseRow(e, i, last){
       '<div class="ex-meta">' +
         '<span class="chip">' + e.sets + ' × ' + esc(e.reps) + '</span>' +
         '<span class="chip load">' + esc(formatLoad(e)) + '</span>' +
-        lastLine +
+        lastLine(last, e.name) +
       '</div>' +
       planLine(e) +
       (e.note ? '<p class="ex-note">' + esc(e.note) + '</p>' : '') +
       '<div class="sets">' + sets + '</div>' +
+      (store.partnerHere() ? partnerRow(e, i, theirLast) : '') +
     '</div>' +
   '</article>';
 }
@@ -229,12 +266,33 @@ function gymChip(){
   '</button>';
 }
 
+/* Whether your partner is with you today, beside the gym and working the
+   same way: tap it to change that, or to add a partner the first time. */
+function partnerChip(){
+  var p = store.partner();
+  var here = store.partnerHere();
+  return '<button class="gymchip partnerchip" id="partnerPick" data-here="' + (here ? "1" : "0") + '"' +
+      ' aria-label="' + (!p ? 'Add a training partner'
+        : here ? 'Training with ' + esc(p.name) + '. Change.' : 'Training on your own. Change.') + '">' +
+    '<span class="lab">' + (p ? "With" : "Partner") + '</span>' +
+    '<b>' + (!p ? "+ Add" : here ? esc(p.name) : "Just me") + '</b>' +
+  '</button>';
+}
+
+/* Their "last" lines, or nothing when they aren't here to need them. */
+function partnerLast(){
+  return store.partnerHere() ? store.lastPerformed("partner") : {};
+}
+
 function renderTrain(){
   var day = store.currentDay();
   var last = store.lastPerformed();
+  var theirs = partnerLast();
   var progress = store.dayProgress(day);
 
-  var rows = day.ex.map(function(e, i){ return exerciseRow(e, i, last[e.name]); }).join("");
+  var rows = day.ex.map(function(e, i){
+    return exerciseRow(e, i, last[e.name], theirs[e.name]);
+  }).join("");
 
   viewEl.innerHTML =
     '<div class="session-head">' +
@@ -249,7 +307,7 @@ function renderTrain(){
         '<div class="cap">Sets in</div>' +
       '</div>' +
     '</div>' +
-    '<div class="gymrow">' + gymChip() + '</div>' +
+    '<div class="gymrow">' + gymChip() + partnerChip() + '</div>' +
     planBanner(day) +
     '<div class="ledger" id="ledger">' + rows + '</div>' +
     '<div class="addrow"><button class="add-btn" id="addEx">+ Add exercise</button></div>' +
@@ -271,8 +329,8 @@ function patchExercise(i){
   var el = document.querySelector('.ex[data-row="' + i + '"]');
   if(!el){ renderTrain(); return; }
 
-  var last = store.lastPerformed()[day.ex[i].name];
-  el.outerHTML = exerciseRow(day.ex[i], i, last);
+  var name = day.ex[i].name;
+  el.outerHTML = exerciseRow(day.ex[i], i, store.lastPerformed()[name], partnerLast()[name]);
 
   var progress = store.dayProgress(day);
   $("progCount").textContent = progress.done + "/" + progress.total;
@@ -322,10 +380,9 @@ function gymRow(h){
   '</div>';
 }
 
-function sessionCard(h, isOpen){
-  var u = h.unit || "lb";
-
-  var lines = h.entries.map(function(en){
+/* One line per exercise in a logged session — yours, or your partner's. */
+function entryLines(entries, u){
+  return entries.map(function(en){
     var summary = repsSummary(en.logged);
     var head =
       '<div class="sess-line">' +
@@ -345,16 +402,35 @@ function sessionCard(h, isOpen){
     }
     return head;
   }).join("");
+}
+
+/* A partner's half of a session sits under yours, under their name and in
+   their colour, with their own volume. */
+function partnerLines(h, u){
+  var p = h.partner;
+  if(!p || !p.entries || !p.entries.length) return "";
+  return '<div class="sess-partner">' +
+    '<div class="sess-partner-head">' +
+      '<span class="pname">' + esc(p.name) + '</span>' +
+      '<small>' + (p.volume || 0).toLocaleString() + ' ' + esc(u) + ' volume</small>' +
+    '</div>' +
+    entryLines(p.entries, u) +
+  '</div>';
+}
+
+function sessionCard(h, isOpen){
+  var u = h.unit || "lb";
 
   return '<div class="sess">' +
     '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
       '<span class="sess-tag">' + esc(h.dayId) + '</span>' +
       '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) +
-        (h.gymName ? ' · ' + esc(h.gymName) : '') + '</small></span>' +
+        (h.gymName ? ' · ' + esc(h.gymName) : '') +
+        (h.partner ? ' · with ' + esc(h.partner.name) : '') + '</small></span>' +
       '<span class="sess-vol"><b>' + h.volume.toLocaleString() + '</b><small>' + esc(u) + ' volume</small></span>' +
     '</button>' +
     (isOpen ?
-      '<div class="sess-detail">' + lines +
+      '<div class="sess-detail">' + entryLines(h.entries, u) + partnerLines(h, u) +
         (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
         dateRow(h) +
         gymRow(h) +
@@ -421,6 +497,12 @@ function settingsPanel(){
         return '<button data-var="' + v + '" aria-pressed="' + (p.variety === v) + '">' +
                  esc(data.VARIETY[v].label) + '</button>';
       }).join("") + '</div>' +
+    '</div>' +
+    '<div class="setrow">' +
+      '<div class="k">Training partner<small>' + (store.partner()
+        ? esc(store.partner().name) + ' gets a row of sets under yours'
+        : 'Log a second person\'s sets alongside yours') + '</small></div>' +
+      '<button class="edit" id="partnerSetup">' + (store.partner() ? "Edit" : "Add") + '</button>' +
     '</div>' +
     '<div class="setrow">' +
       '<div class="k">Re-seed from the log<small>Sets every working weight from your own history</small></div>' +
@@ -769,24 +851,29 @@ function renderLog(openId){
    because a resize has to repaint the same charts without app.js involved.
    -------------------------------------------------------------------------- */
 
-/* ex is a lift key (store.liftKey): the exercise AND the gym it was done
-   at, because the same machine in two buildings is two different lifts. */
-var progress = { ex:null, relative:false };
+/* who is whose page this is: "me", or "partner" once you have one.
+   ex is a lift key (store.liftKey) per person: the exercise AND the gym it
+   was done at, because the same machine in two buildings is two different
+   lifts — and each of you keeps your own pick when you switch between. */
+var progress = { who:"me", ex:{ me:null, partner:null }, relative:false };
 
 function compact(v){
   return v >= 10000 ? Math.round(v / 1000) + "k" : Math.round(v).toLocaleString();
 }
 
-/* The series behind the strength chart, plus how to write its numbers. */
+/* The series behind the strength chart, plus how to write its numbers.
+   A partner has no bodyweight log here, so their page never divides by one. */
 function strengthView(){
-  var lifts = store.liftTrends();
+  var who = progress.who;
+  var mine = who !== "partner";
+  var lifts = store.liftTrends(who);
   if(!lifts.length) return null;
 
-  var lift = lifts.filter(function(l){ return l.key === progress.ex; })[0];
-  if(!lift){ lift = lifts[0]; progress.ex = lift.key; }
+  var lift = lifts.filter(function(l){ return l.key === progress.ex[who]; })[0];
+  if(!lift){ lift = lifts[0]; progress.ex[who] = lift.key; }
 
-  var series = store.exerciseSeries(lift.name, lift.gymId);
-  var relative = progress.relative && series.metric === "load";
+  var series = store.exerciseSeries(lift.name, lift.gymId, who);
+  var relative = mine && progress.relative && series.metric === "load";
   var shown = store.smoothSeries(relative ? store.relativeSeries(series) : series);
   var bw = store.isBodyweight(lift.name);
 
@@ -809,7 +896,7 @@ function strengthView(){
     series: shown,
     metric: series.metric,
     relative: relative,
-    canRelate: series.metric === "load" && store.state.body.length > 0,
+    canRelate: mine && series.metric === "load" && store.state.body.length > 0,
     val: val,
     fmtV: function(v){ return val(v); },
     fmtNote: function(p){
@@ -838,7 +925,7 @@ function liftRow(l){
     ? Math.round(l.now).toLocaleString() + " " + unit()
     : Math.round(l.now) + " reps";
 
-  return '<button class="lift" data-lift="' + esc(l.key) + '" aria-pressed="' + (l.key === progress.ex) + '">' +
+  return '<button class="lift" data-lift="' + esc(l.key) + '" aria-pressed="' + (l.key === progress.ex[progress.who]) + '">' +
     '<span class="lift-name">' + esc(l.name) +
       (l.pr ? '<i class="lift-pr">PR</i>' : '') +
       (l.split ? '<small class="lift-gym">' + esc(placeName(l)) + '</small>' : '') +
@@ -882,9 +969,11 @@ function statTile(label, value, sub){
 
 /* Ten weeks of days, Sunday-first so the columns are weeks. Trained days
    carry three steps of one hue (more volume, darker); missed and rest are
-   their own states and are named in the legend, never colour alone. */
-function calendarHTML(){
-  var cells = store.calendar(10);
+   their own states and are named in the legend, never colour alone. A
+   partner's grid has only trained days — the days off are yours. */
+function calendarHTML(who){
+  var cells = store.calendar(10, who);
+  var mine = who !== "partner";
   var names = { trained:"trained", missed:"missed", rest:"rest day", none:"nothing logged" };
 
   var head = ["S","M","T","W","T","F","S"].map(function(d){
@@ -903,9 +992,12 @@ function calendarHTML(){
       '<div class="cal-grid">' + grid + '</div>' +
     '</div>' +
     '<div class="cal-key">' +
-      '<span><i class="cal-c" data-state="trained" data-level="2"></i>Trained</span>' +
-      '<span><i class="cal-c" data-state="rest" data-level="0"></i>Rest day</span>' +
-      '<span><i class="cal-c" data-state="missed" data-level="0"></i>Missed</span>' +
+      '<span><i class="cal-c" data-state="trained" data-level="2"></i>' +
+        (mine ? 'Trained' : 'Trained with you') + '</span>' +
+      (mine
+        ? '<span><i class="cal-c" data-state="rest" data-level="0"></i>Rest day</span>' +
+          '<span><i class="cal-c" data-state="missed" data-level="0"></i>Missed</span>'
+        : '') +
     '</div>';
 }
 
@@ -1428,19 +1520,44 @@ function maintenanceCard(){
   '</section>';
 }
 
+/* You or your partner. The same page about either of you, except that
+   food, bodyweight and maintenance are only ever yours. */
+function whoSwitch(){
+  var p = store.partner();
+  if(!p) return "";
+  return '<div class="seg who" role="group" aria-label="Whose progress">' +
+    '<button data-who="me" aria-pressed="' + (progress.who !== "partner") + '">You</button>' +
+    '<button data-who="partner" aria-pressed="' + (progress.who === "partner") + '">' +
+      esc(p.name) + '</button>' +
+  '</div>';
+}
+
+/* The fourth tile on a partner's page, where yours has your bodyweight:
+   when they last trained with you, and what. */
+function lastTrainedTile(){
+  var sessions = store.sessionsFor("partner");
+  var last = sessions[sessions.length - 1];
+  return last
+    ? statTile("Last trained", formatDay(last.at), last.dayName)
+    : statTile("Last trained", "—", "nothing logged yet");
+}
+
 function renderProgress(){
-  var s = store.summary();
+  if(!store.partner()) progress.who = "me";
+  var who = progress.who;
+  var mine = who !== "partner";
+  var s = store.summary(who);
   var view = strengthView();
 
-  var sub = s.since
-    ? "Week " + s.weeks + " · training since " + formatDay(s.since)
-    : "Nothing logged yet";
+  var sub = mine
+    ? (s.since ? "Week " + s.weeks + " · training since " + formatDay(s.since) : "Nothing logged yet")
+    : partnerName() + (s.since ? " · with you since " + formatDay(s.since) : " · nothing logged yet");
 
   /* Lifts you're doing now up top; ones you've rotated away from fold away
      underneath, still there to look back on. */
   var recent = view ? view.lifts.filter(function(l){ return l.recent; }) : [];
   var older = view ? view.lifts.filter(function(l){ return !l.recent; }) : [];
-  var olderOpen = older.some(function(l){ return l.key === progress.ex; });
+  var olderOpen = older.some(function(l){ return l.key === progress.ex[progress.who]; });
 
   var liftList = !view ? "" :
     '<div class="lifts">' + recent.map(liftRow).join("") + '</div>' +
@@ -1463,10 +1580,11 @@ function renderProgress(){
       ? "Your strength divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
       : view.metric === "load"
         ? "Each dot is one session's best set turned into an estimated one-rep max" +
-          (store.isBodyweight(view.lift.name) ? " (bodyweight included)" : "") +
-          " — so more weight or more reps both push it up. The line averages your last " +
-          "three sessions, so one off day can't hide the direction."
-        : "This one has never been logged with a load, so it charts your best set's reps instead.");
+          (mine && store.isBodyweight(view.lift.name) ? " (bodyweight included)" : "") +
+          " — so more weight or more reps both push it up. The line averages " +
+          (mine ? "your" : "the") + " last three sessions, so one off day can't hide the direction."
+        : "This one has never been logged with a load, so it charts " +
+          (mine ? "your" : "the") + " best set's reps instead.");
 
   viewEl.innerHTML =
     '<div class="session-head">' +
@@ -1474,23 +1592,24 @@ function renderProgress(){
         '<h2>Progress</h2>' +
         '<p class="sub">' + esc(sub) + '</p>' +
       '</div>' +
+      whoSwitch() +
     '</div>' +
 
-    '<div class="prog-wrap">' +
+    /* data-who recolours a partner's page in their colour — charts, grid
+       and all — so it's never mistaken for yours at a glance. */
+    '<div class="prog-wrap" data-who="' + who + '">' +
       '<div class="stats">' +
         statTile("Sessions", String(s.sessions), s.weeks ? s.weeks + " weeks in" : "") +
-        statTile("Last 30 days", String(s.last30), s.missed30 ? s.missed30 + " missed" : "none missed") +
+        statTile("Last 30 days", String(s.last30),
+                 !mine ? "sessions with you" : s.missed30 ? s.missed30 + " missed" : "none missed") +
         statTile("Total volume", compact(s.volume) + " " + unit(), "everything lifted") +
-        weightTile() +
+        (mine ? weightTile() : lastTrainedTile()) +
       '</div>' +
 
       /* Near the top on purpose: food and the scale are the two cards on
          this tab you touch every day, not just read, and maintenance is
          worked out from both of them — so it sits right underneath. */
-      nutritionCard() +
-      bodyCard() +
-      maintenanceCard() +
-      calorieCard() +
+      (mine ? nutritionCard() + bodyCard() + maintenanceCard() + calorieCard() : '') +
 
       '<section class="card" id="strengthCard">' +
         '<h3>Getting stronger?</h3>' +
@@ -1516,7 +1635,7 @@ function renderProgress(){
 
       '<section class="card">' +
         '<h3>Consistency</h3>' +
-        calendarHTML() +
+        calendarHTML(who) +
       '</section>' +
     '</div>';
 
@@ -1551,7 +1670,7 @@ function paintCharts(){
 
   IL.chart.draw($("chVolume"), {
     kind: "column",
-    points: store.volumeSeries().slice(-18),
+    points: store.volumeSeries(progress.who).slice(-18),
     fmtY: compact,
     fmtV: function(v){ return Math.round(v).toLocaleString() + " " + unit(); },
     fmtX: formatDay,
@@ -1587,10 +1706,13 @@ function paintCharts(){
    Bottom sheet
    -------------------------------------------------------------------------- */
 
-function openSheet(title, html, mode){
+/* who is "partner" for a sheet about your partner's sets, which wears their
+   colour so it's never mistaken for one of yours. */
+function openSheet(title, html, mode, who){
   $("sheetTitle").textContent = title;
   $("sheetBody").innerHTML = html;
   sheetEl.dataset.mode = mode;
+  sheetEl.dataset.who = who || "";
   sheetEl.hidden = false;
   scrimEl.hidden = false;
   requestAnimationFrame(function(){
@@ -1653,16 +1775,24 @@ function setTotalHTML(segs){
       Math.round(store.segmentVolume(segs)).toLocaleString() + ' ' + esc(unit()) + '</b>';
 }
 
+/* Whose side of exercise `row` a set belongs to: yours, or with who set to
+   "partner", your partner's. */
+function sideOf(row, who){
+  var e = store.currentDay().ex[row];
+  return who === "partner" ? store.partnerSide(e) : e;
+}
+
 /* Update just the running total, so typing in a field isn't interrupted. */
-function refreshSetTotal(row, k){
+function refreshSetTotal(row, k, who){
   var el = $("setTotal");
   if(!el) return;
-  var segs = store.currentDay().ex[row].log[k];
+  var segs = sideOf(row, who).log[k];
   if(segs) el.innerHTML = setTotalHTML(segs);
 }
 
-function setSheet(row, k){
-  var e = store.currentDay().ex[row];
+function setSheet(row, k, who){
+  var e = sideOf(row, who);
+  var theirs = who === "partner";
   var segs = e.log[k] || store.quickLog(e, k);
 
   var chips = store.repChoices(e.reps);
@@ -1677,15 +1807,97 @@ function setSheet(row, k){
     return segmentBlock(seg, i, i > 0, i === 0 ? chipHTML : "");
   }).join("");
 
-  openSheet("Set " + (k + 1),
+  openSheet((theirs ? partnerName() + " · " : "") + "Set " + (k + 1),
     '<p class="sheet-sub">' + esc(e.name) + ' · target ' + esc(e.reps) + '</p>' +
     blocks +
     '<button class="add-btn" id="addDrop">+ Add a drop</button>' +
     '<div class="settotal" id="setTotal">' + setTotalHTML(segs) + '</div>' +
+    (theirs
+      ? '<p class="hint">Their next set starts at this one\'s weight.</p>'
+      : '') +
     '<div class="rowbtns one">' +
       '<button class="danger" id="clearSet">Clear this set</button>' +
     '</div>',
-  "set");
+  "set", who);
+}
+
+/* --------------------------------------------------------------------------
+   Your training partner
+   -------------------------------------------------------------------------- */
+
+/* Where a partner's sets start today. Blank means "last time's", which the
+   placeholder shows, so the field is only ever filled in on purpose. */
+function partnerWeightSheet(i){
+  var e = store.currentDay().ex[i];
+  var name = partnerName();
+  var step = store.state.prefs.step;
+  var last = store.lastEntryFor(e.name, "partner");
+  var set = e.partner && typeof e.partner.weight === "number";
+
+  var history = last
+    ? "Last time: " + formatWeight(last.entry.topWeight, e.name) + " " + esc(last.unit) +
+      " · " + esc(repsSummary(last.entry.logged)) +
+      (last.elsewhere && last.gymName ? " at " + esc(last.gymName) : "") + ". "
+    : "Nothing logged for " + esc(name) + " on this yet. ";
+
+  openSheet(name + "'s weight",
+    '<p class="sheet-sub">' + esc(e.name) + ' · target ' + esc(e.reps) + '</p>' +
+    '<div class="field">' +
+      '<label class="lab" for="pW">Starting weight today (' + esc(unit()) + ')</label>' +
+      '<div class="stepper">' +
+        '<button data-pw="' + (-step) + '" aria-label="Decrease weight">−</button>' +
+        '<input id="pW" type="number" inputmode="decimal" step="any"' +
+          ' value="' + (set ? e.partner.weight : "") + '"' +
+          ' placeholder="' + (last && last.entry.topWeight ? last.entry.topWeight
+            : store.isBodyweight(e.name) ? "BW" : "0") + '">' +
+        '<button data-pw="' + step + '" aria-label="Increase weight">+</button>' +
+      '</div>' +
+      '<p class="hint">' + history + 'Leave it blank to start from last time. ' +
+        'Changing the weight on one of ' + esc(name) + '\'s sets moves this too.</p>' +
+    '</div>',
+  "pweight", "partner");
+}
+
+/* Adding a partner, and after that: are they here today, and their name. */
+function partnerSheet(){
+  var p = store.partner();
+
+  if(!p){
+    openSheet("Training partner",
+      '<p class="sheet-sub">Someone who trains with you, logged on this phone.</p>' +
+      '<div class="field">' +
+        '<label class="lab" for="ptName">Their name</label>' +
+        '<input id="ptName" type="text" placeholder="Name" autocomplete="off">' +
+      '</div>' +
+      '<p class="hint">Every exercise gets a second row of sets for them, under yours — ' +
+        'with their own weights, their own “last time” line, and their own page on ' +
+        'Progress. Nothing about your plan or your numbers changes.</p>' +
+      '<div class="rowbtns one">' +
+        '<button class="primary" id="ptSave">Add and train together</button>' +
+      '</div>',
+    "partner");
+    return;
+  }
+
+  openSheet("Training partner",
+    '<div class="field">' +
+      '<span class="lab">Today</span>' +
+      '<div class="seg wide">' +
+        '<button data-phere="1" aria-pressed="' + p.here + '">Training together</button>' +
+        '<button data-phere="0" aria-pressed="' + !p.here + '">Just me</button>' +
+      '</div>' +
+      '<p class="hint">Just me hides ' + esc(p.name) + '\'s rows until you switch back. ' +
+        'Nothing they\'ve logged is touched.</p>' +
+    '</div>' +
+    '<div class="field">' +
+      '<label class="lab" for="ptName">Name</label>' +
+      '<input id="ptName" type="text" value="' + esc(p.name) + '" autocomplete="off">' +
+    '</div>' +
+    '<div class="rowbtns two">' +
+      '<button class="primary" id="ptSave">Save name</button>' +
+      '<button class="danger" id="ptDel">Remove</button>' +
+    '</div>',
+  "partner");
 }
 
 /* --------------------------------------------------------------------------
@@ -2471,6 +2683,8 @@ IL.ui = {
   sheetMode: sheetMode,
   setSheet: setSheet,
   refreshSetTotal: refreshSetTotal,
+  partnerSheet: partnerSheet,
+  partnerWeightSheet: partnerWeightSheet,
   exerciseSheet: exerciseSheet,
   librarySheet: librarySheet,
   builderSheet: builderSheet,

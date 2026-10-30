@@ -24,8 +24,10 @@ function $(id){ return document.getElementById(id); }
 /* View state that isn't worth persisting. */
 var view = "train";          /* "train" | "log" | "progress"                */
 var openSession = null;      /* id of the expanded log entry, or null       */
-var editing = -1;            /* exercise index open in the editor sheet     */
-var editingSet = null;       /* { row, k } open in the set logger, or null  */
+var editing = -1;            /* exercise index open in the editor, or in the
+                                partner's weight sheet                      */
+var editingSet = null;       /* { row, k, who } open in the set logger, or
+                                null; who is "partner" for theirs, else ""  */
 var builderFrom = null;      /* the picker mode the exercise builder came from */
 var builderName = null;      /* library entry being edited, or null to create  */
 
@@ -91,6 +93,7 @@ function applyPick(name, mode){
     target.pin = false;
     target.rotAge = 0;
     target.progress = null;
+    target.partner = store.blankPartner();
     seedFromLog(target);
 
     store.save();
@@ -436,19 +439,48 @@ $("view").addEventListener("click", function(ev){
     var parts = hit.dataset.set.split(",");
     var row = parseInt(parts[0], 10);
     var k = parseInt(parts[1], 10);
-    var e = store.currentDay().ex[row];
+    var who = parts[2] === "partner" ? "partner" : "";
+    var ex = store.currentDay().ex[row];
+    var e = who ? store.partnerSide(ex) : ex;
 
     if(store.isLogged(e, k)){
       /* Already logged — go correct the reps or add a drop. */
-      editingSet = { row:row, k:k };
-      ui.setSheet(row, k);
+      editingSet = { row:row, k:k, who:who };
+      ui.setSheet(row, k, who);
+      return;
+    }
+
+    /* Your partner's sets start the rest only when none is running. Sharing
+       a station, their set usually happens inside your rest, and restarting
+       it would make every one of yours longer. */
+    if(store.state.prefs.autoRest && !(who && rest.id)) startRest(store.restFor(e.name));
+
+    /* With nothing to go on for them yet, there is no weight to quick-log
+       at, so the set opens in the logger for the weight to be typed. */
+    if(who && !e.weight && !store.isBodyweight(e.name)){
+      editingSet = { row:row, k:k, who:who };
+      ui.setSheet(row, k, who);
+      store.save();
+      ui.patchExercise(row);
       return;
     }
 
     store.quickLog(e, k);
-    if(store.state.prefs.autoRest) startRest(store.restFor(e.name));
     store.save();
     ui.patchExercise(row);
+    return;
+  }
+
+  /* A partner's weight chip — where their sets start today. */
+  hit = t.closest("[data-pweight]");
+  if(hit){
+    editing = parseInt(hit.dataset.pweight, 10);
+    ui.partnerWeightSheet(editing);
+    return;
+  }
+
+  if(t.closest("#partnerPick")){
+    ui.partnerSheet();
     return;
   }
 
@@ -511,6 +543,15 @@ $("view").addEventListener("click", function(ev){
 
   /* --- progress view --- */
 
+  /* The switch's buttons only — the page under it carries data-who too,
+     for its colours, and a tap anywhere on it isn't a switch. */
+  hit = t.closest("button[data-who]");
+  if(hit){
+    ui.progress.who = hit.dataset.who === "partner" ? "partner" : "me";
+    ui.renderProgress();
+    return;
+  }
+
   hit = t.closest("[data-rel]");
   if(hit){
     ui.progress.relative = hit.dataset.rel === "1";
@@ -522,7 +563,7 @@ $("view").addEventListener("click", function(ev){
      the chart back into view rather than leaving you looking at the list. */
   hit = t.closest("[data-lift]");
   if(hit){
-    ui.progress.ex = hit.dataset.lift;
+    ui.progress.ex[ui.progress.who] = hit.dataset.lift;
     ui.renderProgress();
     var head = document.querySelector(".lift-head");
     if(head) head.scrollIntoView({ block:"nearest", behavior:"smooth" });
@@ -635,6 +676,11 @@ $("view").addEventListener("click", function(ev){
     store.state.prefs.variety = hit.dataset["var"];
     store.save();
     ui.renderLog(openSession);
+    return;
+  }
+
+  if(t.closest("#partnerSetup")){
+    ui.partnerSheet();
     return;
   }
 
@@ -823,8 +869,24 @@ function syncRepChips(e, k){
   }
 }
 
+/* The side of the exercise the open set belongs to — yours, or your
+   partner's — so everything below is the same code for both. */
+function editingSide(){
+  var ex = store.currentDay().ex[editingSet.row];
+  return editingSet.who ? store.partnerSide(ex) : ex;
+}
+
+/* A partner's plan doesn't move by itself, so the set they just did is the
+   best guess at their next one: changing the weight of a set's first part
+   (not a drop) makes it where their next set starts. Yours start from the
+   working weight in the exercise editor, which only you move. */
+function followWeight(index, value){
+  if(editingSet.who !== "partner" || index !== 0) return;
+  store.setPartnerWeight(store.currentDay().ex[editingSet.row], value);
+}
+
 function setSheetClick(t){
-  var e = store.currentDay().ex[editingSet.row];
+  var e = editingSide();
   var k = editingSet.k;
   var hit;
 
@@ -841,8 +903,12 @@ function setSheetClick(t){
     var seg = e.log[k][index];
     var value;
 
-    if(parts[0] === "w") value = store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
-    else value = store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
+    if(parts[0] === "w"){
+      value = store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
+      followWeight(index, value);
+    }else{
+      value = store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
+    }
 
     var field = $("sheetBody").querySelector('[data-segval="' + parts[0] + ',' + index + '"]');
     if(field) field.value = value || "";
@@ -850,7 +916,7 @@ function setSheetClick(t){
     syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.refreshSetTotal(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -863,7 +929,7 @@ function setSheetClick(t){
     syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.refreshSetTotal(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -872,7 +938,7 @@ function setSheetClick(t){
     store.removeSegment(e, k, parseInt(hit.dataset.segdel, 10));
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.setSheet(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -880,7 +946,7 @@ function setSheetClick(t){
     store.addSegment(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.setSheet(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -968,6 +1034,63 @@ $("sheetBody").addEventListener("click", function(ev){
         if(view === "train") ui.renderTrain();
         ui.toast(gone + " removed.");
       }
+    }
+    return;
+  }
+
+  /* --- your training partner -------------------------------------------- */
+
+  if(ui.sheetMode() === "partner"){
+    hit = t.closest("[data-phere]");
+    if(hit){
+      var together = store.setPartnerHere(hit.dataset.phere === "1");
+      ui.closeSheet();
+      if(view === "train") ui.renderTrain();
+      ui.toast(together
+        ? "Logging for you and " + store.partner().name + "."
+        : "Just you today — " + store.partner().name + "'s rows are hidden.");
+      return;
+    }
+
+    if(t.closest("#ptSave")){
+      var adding = !store.partner();
+      var mate = store.setPartner($("ptName").value);
+      if(!mate){
+        ui.toast("Give them a name first.");
+        return;
+      }
+      ui.closeSheet();
+      render();
+      ui.toast(adding
+        ? mate.name + " added — each exercise has a row for them now."
+        : "Renamed to " + mate.name + ".");
+      return;
+    }
+
+    if(t.closest("#ptDel")){
+      var leaving = store.partner().name;
+      if(confirm("Stop logging for " + leaving + "? Every session already logged " +
+                 "for them stays in the log, and adding a partner again brings " +
+                 "their history back.")){
+        store.removePartner();
+        ui.closeSheet();
+        render();
+        ui.toast(leaving + " removed. Their sessions are still in the log.");
+      }
+    }
+    return;
+  }
+
+  /* --- where a partner's sets start ------------------------------------- */
+
+  if(ui.sheetMode() === "pweight"){
+    hit = t.closest("[data-pw]");
+    if(hit && editing >= 0){
+      var pe = day.ex[editing];
+      /* Shown even at 0: here a blank field means "last time's", not zero. */
+      $("pW").value = store.setPartnerWeight(pe, store.partnerWeight(pe) + parseFloat(hit.dataset.pw));
+      store.save();
+      ui.patchExercise(editing);
     }
     return;
   }
@@ -1289,14 +1412,25 @@ $("sheetBody").addEventListener("input", function(ev){
   if(mode === "set" && editingSet && t.dataset.segval){
     var parts = t.dataset.segval.split(",");
     var index = parseInt(parts[1], 10);
-    var e = store.currentDay().ex[editingSet.row];
+    var e = editingSide();
 
-    if(parts[0] === "w") store.setSegmentWeight(e, editingSet.k, index, parseFloat(t.value) || 0);
-    else store.setSegmentReps(e, editingSet.k, index, t.value);
+    if(parts[0] === "w"){
+      followWeight(index, store.setSegmentWeight(e, editingSet.k, index, parseFloat(t.value) || 0));
+    }else{
+      store.setSegmentReps(e, editingSet.k, index, t.value);
+    }
 
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.refreshSetTotal(editingSet.row, editingSet.k);
+    ui.refreshSetTotal(editingSet.row, editingSet.k, editingSet.who);
+    return;
+  }
+
+  /* A blank goes back to "last time", which the placeholder is showing. */
+  if(mode === "pweight" && editing >= 0 && t.id === "pW"){
+    store.setPartnerWeight(store.currentDay().ex[editing], t.value);
+    store.save();
+    ui.patchExercise(editing);
     return;
   }
 
@@ -1390,8 +1524,10 @@ $("timer").addEventListener("click", function(){
 $("finish").addEventListener("click", function(){
   var day = store.currentDay();
 
-  /* Finishing an empty session is almost always a mispress — ask once. */
-  if(store.dayProgress(day).done === 0 && this.dataset.armed !== "1"){
+  /* Finishing an empty session is almost always a mispress — ask once. A
+     session where only your partner lifted isn't empty. */
+  var nothing = store.dayProgress(day).done === 0 && store.dayProgress(day, "partner").done === 0;
+  if(nothing && this.dataset.armed !== "1"){
     ui.setFinishLabel(true);
     setTimeout(function(){
       if($("finish").dataset.armed === "1") ui.setFinishLabel(false);
@@ -1418,6 +1554,7 @@ $("finish").addEventListener("click", function(){
   });
 
   ui.toast(out.day.name + " logged" +
+    (out.record.partner ? " with " + out.record.partner.name : "") +
     (ups ? " · " + ups + " load" + (ups === 1 ? "" : "s") + " up" : "") +
     (swaps ? " · " + swaps + " new next time" : "") +
     " · " + store.currentDay().name + " is up next.");

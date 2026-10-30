@@ -390,10 +390,11 @@ eq("over/under averages only days with a target and calories", week.diff.days, 3
 group("nutrition: in the CSV and through a backup");
 const csv = store.toCSV().split("\r\n");
 const cols = csv[0].split(",");
-eq("four new columns", cols.slice(-4).join(), "calories,calorie_target,protein_g,fiber_g");
+/* The partner's "person" column came after these, so they're one from the end. */
+eq("four nutrition columns", cols.slice(-5, -1).join(), "calories,calorie_target,protein_g,fiber_g");
 ok("every row is padded to the header", csv.every((line) => line.split(",").length >= cols.length));
 const bulkRow = csv.find((line) => line.startsWith(keyAgo(20) + ",") && line.includes("nutrition"));
-ok("a nutrition row carries the target in force THAT day", bulkRow && bulkRow.endsWith(",3100,3000,,"),
+ok("a nutrition row carries the target in force THAT day", bulkRow && bulkRow.endsWith(",3100,3000,,,"),
    bulkRow);
 
 const withFood = store.toBackup();
@@ -734,6 +735,166 @@ store.state.gyms = [{ id: "g-ghost", name: "Ghost" }];
 store.state.gym = "g-nope";
 store.restore(store.toBackup());
 eq("a current gym that no longer exists is dropped", store.state.gym, "");
+
+/* ------------------------------------------------------ training partner */
+group("partner: setting one up");
+store.reset();
+store.state.prefs.variety = "off";
+eq("nobody to start with", store.partner(), null);
+eq("so nobody's here", store.partnerHere(), false);
+eq("a blank name isn't a partner", store.setPartner("   "), null);
+eq("named, and tidied", store.setPartner("  Sam  ").name, "Sam");
+eq("and training with you from the start", store.partnerHere(), true);
+ok("every exercise has a blank side for them", store.state.days.every((d) =>
+   d.ex.every((e) => e.partner && e.partner.weight === null && e.partner.log.length === 0)));
+
+group("partner: their sets beside yours");
+const homeGym = store.addGym("Home");
+store.setGym(homeGym.id);
+store.state.day = 0;
+const pDay = store.state.days[0];
+const pEx = pDay.ex[0];
+pEx.sets = 3;
+pEx.reps = "8-10";
+pEx.weight = 135;
+const PEX = pEx.name;
+
+let side = store.partnerSide(pEx);
+eq("the same exercise", side.name, PEX);
+eq("the same rep target", side.reps, "8-10");
+eq("but nothing to start them at yet", side.weight, 0);
+
+store.quickLog(pEx, 0);
+store.quickLog(side, 0);
+eq("your set at your weight", pEx.log[0][0].w, 135);
+eq("theirs at theirs", pEx.partner.log[0][0].w, 0);
+ok("written through to the save, not to a copy", store.isLogged(store.partnerSide(pEx), 0));
+
+/* What the app does when their set's weight is changed: the next starts there. */
+store.setSegmentWeight(side, 0, 0, 45);
+store.setPartnerWeight(pEx, 45);
+eq("their weight for today", store.partnerSide(pEx).weight, 45);
+store.quickLog(store.partnerSide(pEx), 1);
+eq("so their next set starts there", pEx.partner.log[1][0].w, 45);
+eq("your sets aren't theirs", store.doneCount(pEx), 1);
+eq("theirs are counted on their own", store.dayProgress(pDay, "partner").done, 2);
+eq("a blank weight goes back to last time's", store.setPartnerWeight(pEx, ""), 0);
+store.setPartnerWeight(pEx, 45);
+
+store.setSets(pEx, 1);
+eq("fewer sets trims theirs too", pEx.partner.log.length, 1);
+store.setSets(pEx, 3);
+store.quickLog(store.partnerSide(pEx), 1);
+
+const together = store.finishSession().record;
+eq("one session, not two", store.sessionsOnly().length, 1);
+eq("their half rides inside yours", together.partner.name, "Sam");
+eq("listing only what they did", together.partner.entries.length, 1);
+eq("at their weight", together.partner.entries[0].topWeight, 45);
+eq("with their own volume", together.partner.volume, 45 * 10 * 2);
+eq("and yours without theirs in it", together.volume, 135 * 10);
+eq("their side is cleared for next time", pEx.partner, { weight: null, log: [] });
+
+group("partner: last time, theirs");
+eq("their working weight comes from their history", store.partnerSide(pEx).weight, 45);
+eq("their 'last' line", store.lastPerformed("partner")[PEX].topWeight, 45);
+eq("yours is still yours", store.lastPerformed()[PEX].topWeight, 135);
+eq("their last entry, whole", store.lastEntryFor(PEX, "partner").entry.completed, 2);
+const awayGym = store.addGym("Away");
+store.setGym(awayGym.id);
+eq("at a gym they haven't lifted at, last time anywhere stands in", store.partnerSide(pEx).weight, 45);
+ok("and says so", store.lastPerformed("partner")[PEX].elsewhere);
+store.setGym(homeGym.id);
+
+group("partner: a session they sat out");
+store.state.day = 0;
+pEx.log = [[{ w: 140, r: 8 }]];
+eq("has no partner on it", store.finishSession().record.partner, undefined);
+eq("so their history doesn't include it", store.sessionsFor("partner").length, 1);
+eq("while yours does", store.sessionsFor().length, 2);
+
+group("partner: their own progress");
+store.state.day = 0;
+pEx.log = [[{ w: 140, r: 9 }]];
+pEx.partner.log = [[{ w: 50, r: 10 }]];
+store.finishSession();
+{
+  const theirLifts = store.liftTrends("partner");
+  eq("one lift of theirs", theirLifts.length, 1);
+  eq("and it's going up", theirLifts[0].dir, "up");
+  eq("their series is their sessions", store.exerciseSeries(PEX, null, "partner").points.length, 2);
+  eq("yours is yours", store.exerciseSeries(PEX).points.length, 3);
+  eq("their volume per session", store.volumeSeries("partner").map((p) => p.y), [900, 500]);
+  eq("their session count", store.summary("partner").sessions, 2);
+  store.addSkip(store.dayKey(Date.now() - 86400000), "missed", 0);
+  eq("your missed day isn't theirs", store.summary("partner").missed30, 0);
+  ok("your calendar shows it", store.calendar(2).some((c) => c.state === "missed"));
+  ok("theirs doesn't", !store.calendar(2, "partner").some((c) => c.state === "missed"));
+
+  /* Your bodyweight goes into your pull-ups, never into theirs. */
+  store.addBodyweight(200);
+  store.state.day = 0;
+  pEx.name = "Pull-Ups";
+  pEx.log = [[{ w: 0, r: 10 }]];
+  pEx.partner.log = [[{ w: 0, r: 6 }]];
+  store.finishSession();
+  eq("your pull-ups carry your bodyweight", store.exerciseSeries("Pull-Ups").metric, "load");
+  eq("theirs chart reps", store.exerciseSeries("Pull-Ups", null, "partner").metric, "reps");
+  eq("of their best set", store.exerciseSeries("Pull-Ups", null, "partner").points[0].y, 6);
+}
+
+group("partner: one session, so changing it changes both");
+{
+  const first = store.sessionsFor("partner")[0];
+  store.setEntryDate(first.id, "2026-01-05");
+  eq("moving the date moves theirs", store.dayKey(store.sessionsFor("partner")[0].at), "2026-01-05");
+  store.setEntryGym(first.id, awayGym.id);
+  eq("and so does changing the gym", store.sessionsFor("partner")[0].gymName, "Away");
+  const n = store.sessionsFor("partner").length;
+  store.removeEntry(first.id);
+  eq("deleting it deletes theirs", store.sessionsFor("partner").length, n - 1);
+}
+
+group("partner: renaming, the CSV, removing, and a migration");
+store.setPartner("Sammy");
+ok("renaming carries to their sessions", store.sessionsFor("partner").length > 0 &&
+   store.state.history.filter((h) => h.partner).every((h) => h.partner.name === "Sammy"));
+{
+  const pcsv = store.toCSV().split("\r\n");
+  eq("a person column, last", pcsv[0].split(",").pop(), "person");
+  ok("their sets carry their name", pcsv.some((l) => l.includes(",set,") && l.endsWith(",Sammy")));
+  ok("yours leave it blank", pcsv.some((l) => l.includes(",set,") && l.endsWith(",")));
+}
+
+store.setPartnerHere(false);
+eq("just you today", store.partnerHere(), false);
+eq("but still a partner", store.partner().name, "Sammy");
+store.setPartnerHere(true);
+
+store.state.days[0].ex[0].partner.log = [[{ w: 50, r: 10 }]];
+const theirCount = store.sessionsFor("partner").length;
+store.removePartner();
+eq("removed", store.partner(), null);
+eq("every session they logged stays", store.sessionsFor("partner").length, theirCount);
+eq("a set of theirs you hadn't finished goes with them", store.state.days[0].ex[0].partner.log, []);
+store.state.day = 0;
+store.state.days[0].ex[0].log = [[{ w: 140, r: 8 }]];
+store.state.days[0].ex[0].partner.log = [[{ w: 50, r: 10 }]];
+eq("with no partner, nothing of theirs is recorded", store.finishSession().record.partner, undefined);
+
+const old6 = JSON.parse(store.toBackup());
+old6.schema = 6;
+delete old6.partner;
+old6.days.forEach((d) => d.ex.forEach((e) => { delete e.partner; }));
+store.restore(JSON.stringify(old6));
+eq("a save from before partners migrates", store.state.schema, CURRENT);
+eq("with no partner", store.state.partner, null);
+ok("and a blank side on every exercise", store.state.days.every((d) =>
+   d.ex.every((e) => e.partner && e.partner.weight === null && e.partner.log.length === 0)));
+const nameless = JSON.parse(store.toBackup());
+nameless.partner = { name: "   ", here: true };
+store.restore(JSON.stringify(nameless));
+eq("a partner with no name isn't one", store.state.partner, null);
 
 /* ------------------------------------------ the vault, with no IndexedDB */
 group("vault degrades quietly with no IndexedDB");

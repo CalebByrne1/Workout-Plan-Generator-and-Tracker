@@ -37,6 +37,12 @@
   --over:#A85F00;
   --under:#2F6FB3;
   --under-soft:#DCE7F4;
+  /* a training partner — the same blue as "under", so it carries the same
+     checked separation from the amber that marks your own sets. Its own
+     tokens all the same, so the two can part ways. */
+  --partner:#2F6FB3;
+  --partner-ink:#FFFFFF;
+  --partner-soft:#DCE7F4;
 
   --shadow:0 1px 2px rgba(16,26,26,.10), 0 12px 28px -12px rgba(16,26,26,.28);
   --r:10px;
@@ -66,6 +72,9 @@
     --over:#C27A18;
     --under:#4F8ACB;
     --under-soft:#1C2A38;
+    --partner:#4F8ACB;
+    --partner-ink:#08131F;
+    --partner-soft:#1C2A38;
     --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
   }
 }
@@ -89,6 +98,9 @@
   --over:#C27A18;
   --under:#4F8ACB;
   --under-soft:#1C2A38;
+  --partner:#4F8ACB;
+  --partner-ink:#08131F;
+  --partner-soft:#1C2A38;
   --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 32px -14px rgba(0,0,0,.7);
 }
 
@@ -1389,7 +1401,10 @@ textarea.tall{
    Gyms
    ========================================================================== */
 
-.gymrow{padding:0 14px 12px;margin-top:-4px}
+.gymrow{
+  display:flex;flex-wrap:wrap;gap:8px;
+  padding:0 14px 12px;margin-top:-4px;
+}
 
 .gymchip{
   display:flex;align-items:baseline;gap:8px;
@@ -1426,6 +1441,79 @@ textarea.tall{
 }
 .gymrow-item.here .gympick b{color:var(--accent)}
 .gymrow-item .lib-edit{align-self:center}
+
+
+/* ==========================================================================
+   Training partner
+   ========================================================================== */
+
+/* Their sets sit under yours behind a dashed rule, with their name and
+   colour leading — two people's sets, never one person doing double. Their
+   boxes are a little shorter, so yours still read as the main row. */
+.ex-partner{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.ex-partner .ex-meta{margin-top:0}
+.ex-partner .sets{margin-top:8px}
+.ex-partner .set{height:42px}
+.ex-partner .set[aria-pressed="true"]{background:var(--partner);border-color:var(--partner)}
+.ex-partner .set[aria-pressed="true"] .s,
+.ex-partner .set[aria-pressed="true"] .r{color:var(--partner-ink)}
+.ex-partner .chip.load{
+  background:var(--partner-soft);color:var(--partner);
+  border:1px solid var(--partner);       /* it's a button: where their sets start */
+}
+
+/* A name in their colour, with a dot, wherever their sets are shown. */
+.pname{
+  display:inline-flex;align-items:center;gap:6px;min-width:0;
+  font-family:var(--font-d);font-size:14px;font-weight:600;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--partner);
+  overflow-wrap:anywhere;
+}
+.pname::before{
+  content:"";flex:none;width:8px;height:8px;border-radius:50%;
+  background:var(--partner);
+}
+
+.partnerchip[data-here="1"]{border-color:var(--partner)}
+.partnerchip[data-here="1"] b{color:var(--partner)}
+.partnerchip[data-here="0"] b{color:var(--ink-3)}
+
+/* Their half of a logged session, under yours. */
+.sess-partner{margin-top:8px}
+.sess-partner-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:4px 0 2px;
+}
+.sess-partner-head small{
+  font-family:var(--font-m);font-size:10.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+
+/* A sheet about their sets says so before anything else does: their colour
+   in the title and, through --accent, on the drop rails and rep chips. */
+.sheet[data-who="partner"]{
+  --accent:var(--partner);
+  --accent-hi:var(--partner);
+  --accent-ink:var(--partner-ink);
+  --accent-soft:var(--partner-soft);
+}
+.sheet[data-who="partner"] .sheet-head h3{color:var(--partner)}
+
+/* Whose Progress page. Their button wears their colour when it's theirs. */
+.seg.who{align-self:center}
+.seg.who button{max-width:9.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg.who button[data-who="partner"][aria-pressed="true"]{
+  background:var(--partner);color:var(--partner-ink);
+}
+
+/* Their page in their colour — the charts, the grid and the PR tags all
+   read --accent, so redefining it here recolours the lot. */
+.prog-wrap[data-who="partner"]{
+  --accent:var(--partner);
+  --accent-hi:var(--partner);
+  --accent-ink:var(--partner-ink);
+  --accent-soft:var(--partner-soft);
+}
 
 </style>
 
@@ -2182,6 +2270,7 @@ IL.vault = {
        custom:  [ libEntry ]              exercises you added on the phone
        gyms:    [ { id, name } ]          the places you train
        gym:     id of the one you're at now, or ""
+       partner: { name, here } or null    someone you train with — see below
        nutrition: { days:{ "YYYY-MM-DD": food }, goals:[ goal ] }
        prefs:   { unit, step, autoRest, restCompound, restOther,
                   autoProgress, variety, lastExport }
@@ -2191,7 +2280,7 @@ IL.vault = {
      goal = { from:"YYYY-MM-DD", kcal, phase:"cut"|"maintain"|"bulk"|"" }
 
      exercise = { uid, name, sets, reps, weight, note, log,
-                  pin, rotAge, progress }
+                  pin, rotAge, progress, partner:{ weight, log } }
      libEntry = { name, group, type, sets, reps, pattern, bw, machine }
 
    A SET IS NOT A CHECKBOX. log[k] is either null (not done yet) or an array
@@ -2200,7 +2289,7 @@ IL.vault = {
    set, and it's stored as [{w:185,r:5},{w:155,r:3}].
 
      session = { id, at, kind:"session", dayId, dayName, notes, unit,
-                 volume, entries }
+                 volume, entries, partner?:{ name, volume, entries } }
      entry   = { name, sets, target, completed, topWeight, volume,
                  logged: [ { set, segs } ] }
      skip    = { id, at, kind:"skip", skipType:"missed"|"rest", dayId,
@@ -2219,7 +2308,7 @@ window.IL = window.IL || {};
 var data = IL.data;
 
 var KEY = "ironLedger.v1";
-var SCHEMA = 6;
+var SCHEMA = 7;
 var MAX_SETS = 10;
 
 var uidCounter = 0;
@@ -2452,7 +2541,8 @@ function varietyRules(){
 
    pin       keeps auto-rotation off this slot
    rotAge    visits to this day since the slot last changed hands
-   progress  what the last finish decided — the chip on the row */
+   progress  what the last finish decided — the chip on the row
+   partner   your training partner's side of it: see partnerSide() */
 function planned(name, sets, reps){
   var def = libLookup(name);
   return {
@@ -2465,9 +2555,13 @@ function planned(name, sets, reps){
     log: [],
     pin: false,
     rotAge: 0,
-    progress: null
+    progress: null,
+    partner: blankPartner()
   };
 }
+
+/* weight null means "whatever their log says" — see partnerWeight(). */
+function blankPartner(){ return { weight:null, log:[] }; }
 
 function seed(){
   return {
@@ -2490,6 +2584,7 @@ function seed(){
     custom: [],
     gyms: [],
     gym: "",
+    partner: null,
     nutrition: { days:{}, goals:[] },
     prefs: {
       unit:"lb", step:5, autoRest:true, restCompound:180, restOther:90,
@@ -2573,6 +2668,14 @@ function migrateToV6(saved){
   return saved;
 }
 
+/* schema 6 had no training partner. Nothing to convert — every session
+   logged so far was yours alone, which is exactly what it says. */
+function migrateToV7(saved){
+  saved.partner = saved.partner || null;
+  saved.schema = 7;
+  return saved;
+}
+
 /* Bring any accepted save up to the current shape. Shared by load() and by
    restoring a backup file, so a backup can never sneak past a migration. */
 function normalize(saved){
@@ -2589,11 +2692,17 @@ function normalize(saved){
   if(saved.schema < 4) migrateToV4(saved);
   if(saved.schema < 5) migrateToV5(saved);
   if(saved.schema < 6) migrateToV6(saved);
+  if(saved.schema < 7) migrateToV7(saved);
 
   saved.gyms = Array.isArray(saved.gyms) ? saved.gyms : [];
   if(typeof saved.gym !== "string") saved.gym = "";
   /* A current gym that has since been deleted is no gym at all. */
   if(saved.gym && !saved.gyms.some(function(g){ return g.id === saved.gym; })) saved.gym = "";
+
+  var mate = saved.partner;
+  saved.partner = (mate && typeof mate === "object" && String(mate.name || "").trim())
+    ? { name: String(mate.name).trim(), here: mate.here !== false }
+    : null;
 
   /* Whatever arrived, leave nutrition in exactly one shape: days as a map,
      goals as a list in date order. A hand-edited backup can't break it. */
@@ -2611,6 +2720,8 @@ function normalize(saved){
       if(typeof e.pin !== "boolean") e.pin = false;
       if(typeof e.rotAge !== "number") e.rotAge = 0;
       if(e.progress === undefined) e.progress = null;
+      if(!e.partner || !Array.isArray(e.partner.log)) e.partner = blankPartner();
+      if(typeof e.partner.weight !== "number") e.partner.weight = null;
     });
   });
   saved.history.sort(function(a, b){ return a.at - b.at; });
@@ -2689,9 +2800,12 @@ function doneCount(e){
   return n;
 }
 
-function dayProgress(day){
+function dayProgress(day, who){
   var total = 0, done = 0;
-  day.ex.forEach(function(e){ total += e.sets; done += doneCount(e); });
+  day.ex.forEach(function(e){
+    total += e.sets;
+    done += doneCount(who === "partner" ? partnerSide(e) : e);
+  });
   return { done:done, total:total };
 }
 
@@ -2703,15 +2817,16 @@ function exerciseVolume(e){
 
 /* Most recent logged performance per movement, for the "last ..." line.
    Gym-aware in the same way as lastEntryFor: what you did HERE, falling
-   back to anywhere, flagged so the row can say which. */
-function lastPerformed(){
+   back to anywhere, flagged so the row can say which. Pass "partner" for
+   theirs. */
+function lastPerformed(who){
   var here = {};
   var anywhere = {};
   var at = state.gym;
+  var sessions = sessionsFor(who);
 
-  for(var i = state.history.length - 1; i >= 0; i--){
-    var h = state.history[i];
-    if(isSkip(h)) continue;
+  for(var i = sessions.length - 1; i >= 0; i--){
+    var h = sessions[i];
 
     for(var j = 0; j < h.entries.length; j++){
       var en = h.entries[j];
@@ -2749,14 +2864,14 @@ function lastPerformed(){
 
    Prefers the gym you're at. The elsewhere flag tells the caller the numbers came
    from a different building, which is worth saying out loud before anyone
-   plans a personal best on them. */
-function lastEntryFor(name){
+   plans a personal best on them. Pass "partner" for theirs. */
+function lastEntryFor(name, who){
   var at = state.gym;
   var fallback = null;
+  var sessions = sessionsFor(who);
 
-  for(var i = state.history.length - 1; i >= 0; i--){
-    var h = state.history[i];
-    if(isSkip(h)) continue;
+  for(var i = sessions.length - 1; i >= 0; i--){
+    var h = sessions[i];
 
     for(var j = 0; j < h.entries.length; j++){
       var en = h.entries[j];
@@ -2801,6 +2916,30 @@ function isSkip(h){ return h.kind === "skip"; }
 
 function sessionsOnly(){
   return state.history.filter(function(h){ return !isSkip(h); });
+}
+
+/* The sessions one person trained in, oldest first, each carrying that
+   person's own entries and volume. Yours are the history itself; your
+   partner's are lifted out of the sessions they joined (h.partner) into
+   the same shape, which is what lets every question below — last time,
+   working weight, the strength trend — be asked of either of you. */
+function sessionsFor(who){
+  if(who !== "partner") return sessionsOnly();
+
+  return sessionsOnly().filter(function(h){ return h.partner; }).map(function(h){
+    return {
+      id: h.id,
+      at: h.at,
+      kind: "session",
+      dayId: h.dayId,
+      dayName: h.dayName,
+      gymId: h.gymId,
+      gymName: h.gymName,
+      unit: h.unit,
+      volume: h.partner.volume || 0,
+      entries: h.partner.entries || []
+    };
+  });
 }
 
 /* Which calendar days have a logged workout on them. */
@@ -3015,6 +3154,108 @@ function setGym(id){
   state.gym = gymById(id) ? id : "";
   save();
   return currentGym();
+}
+
+/* --------------------------------------------------------------------------
+   Training partner
+
+   Someone you train alongside, logged on your phone so neither of you has
+   to guess what they lifted last time.
+
+   THEIR SETS RIDE INSIDE YOUR SESSIONS — h.partner = { name, volume,
+   entries }, with entries in exactly the shape of yours — rather than in a
+   history of their own. You trained together, so it is one session: moving
+   its date or its gym moves theirs too, deleting it deletes both, and there
+   are never two logs to keep in step. sessionsFor("partner") lifts them
+   back out whenever a question is about them.
+
+   In the plan, each exercise holds their side in e.partner: today's log,
+   and a working weight that stays null until something sets it (their
+   weight chip, or changing the weight on one of their sets) — null meaning
+   "what they lifted last time", read from their own history at this gym.
+   They share your exercise, sets and rep target; the weights are theirs.
+   Nothing progresses on its own for them. The point is remembering what
+   they did, not programming it.
+
+   `here` is whether they're training with you today. It only hides their
+   rows, and it stays put from one session to the next.
+   -------------------------------------------------------------------------- */
+
+function partner(){ return state.partner; }
+
+function partnerHere(){ return !!(state.partner && state.partner.here); }
+
+/* Add a partner, or rename the one you have. A rename carries through to
+   the sessions they've already logged, the way renaming a gym does. */
+function setPartner(name){
+  var clean = String(name || "").trim().replace(/\s+/g, " ");
+  if(!clean) return null;
+
+  if(state.partner){
+    state.partner.name = clean;
+    state.history.forEach(function(h){ if(h.partner) h.partner.name = clean; });
+  }else{
+    state.partner = { name:clean, here:true };
+  }
+  save();
+  return state.partner;
+}
+
+function setPartnerHere(here){
+  if(!state.partner) return false;
+  state.partner.here = !!here;
+  save();
+  return state.partner.here;
+}
+
+/* Only the partner goes. Every session they logged stays exactly as it is,
+   and adding a partner again picks that history back up. Sets logged for
+   them in a session you haven't finished go with them. */
+function removePartner(){
+  if(!state.partner) return false;
+  state.partner = null;
+  state.days.forEach(function(d){
+    d.ex.forEach(function(e){ e.partner = blankPartner(); });
+  });
+  save();
+  return true;
+}
+
+/* Where their sets start: the weight you set for them today, or else the
+   heaviest they lifted on it last time — here if they've done it here,
+   the same rule as yours. 0 for something they've never done. */
+function partnerWeight(e){
+  if(e.partner && typeof e.partner.weight === "number") return e.partner.weight;
+  var last = lastEntryFor(e.name, "partner");
+  return last ? (last.entry.topWeight || 0) : 0;
+}
+
+/* A blank goes back to last time's weight rather than to zero. */
+function setPartnerWeight(e, value){
+  if(!e.partner) e.partner = blankPartner();
+  if(value === null || value === undefined || String(value).trim() === ""){
+    e.partner.weight = null;
+  }else{
+    e.partner.weight = Math.max(0, Math.round((parseFloat(value) || 0) * 100) / 100);
+  }
+  return partnerWeight(e);
+}
+
+/* Their side of an exercise in the same shape as yours: the shared name,
+   sets and rep target, with their own log and weight. Every set function in
+   this file takes either — quickLog, addSegment, clearSet, doneCount — so
+   logging a set for them is the same code as logging one for you. The log
+   is their real array, not a copy, so writing through this writes the save. */
+function partnerSide(e){
+  if(!e.partner) e.partner = blankPartner();
+  return {
+    name: e.name,
+    sets: e.sets,
+    reps: e.reps,
+    weight: partnerWeight(e),
+    log: e.partner.log,
+    who: "partner"
+  };
 }
 
 /* --------------------------------------------------------------------------
@@ -3444,15 +3685,18 @@ function loggedExercises(){
 
    key is gymId + ":" + name, with "*" for null — gym ids never contain a
    colon, so it splits back cleanly. split is true when this exercise has
-   been done in more than one place, which is when the gym is worth naming. */
+   been done in more than one place, which is when the gym is worth naming.
+
+   Yours unless who is "partner" — and the same goes for every Progress
+   question below. */
 function liftKey(name, gymId){ return (gymId === null ? "*" : gymId || "") + ":" + name; }
 
-function loggedLifts(){
+function loggedLifts(who){
   var seen = {};
   var places = {};
   var order = [];
 
-  sessionsOnly().forEach(function(h){
+  sessionsFor(who).forEach(function(h){
     h.entries.forEach(function(en){
       if(!en.completed) return;
       var gymId = isMachine(en.name) ? (h.gymId || "") : null;
@@ -3491,17 +3735,20 @@ function loggedLifts(){
    more reps IS the progress.
 
    Pass a gymId ("" for sessions with no gym) to keep to one place; leave it
-   out, or pass null, for every session wherever it happened. */
-function exerciseSeries(name, gymId){
+   out, or pass null, for every session wherever it happened.
+
+   The bodyweight log is yours alone, so a partner's lifts are charted on
+   the load by itself: their pull-ups chart reps, not your weight. */
+function exerciseSeries(name, gymId, who){
   var raw = [];
   var anyLoad = false;
 
-  sessionsOnly().forEach(function(h){
+  sessionsFor(who).forEach(function(h){
     if(gymId !== undefined && gymId !== null && (h.gymId || "") !== gymId) return;
     h.entries.forEach(function(en){
       if(en.name !== name || !en.completed) return;
 
-      var bw = trendWeightAt(h.at);
+      var bw = who === "partner" ? 0 : trendWeightAt(h.at);
       var carried = isBodyweight(name) ? bw : 0;
       var best = 0, bestSet = null;
       var reps = 0, repSet = null;
@@ -3579,11 +3826,11 @@ var TREND_FLAT = 0.015;       /* inside ±1.5% reads as holding, not a move */
    started it, if that's sooner). The estimate rises with more weight OR more
    reps on your best set, so either kind of overload counts. One row per
    exercise per gym — see loggedLifts(). */
-function liftTrends(){
+function liftTrends(who){
   var now = Date.now();
 
-  return loggedLifts().map(function(lift){
-    var line = smoothSeries(exerciseSeries(lift.name, lift.gymId));
+  return loggedLifts(who).map(function(lift){
+    var line = smoothSeries(exerciseSeries(lift.name, lift.gymId, who));
     var pts = line.points;
     if(!pts.length) return null;
 
@@ -3615,17 +3862,18 @@ function liftTrends(){
   }).filter(Boolean);
 }
 
-function volumeSeries(){
-  return sessionsOnly().map(function(h){
+function volumeSeries(who){
+  return sessionsFor(who).map(function(h){
     return { x:h.at, y:h.volume || 0 };
   });
 }
 
 /* One row per calendar day for the consistency grid, oldest first, always
-   starting on a Sunday so the columns line up as weeks. */
-function calendar(weeks){
+   starting on a Sunday so the columns line up as weeks. A partner's grid is
+   the days they trained with you — the days off you marked are yours. */
+function calendar(weeks, who){
   var byDay = {};
-  state.history.forEach(function(h){
+  (who === "partner" ? sessionsFor(who) : state.history).forEach(function(h){
     var k = dayKey(h.at);
     /* A session outranks a skip on the same date — if you logged a workout,
        that day counts as trained whatever else got recorded. */
@@ -3637,7 +3885,7 @@ function calendar(weeks){
   cursor.setDate(cursor.getDate() - (weeks * 7 - 1));
   cursor.setDate(cursor.getDate() - cursor.getDay());     /* back to Sunday */
 
-  var volumes = sessionsOnly().map(function(h){ return h.volume || 0; })
+  var volumes = sessionsFor(who).map(function(h){ return h.volume || 0; })
                               .filter(function(v){ return v > 0; })
                               .sort(function(a, b){ return a - b; });
   var mid = volumes.length ? volumes[Math.floor(volumes.length / 2)] : 0;
@@ -3669,15 +3917,18 @@ function calendar(weeks){
   return cells;
 }
 
-/* The headline numbers above the charts. */
-function summary(){
-  var sessions = sessionsOnly();
-  var first = state.history.length ? state.history[0].at : null;
+/* The headline numbers above the charts. A partner's start from their
+   first session with you, and have no missed days — those are yours. */
+function summary(who){
+  var sessions = sessionsFor(who);
+  var mine = who !== "partner";
+  var from = mine ? state.history : sessions;
+  var first = from.length ? from[0].at : null;
   var since = first ? Math.max(1, Math.ceil((daysBetween(first, Date.now()) + 1) / 7)) : 0;
 
   var monthAgo = Date.now() - 30 * DAY_MS;
   var recent = sessions.filter(function(h){ return h.at >= monthAgo; });
-  var missed = skipsOnly().filter(function(h){
+  var missed = !mine ? [] : skipsOnly().filter(function(h){
     return h.skipType === "missed" && h.at >= monthAgo;
   });
 
@@ -3706,6 +3957,7 @@ function clampSets(n){
 function setSets(e, n){
   e.sets = clampSets(n);
   e.log.length = e.sets;   /* drop logs for sets that no longer exist */
+  if(e.partner && e.partner.log.length > e.sets) e.partner.log.length = e.sets;
   return e.sets;
 }
 
@@ -3764,36 +4016,48 @@ function moveExercise(day, from, to){
   return true;
 }
 
+/* One exercise as it goes into the history: every logged set copied, with
+   its totals. Takes your side of an exercise or your partner's, and adds
+   its volume, unrounded, to tally. */
+function toEntry(e, tally){
+  var logged = [];
+  var heaviest = 0;
+  var exVolume = 0;
+
+  for(var k = 0; k < e.sets; k++){
+    if(!isLogged(e, k)) continue;
+    var segs = e.log[k].map(function(s){ return { w:s.w, r:s.r }; });
+    logged.push({ set:k + 1, segs:segs });
+    heaviest = Math.max(heaviest, topWeight(segs));
+    exVolume += segmentVolume(segs);
+  }
+
+  tally.volume += exVolume;
+  return {
+    name: e.name,
+    sets: e.sets,
+    target: e.reps,
+    completed: logged.length,
+    topWeight: heaviest,
+    volume: Math.round(exVolume),
+    logged: logged
+  };
+}
+
 /* Log the session, clear the sets, advance the rotation.
    Returns the finished day so the caller can report on it. */
 function finishSession(){
   var day = currentDay();
-  var volume = 0;
+  var mine = { volume:0 };
+  var entries = day.ex.map(function(e){ return toEntry(e, mine); });
+  var volume = mine.volume;
 
-  var entries = day.ex.map(function(e){
-    var logged = [];
-    var heaviest = 0;
-    var exVolume = 0;
-
-    for(var k = 0; k < e.sets; k++){
-      if(!isLogged(e, k)) continue;
-      var segs = e.log[k].map(function(s){ return { w:s.w, r:s.r }; });
-      logged.push({ set:k + 1, segs:segs });
-      heaviest = Math.max(heaviest, topWeight(segs));
-      exVolume += segmentVolume(segs);
-    }
-
-    volume += exVolume;
-    return {
-      name: e.name,
-      sets: e.sets,
-      target: e.reps,
-      completed: logged.length,
-      topWeight: heaviest,
-      volume: Math.round(exVolume),
-      logged: logged
-    };
-  });
+  /* A partner's side lists only what they did, and goes in only if they did
+     something — a session they sat out simply has no partner on it. */
+  var theirs = { volume:0 };
+  var partnerEntries = !state.partner ? [] : day.ex.map(function(e){
+    return toEntry(partnerSide(e), theirs);
+  }).filter(function(en){ return en.completed > 0; });
 
   var here = currentGym();
   var record = {
@@ -3809,11 +4073,19 @@ function finishSession(){
     volume: Math.round(volume),
     entries: entries
   };
+  if(partnerEntries.length){
+    record.partner = {
+      name: state.partner.name,
+      volume: Math.round(theirs.volume),
+      entries: partnerEntries
+    };
+  }
 
   state.history.push(record);
   sortHistory();   /* a backdated skip may already sit after "now" */
 
-  day.ex.forEach(function(e){ e.log = []; });
+  /* Their weight goes back to "last time", which is now today. */
+  day.ex.forEach(function(e){ e.log = []; e.partner = blankPartner(); });
   day.notes = "";
 
   /* Set the day up for next time while the session is still in hand: loads
@@ -3848,7 +4120,7 @@ function toCSV(){
   var header = [
     "date","time","day","gym","type","exercise","set","segment",
     "weight","reps","unit","volume","bodyweight","notes",
-    "calories","calorie_target","protein_g","fiber_g"
+    "calories","calorie_target","protein_g","fiber_g","person"
   ];
   var rows = [header];
 
@@ -3887,6 +4159,26 @@ function toCSV(){
         });
       });
     });
+
+    /* A partner's sets follow yours: same session, so the same date, day
+       and gym, with their name in the last column and none of your
+       bodyweight. Your rows leave that column blank. */
+    if(h.partner){
+      h.partner.entries.forEach(function(en){
+        (en.logged || []).forEach(function(item){
+          item.segs.forEach(function(s, i){
+            var row = [
+              date, time, h.dayName, h.gymName || "", "set", en.name, item.set, i + 1,
+              s.w || 0, s.r || 0, h.unit || "lb",
+              Math.round((s.w || 0) * (s.r || 0)), "", ""
+            ];
+            while(row.length < header.length - 1) row.push("");
+            row.push(h.partner.name);
+            rows.push(row);
+          });
+        });
+      });
+    }
   });
 
   /* Weigh-ins ride along in the same file, so one export is the whole story. */
@@ -3975,6 +4267,15 @@ IL.store = {
   renameGym: renameGym,
   removeGym: removeGym,
   setGym: setGym,
+  partner: partner,
+  partnerHere: partnerHere,
+  setPartner: setPartner,
+  setPartnerHere: setPartnerHere,
+  removePartner: removePartner,
+  partnerSide: partnerSide,
+  partnerWeight: partnerWeight,
+  setPartnerWeight: setPartnerWeight,
+  blankPartner: blankPartner,
   customLib: customLib,
   libLookup: libLookup,
   libAll: libAll,
@@ -4013,6 +4314,7 @@ IL.store = {
   lastEntryFor: lastEntryFor,
   lastTouchedAt: lastTouchedAt,
   sessionsOnly: sessionsOnly,
+  sessionsFor: sessionsFor,
   skipsOnly: skipsOnly,
   findEntry: findEntry,
   removeEntry: removeEntry,
@@ -6088,25 +6390,34 @@ function renderRail(activeView){
    Training day
    -------------------------------------------------------------------------- */
 
+function partnerName(){
+  var p = store.partner();
+  return p ? p.name : "Partner";
+}
+
 /* Unlogged: "Set 2" over the rep target.
    Logged:   the weight over the reps you actually got, with a ▾ when the set
-             had drops in it. */
+             had drops in it.
+   e is your side of the exercise or your partner's (store.partnerSide), and
+   theirs carry ",partner" on the end of data-set so a tap knows whose it is. */
 function setButton(e, row, k){
   var segs = e.log[k];
   var logged = store.isLogged(e, k);
+  var theirs = e.who === "partner";
+  var whose = theirs ? partnerName() + "'s set " : "set ";
   var top, big, label;
 
   if(logged){
     top = formatWeight(store.topWeight(segs), e.name) + (segs.length > 1 ? " ▾" : "");
     big = store.totalReps(segs);
-    label = "Set " + (k + 1) + ", " + segsDetail(segs, e.name) + ". Edit.";
+    label = (theirs ? whose : "Set ") + (k + 1) + ", " + segsDetail(segs, e.name) + ". Edit.";
   }else{
     top = "Set " + (k + 1);
     big = e.reps;
-    label = "Log set " + (k + 1) + " of " + e.name;
+    label = "Log " + whose + (k + 1) + " of " + e.name;
   }
 
-  return '<button class="set" data-set="' + row + ',' + k + '"' +
+  return '<button class="set" data-set="' + row + ',' + k + (theirs ? ',partner' : '') + '"' +
            ' aria-pressed="' + (logged ? "true" : "false") + '"' +
            ' aria-label="' + esc(label) + '">' +
            '<span class="s">' + esc(top) + '</span>' +
@@ -6114,23 +6425,50 @@ function setButton(e, row, k){
          '</button>';
 }
 
-function exerciseRow(e, i, last){
+/* Where it was lifted matters as much as what: the same machine in another
+   building doesn't take the same pin. When the number comes from a
+   different gym, the line says so rather than quietly implying it can be
+   lifted here. */
+function lastLine(last, name){
+  return (last && last.logged.length)
+    ? '<span class="last' + (last.elsewhere ? " away" : "") + '">last ' +
+      formatWeight(last.topWeight, name) + " " + esc(last.unit) +
+      ' · ' + esc(repsSummary(last.logged)) +
+      (last.elsewhere && last.gymName ? ' · at ' + esc(last.gymName) : '') + '</span>'
+    : '';
+}
+
+/* Your partner's sets, under yours. Their own name, colour, weight and
+   "last" line, behind a rule — so the two rows read as two people, never as
+   one person with twice the sets. Their weight chip is a button: it's how
+   you set where their sets start today. */
+function partnerRow(e, i, last){
+  var side = store.partnerSide(e);
+  var name = partnerName();
+
+  var sets = "";
+  for(var k = 0; k < e.sets; k++) sets += setButton(side, i, k);
+
+  return '<div class="ex-partner">' +
+    '<div class="ex-meta">' +
+      '<span class="pname">' + esc(name) + '</span>' +
+      '<button class="chip load" data-pweight="' + i + '"' +
+        ' aria-label="' + esc(name + "'s starting weight, " + formatLoad(side) + ". Change it.") + '">' +
+        esc(formatLoad(side)) + '</button>' +
+      (lastLine(last, e.name) || '<span class="last">first time</span>') +
+    '</div>' +
+    '<div class="sets">' + sets + '</div>' +
+  '</div>';
+}
+
+/* theirLast is the partner's "last" for this exercise; leave it out when
+   they aren't training today and their row isn't drawn at all. */
+function exerciseRow(e, i, last, theirLast){
   var completed = store.doneCount(e);
   var pct = e.sets ? Math.round(completed / e.sets * 100) : 0;
 
   var sets = "";
   for(var k = 0; k < e.sets; k++) sets += setButton(e, i, k);
-
-  /* Where it was lifted matters as much as what: the same machine in
-     another building doesn't take the same pin. When the number comes from
-     a different gym, the line says so rather than quietly implying you can
-     lift it here. */
-  var lastLine = (last && last.logged.length)
-    ? '<span class="last' + (last.elsewhere ? " away" : "") + '">last ' +
-      formatWeight(last.topWeight, e.name) + " " + esc(last.unit) +
-      ' · ' + esc(repsSummary(last.logged)) +
-      (last.elsewhere && last.gymName ? ' · at ' + esc(last.gymName) : '') + '</span>'
-    : '';
 
   return '<article class="ex" data-row="' + i + '"' +
            ' data-complete="' + (e.sets > 0 && completed === e.sets ? "1" : "0") + '">' +
@@ -6143,11 +6481,12 @@ function exerciseRow(e, i, last){
       '<div class="ex-meta">' +
         '<span class="chip">' + e.sets + ' × ' + esc(e.reps) + '</span>' +
         '<span class="chip load">' + esc(formatLoad(e)) + '</span>' +
-        lastLine +
+        lastLine(last, e.name) +
       '</div>' +
       planLine(e) +
       (e.note ? '<p class="ex-note">' + esc(e.note) + '</p>' : '') +
       '<div class="sets">' + sets + '</div>' +
+      (store.partnerHere() ? partnerRow(e, i, theirLast) : '') +
     '</div>' +
   '</article>';
 }
@@ -6163,12 +6502,33 @@ function gymChip(){
   '</button>';
 }
 
+/* Whether your partner is with you today, beside the gym and working the
+   same way: tap it to change that, or to add a partner the first time. */
+function partnerChip(){
+  var p = store.partner();
+  var here = store.partnerHere();
+  return '<button class="gymchip partnerchip" id="partnerPick" data-here="' + (here ? "1" : "0") + '"' +
+      ' aria-label="' + (!p ? 'Add a training partner'
+        : here ? 'Training with ' + esc(p.name) + '. Change.' : 'Training on your own. Change.') + '">' +
+    '<span class="lab">' + (p ? "With" : "Partner") + '</span>' +
+    '<b>' + (!p ? "+ Add" : here ? esc(p.name) : "Just me") + '</b>' +
+  '</button>';
+}
+
+/* Their "last" lines, or nothing when they aren't here to need them. */
+function partnerLast(){
+  return store.partnerHere() ? store.lastPerformed("partner") : {};
+}
+
 function renderTrain(){
   var day = store.currentDay();
   var last = store.lastPerformed();
+  var theirs = partnerLast();
   var progress = store.dayProgress(day);
 
-  var rows = day.ex.map(function(e, i){ return exerciseRow(e, i, last[e.name]); }).join("");
+  var rows = day.ex.map(function(e, i){
+    return exerciseRow(e, i, last[e.name], theirs[e.name]);
+  }).join("");
 
   viewEl.innerHTML =
     '<div class="session-head">' +
@@ -6183,7 +6543,7 @@ function renderTrain(){
         '<div class="cap">Sets in</div>' +
       '</div>' +
     '</div>' +
-    '<div class="gymrow">' + gymChip() + '</div>' +
+    '<div class="gymrow">' + gymChip() + partnerChip() + '</div>' +
     planBanner(day) +
     '<div class="ledger" id="ledger">' + rows + '</div>' +
     '<div class="addrow"><button class="add-btn" id="addEx">+ Add exercise</button></div>' +
@@ -6205,8 +6565,8 @@ function patchExercise(i){
   var el = document.querySelector('.ex[data-row="' + i + '"]');
   if(!el){ renderTrain(); return; }
 
-  var last = store.lastPerformed()[day.ex[i].name];
-  el.outerHTML = exerciseRow(day.ex[i], i, last);
+  var name = day.ex[i].name;
+  el.outerHTML = exerciseRow(day.ex[i], i, store.lastPerformed()[name], partnerLast()[name]);
 
   var progress = store.dayProgress(day);
   $("progCount").textContent = progress.done + "/" + progress.total;
@@ -6256,10 +6616,9 @@ function gymRow(h){
   '</div>';
 }
 
-function sessionCard(h, isOpen){
-  var u = h.unit || "lb";
-
-  var lines = h.entries.map(function(en){
+/* One line per exercise in a logged session — yours, or your partner's. */
+function entryLines(entries, u){
+  return entries.map(function(en){
     var summary = repsSummary(en.logged);
     var head =
       '<div class="sess-line">' +
@@ -6279,16 +6638,35 @@ function sessionCard(h, isOpen){
     }
     return head;
   }).join("");
+}
+
+/* A partner's half of a session sits under yours, under their name and in
+   their colour, with their own volume. */
+function partnerLines(h, u){
+  var p = h.partner;
+  if(!p || !p.entries || !p.entries.length) return "";
+  return '<div class="sess-partner">' +
+    '<div class="sess-partner-head">' +
+      '<span class="pname">' + esc(p.name) + '</span>' +
+      '<small>' + (p.volume || 0).toLocaleString() + ' ' + esc(u) + ' volume</small>' +
+    '</div>' +
+    entryLines(p.entries, u) +
+  '</div>';
+}
+
+function sessionCard(h, isOpen){
+  var u = h.unit || "lb";
 
   return '<div class="sess">' +
     '<button class="sess-top" data-open="' + esc(h.id) + '" aria-expanded="' + isOpen + '">' +
       '<span class="sess-tag">' + esc(h.dayId) + '</span>' +
       '<span class="sess-when"><b>' + esc(h.dayName) + '</b><small>' + formatDate(h.at) +
-        (h.gymName ? ' · ' + esc(h.gymName) : '') + '</small></span>' +
+        (h.gymName ? ' · ' + esc(h.gymName) : '') +
+        (h.partner ? ' · with ' + esc(h.partner.name) : '') + '</small></span>' +
       '<span class="sess-vol"><b>' + h.volume.toLocaleString() + '</b><small>' + esc(u) + ' volume</small></span>' +
     '</button>' +
     (isOpen ?
-      '<div class="sess-detail">' + lines +
+      '<div class="sess-detail">' + entryLines(h.entries, u) + partnerLines(h, u) +
         (h.notes ? '<p class="sess-note">' + esc(h.notes) + '</p>' : '') +
         dateRow(h) +
         gymRow(h) +
@@ -6355,6 +6733,12 @@ function settingsPanel(){
         return '<button data-var="' + v + '" aria-pressed="' + (p.variety === v) + '">' +
                  esc(data.VARIETY[v].label) + '</button>';
       }).join("") + '</div>' +
+    '</div>' +
+    '<div class="setrow">' +
+      '<div class="k">Training partner<small>' + (store.partner()
+        ? esc(store.partner().name) + ' gets a row of sets under yours'
+        : 'Log a second person\'s sets alongside yours') + '</small></div>' +
+      '<button class="edit" id="partnerSetup">' + (store.partner() ? "Edit" : "Add") + '</button>' +
     '</div>' +
     '<div class="setrow">' +
       '<div class="k">Re-seed from the log<small>Sets every working weight from your own history</small></div>' +
@@ -6703,24 +7087,29 @@ function renderLog(openId){
    because a resize has to repaint the same charts without app.js involved.
    -------------------------------------------------------------------------- */
 
-/* ex is a lift key (store.liftKey): the exercise AND the gym it was done
-   at, because the same machine in two buildings is two different lifts. */
-var progress = { ex:null, relative:false };
+/* who is whose page this is: "me", or "partner" once you have one.
+   ex is a lift key (store.liftKey) per person: the exercise AND the gym it
+   was done at, because the same machine in two buildings is two different
+   lifts — and each of you keeps your own pick when you switch between. */
+var progress = { who:"me", ex:{ me:null, partner:null }, relative:false };
 
 function compact(v){
   return v >= 10000 ? Math.round(v / 1000) + "k" : Math.round(v).toLocaleString();
 }
 
-/* The series behind the strength chart, plus how to write its numbers. */
+/* The series behind the strength chart, plus how to write its numbers.
+   A partner has no bodyweight log here, so their page never divides by one. */
 function strengthView(){
-  var lifts = store.liftTrends();
+  var who = progress.who;
+  var mine = who !== "partner";
+  var lifts = store.liftTrends(who);
   if(!lifts.length) return null;
 
-  var lift = lifts.filter(function(l){ return l.key === progress.ex; })[0];
-  if(!lift){ lift = lifts[0]; progress.ex = lift.key; }
+  var lift = lifts.filter(function(l){ return l.key === progress.ex[who]; })[0];
+  if(!lift){ lift = lifts[0]; progress.ex[who] = lift.key; }
 
-  var series = store.exerciseSeries(lift.name, lift.gymId);
-  var relative = progress.relative && series.metric === "load";
+  var series = store.exerciseSeries(lift.name, lift.gymId, who);
+  var relative = mine && progress.relative && series.metric === "load";
   var shown = store.smoothSeries(relative ? store.relativeSeries(series) : series);
   var bw = store.isBodyweight(lift.name);
 
@@ -6743,7 +7132,7 @@ function strengthView(){
     series: shown,
     metric: series.metric,
     relative: relative,
-    canRelate: series.metric === "load" && store.state.body.length > 0,
+    canRelate: mine && series.metric === "load" && store.state.body.length > 0,
     val: val,
     fmtV: function(v){ return val(v); },
     fmtNote: function(p){
@@ -6772,7 +7161,7 @@ function liftRow(l){
     ? Math.round(l.now).toLocaleString() + " " + unit()
     : Math.round(l.now) + " reps";
 
-  return '<button class="lift" data-lift="' + esc(l.key) + '" aria-pressed="' + (l.key === progress.ex) + '">' +
+  return '<button class="lift" data-lift="' + esc(l.key) + '" aria-pressed="' + (l.key === progress.ex[progress.who]) + '">' +
     '<span class="lift-name">' + esc(l.name) +
       (l.pr ? '<i class="lift-pr">PR</i>' : '') +
       (l.split ? '<small class="lift-gym">' + esc(placeName(l)) + '</small>' : '') +
@@ -6816,9 +7205,11 @@ function statTile(label, value, sub){
 
 /* Ten weeks of days, Sunday-first so the columns are weeks. Trained days
    carry three steps of one hue (more volume, darker); missed and rest are
-   their own states and are named in the legend, never colour alone. */
-function calendarHTML(){
-  var cells = store.calendar(10);
+   their own states and are named in the legend, never colour alone. A
+   partner's grid has only trained days — the days off are yours. */
+function calendarHTML(who){
+  var cells = store.calendar(10, who);
+  var mine = who !== "partner";
   var names = { trained:"trained", missed:"missed", rest:"rest day", none:"nothing logged" };
 
   var head = ["S","M","T","W","T","F","S"].map(function(d){
@@ -6837,9 +7228,12 @@ function calendarHTML(){
       '<div class="cal-grid">' + grid + '</div>' +
     '</div>' +
     '<div class="cal-key">' +
-      '<span><i class="cal-c" data-state="trained" data-level="2"></i>Trained</span>' +
-      '<span><i class="cal-c" data-state="rest" data-level="0"></i>Rest day</span>' +
-      '<span><i class="cal-c" data-state="missed" data-level="0"></i>Missed</span>' +
+      '<span><i class="cal-c" data-state="trained" data-level="2"></i>' +
+        (mine ? 'Trained' : 'Trained with you') + '</span>' +
+      (mine
+        ? '<span><i class="cal-c" data-state="rest" data-level="0"></i>Rest day</span>' +
+          '<span><i class="cal-c" data-state="missed" data-level="0"></i>Missed</span>'
+        : '') +
     '</div>';
 }
 
@@ -7362,19 +7756,44 @@ function maintenanceCard(){
   '</section>';
 }
 
+/* You or your partner. The same page about either of you, except that
+   food, bodyweight and maintenance are only ever yours. */
+function whoSwitch(){
+  var p = store.partner();
+  if(!p) return "";
+  return '<div class="seg who" role="group" aria-label="Whose progress">' +
+    '<button data-who="me" aria-pressed="' + (progress.who !== "partner") + '">You</button>' +
+    '<button data-who="partner" aria-pressed="' + (progress.who === "partner") + '">' +
+      esc(p.name) + '</button>' +
+  '</div>';
+}
+
+/* The fourth tile on a partner's page, where yours has your bodyweight:
+   when they last trained with you, and what. */
+function lastTrainedTile(){
+  var sessions = store.sessionsFor("partner");
+  var last = sessions[sessions.length - 1];
+  return last
+    ? statTile("Last trained", formatDay(last.at), last.dayName)
+    : statTile("Last trained", "—", "nothing logged yet");
+}
+
 function renderProgress(){
-  var s = store.summary();
+  if(!store.partner()) progress.who = "me";
+  var who = progress.who;
+  var mine = who !== "partner";
+  var s = store.summary(who);
   var view = strengthView();
 
-  var sub = s.since
-    ? "Week " + s.weeks + " · training since " + formatDay(s.since)
-    : "Nothing logged yet";
+  var sub = mine
+    ? (s.since ? "Week " + s.weeks + " · training since " + formatDay(s.since) : "Nothing logged yet")
+    : partnerName() + (s.since ? " · with you since " + formatDay(s.since) : " · nothing logged yet");
 
   /* Lifts you're doing now up top; ones you've rotated away from fold away
      underneath, still there to look back on. */
   var recent = view ? view.lifts.filter(function(l){ return l.recent; }) : [];
   var older = view ? view.lifts.filter(function(l){ return !l.recent; }) : [];
-  var olderOpen = older.some(function(l){ return l.key === progress.ex; });
+  var olderOpen = older.some(function(l){ return l.key === progress.ex[progress.who]; });
 
   var liftList = !view ? "" :
     '<div class="lifts">' + recent.map(liftRow).join("") + '</div>' +
@@ -7397,10 +7816,11 @@ function renderProgress(){
       ? "Your strength divided by what you weighed that week. It rises only when you get stronger faster than you get heavier."
       : view.metric === "load"
         ? "Each dot is one session's best set turned into an estimated one-rep max" +
-          (store.isBodyweight(view.lift.name) ? " (bodyweight included)" : "") +
-          " — so more weight or more reps both push it up. The line averages your last " +
-          "three sessions, so one off day can't hide the direction."
-        : "This one has never been logged with a load, so it charts your best set's reps instead.");
+          (mine && store.isBodyweight(view.lift.name) ? " (bodyweight included)" : "") +
+          " — so more weight or more reps both push it up. The line averages " +
+          (mine ? "your" : "the") + " last three sessions, so one off day can't hide the direction."
+        : "This one has never been logged with a load, so it charts " +
+          (mine ? "your" : "the") + " best set's reps instead.");
 
   viewEl.innerHTML =
     '<div class="session-head">' +
@@ -7408,23 +7828,24 @@ function renderProgress(){
         '<h2>Progress</h2>' +
         '<p class="sub">' + esc(sub) + '</p>' +
       '</div>' +
+      whoSwitch() +
     '</div>' +
 
-    '<div class="prog-wrap">' +
+    /* data-who recolours a partner's page in their colour — charts, grid
+       and all — so it's never mistaken for yours at a glance. */
+    '<div class="prog-wrap" data-who="' + who + '">' +
       '<div class="stats">' +
         statTile("Sessions", String(s.sessions), s.weeks ? s.weeks + " weeks in" : "") +
-        statTile("Last 30 days", String(s.last30), s.missed30 ? s.missed30 + " missed" : "none missed") +
+        statTile("Last 30 days", String(s.last30),
+                 !mine ? "sessions with you" : s.missed30 ? s.missed30 + " missed" : "none missed") +
         statTile("Total volume", compact(s.volume) + " " + unit(), "everything lifted") +
-        weightTile() +
+        (mine ? weightTile() : lastTrainedTile()) +
       '</div>' +
 
       /* Near the top on purpose: food and the scale are the two cards on
          this tab you touch every day, not just read, and maintenance is
          worked out from both of them — so it sits right underneath. */
-      nutritionCard() +
-      bodyCard() +
-      maintenanceCard() +
-      calorieCard() +
+      (mine ? nutritionCard() + bodyCard() + maintenanceCard() + calorieCard() : '') +
 
       '<section class="card" id="strengthCard">' +
         '<h3>Getting stronger?</h3>' +
@@ -7450,7 +7871,7 @@ function renderProgress(){
 
       '<section class="card">' +
         '<h3>Consistency</h3>' +
-        calendarHTML() +
+        calendarHTML(who) +
       '</section>' +
     '</div>';
 
@@ -7485,7 +7906,7 @@ function paintCharts(){
 
   IL.chart.draw($("chVolume"), {
     kind: "column",
-    points: store.volumeSeries().slice(-18),
+    points: store.volumeSeries(progress.who).slice(-18),
     fmtY: compact,
     fmtV: function(v){ return Math.round(v).toLocaleString() + " " + unit(); },
     fmtX: formatDay,
@@ -7521,10 +7942,13 @@ function paintCharts(){
    Bottom sheet
    -------------------------------------------------------------------------- */
 
-function openSheet(title, html, mode){
+/* who is "partner" for a sheet about your partner's sets, which wears their
+   colour so it's never mistaken for one of yours. */
+function openSheet(title, html, mode, who){
   $("sheetTitle").textContent = title;
   $("sheetBody").innerHTML = html;
   sheetEl.dataset.mode = mode;
+  sheetEl.dataset.who = who || "";
   sheetEl.hidden = false;
   scrimEl.hidden = false;
   requestAnimationFrame(function(){
@@ -7587,16 +8011,24 @@ function setTotalHTML(segs){
       Math.round(store.segmentVolume(segs)).toLocaleString() + ' ' + esc(unit()) + '</b>';
 }
 
+/* Whose side of exercise `row` a set belongs to: yours, or with who set to
+   "partner", your partner's. */
+function sideOf(row, who){
+  var e = store.currentDay().ex[row];
+  return who === "partner" ? store.partnerSide(e) : e;
+}
+
 /* Update just the running total, so typing in a field isn't interrupted. */
-function refreshSetTotal(row, k){
+function refreshSetTotal(row, k, who){
   var el = $("setTotal");
   if(!el) return;
-  var segs = store.currentDay().ex[row].log[k];
+  var segs = sideOf(row, who).log[k];
   if(segs) el.innerHTML = setTotalHTML(segs);
 }
 
-function setSheet(row, k){
-  var e = store.currentDay().ex[row];
+function setSheet(row, k, who){
+  var e = sideOf(row, who);
+  var theirs = who === "partner";
   var segs = e.log[k] || store.quickLog(e, k);
 
   var chips = store.repChoices(e.reps);
@@ -7611,15 +8043,97 @@ function setSheet(row, k){
     return segmentBlock(seg, i, i > 0, i === 0 ? chipHTML : "");
   }).join("");
 
-  openSheet("Set " + (k + 1),
+  openSheet((theirs ? partnerName() + " · " : "") + "Set " + (k + 1),
     '<p class="sheet-sub">' + esc(e.name) + ' · target ' + esc(e.reps) + '</p>' +
     blocks +
     '<button class="add-btn" id="addDrop">+ Add a drop</button>' +
     '<div class="settotal" id="setTotal">' + setTotalHTML(segs) + '</div>' +
+    (theirs
+      ? '<p class="hint">Their next set starts at this one\'s weight.</p>'
+      : '') +
     '<div class="rowbtns one">' +
       '<button class="danger" id="clearSet">Clear this set</button>' +
     '</div>',
-  "set");
+  "set", who);
+}
+
+/* --------------------------------------------------------------------------
+   Your training partner
+   -------------------------------------------------------------------------- */
+
+/* Where a partner's sets start today. Blank means "last time's", which the
+   placeholder shows, so the field is only ever filled in on purpose. */
+function partnerWeightSheet(i){
+  var e = store.currentDay().ex[i];
+  var name = partnerName();
+  var step = store.state.prefs.step;
+  var last = store.lastEntryFor(e.name, "partner");
+  var set = e.partner && typeof e.partner.weight === "number";
+
+  var history = last
+    ? "Last time: " + formatWeight(last.entry.topWeight, e.name) + " " + esc(last.unit) +
+      " · " + esc(repsSummary(last.entry.logged)) +
+      (last.elsewhere && last.gymName ? " at " + esc(last.gymName) : "") + ". "
+    : "Nothing logged for " + esc(name) + " on this yet. ";
+
+  openSheet(name + "'s weight",
+    '<p class="sheet-sub">' + esc(e.name) + ' · target ' + esc(e.reps) + '</p>' +
+    '<div class="field">' +
+      '<label class="lab" for="pW">Starting weight today (' + esc(unit()) + ')</label>' +
+      '<div class="stepper">' +
+        '<button data-pw="' + (-step) + '" aria-label="Decrease weight">−</button>' +
+        '<input id="pW" type="number" inputmode="decimal" step="any"' +
+          ' value="' + (set ? e.partner.weight : "") + '"' +
+          ' placeholder="' + (last && last.entry.topWeight ? last.entry.topWeight
+            : store.isBodyweight(e.name) ? "BW" : "0") + '">' +
+        '<button data-pw="' + step + '" aria-label="Increase weight">+</button>' +
+      '</div>' +
+      '<p class="hint">' + history + 'Leave it blank to start from last time. ' +
+        'Changing the weight on one of ' + esc(name) + '\'s sets moves this too.</p>' +
+    '</div>',
+  "pweight", "partner");
+}
+
+/* Adding a partner, and after that: are they here today, and their name. */
+function partnerSheet(){
+  var p = store.partner();
+
+  if(!p){
+    openSheet("Training partner",
+      '<p class="sheet-sub">Someone who trains with you, logged on this phone.</p>' +
+      '<div class="field">' +
+        '<label class="lab" for="ptName">Their name</label>' +
+        '<input id="ptName" type="text" placeholder="Name" autocomplete="off">' +
+      '</div>' +
+      '<p class="hint">Every exercise gets a second row of sets for them, under yours — ' +
+        'with their own weights, their own “last time” line, and their own page on ' +
+        'Progress. Nothing about your plan or your numbers changes.</p>' +
+      '<div class="rowbtns one">' +
+        '<button class="primary" id="ptSave">Add and train together</button>' +
+      '</div>',
+    "partner");
+    return;
+  }
+
+  openSheet("Training partner",
+    '<div class="field">' +
+      '<span class="lab">Today</span>' +
+      '<div class="seg wide">' +
+        '<button data-phere="1" aria-pressed="' + p.here + '">Training together</button>' +
+        '<button data-phere="0" aria-pressed="' + !p.here + '">Just me</button>' +
+      '</div>' +
+      '<p class="hint">Just me hides ' + esc(p.name) + '\'s rows until you switch back. ' +
+        'Nothing they\'ve logged is touched.</p>' +
+    '</div>' +
+    '<div class="field">' +
+      '<label class="lab" for="ptName">Name</label>' +
+      '<input id="ptName" type="text" value="' + esc(p.name) + '" autocomplete="off">' +
+    '</div>' +
+    '<div class="rowbtns two">' +
+      '<button class="primary" id="ptSave">Save name</button>' +
+      '<button class="danger" id="ptDel">Remove</button>' +
+    '</div>',
+  "partner");
 }
 
 /* --------------------------------------------------------------------------
@@ -8405,6 +8919,8 @@ IL.ui = {
   sheetMode: sheetMode,
   setSheet: setSheet,
   refreshSetTotal: refreshSetTotal,
+  partnerSheet: partnerSheet,
+  partnerWeightSheet: partnerWeightSheet,
   exerciseSheet: exerciseSheet,
   librarySheet: librarySheet,
   builderSheet: builderSheet,
@@ -8448,8 +8964,10 @@ function $(id){ return document.getElementById(id); }
 /* View state that isn't worth persisting. */
 var view = "train";          /* "train" | "log" | "progress"                */
 var openSession = null;      /* id of the expanded log entry, or null       */
-var editing = -1;            /* exercise index open in the editor sheet     */
-var editingSet = null;       /* { row, k } open in the set logger, or null  */
+var editing = -1;            /* exercise index open in the editor, or in the
+                                partner's weight sheet                      */
+var editingSet = null;       /* { row, k, who } open in the set logger, or
+                                null; who is "partner" for theirs, else ""  */
 var builderFrom = null;      /* the picker mode the exercise builder came from */
 var builderName = null;      /* library entry being edited, or null to create  */
 
@@ -8515,6 +9033,7 @@ function applyPick(name, mode){
     target.pin = false;
     target.rotAge = 0;
     target.progress = null;
+    target.partner = store.blankPartner();
     seedFromLog(target);
 
     store.save();
@@ -8860,19 +9379,48 @@ $("view").addEventListener("click", function(ev){
     var parts = hit.dataset.set.split(",");
     var row = parseInt(parts[0], 10);
     var k = parseInt(parts[1], 10);
-    var e = store.currentDay().ex[row];
+    var who = parts[2] === "partner" ? "partner" : "";
+    var ex = store.currentDay().ex[row];
+    var e = who ? store.partnerSide(ex) : ex;
 
     if(store.isLogged(e, k)){
       /* Already logged — go correct the reps or add a drop. */
-      editingSet = { row:row, k:k };
-      ui.setSheet(row, k);
+      editingSet = { row:row, k:k, who:who };
+      ui.setSheet(row, k, who);
+      return;
+    }
+
+    /* Your partner's sets start the rest only when none is running. Sharing
+       a station, their set usually happens inside your rest, and restarting
+       it would make every one of yours longer. */
+    if(store.state.prefs.autoRest && !(who && rest.id)) startRest(store.restFor(e.name));
+
+    /* With nothing to go on for them yet, there is no weight to quick-log
+       at, so the set opens in the logger for the weight to be typed. */
+    if(who && !e.weight && !store.isBodyweight(e.name)){
+      editingSet = { row:row, k:k, who:who };
+      ui.setSheet(row, k, who);
+      store.save();
+      ui.patchExercise(row);
       return;
     }
 
     store.quickLog(e, k);
-    if(store.state.prefs.autoRest) startRest(store.restFor(e.name));
     store.save();
     ui.patchExercise(row);
+    return;
+  }
+
+  /* A partner's weight chip — where their sets start today. */
+  hit = t.closest("[data-pweight]");
+  if(hit){
+    editing = parseInt(hit.dataset.pweight, 10);
+    ui.partnerWeightSheet(editing);
+    return;
+  }
+
+  if(t.closest("#partnerPick")){
+    ui.partnerSheet();
     return;
   }
 
@@ -8935,6 +9483,15 @@ $("view").addEventListener("click", function(ev){
 
   /* --- progress view --- */
 
+  /* The switch's buttons only — the page under it carries data-who too,
+     for its colours, and a tap anywhere on it isn't a switch. */
+  hit = t.closest("button[data-who]");
+  if(hit){
+    ui.progress.who = hit.dataset.who === "partner" ? "partner" : "me";
+    ui.renderProgress();
+    return;
+  }
+
   hit = t.closest("[data-rel]");
   if(hit){
     ui.progress.relative = hit.dataset.rel === "1";
@@ -8946,7 +9503,7 @@ $("view").addEventListener("click", function(ev){
      the chart back into view rather than leaving you looking at the list. */
   hit = t.closest("[data-lift]");
   if(hit){
-    ui.progress.ex = hit.dataset.lift;
+    ui.progress.ex[ui.progress.who] = hit.dataset.lift;
     ui.renderProgress();
     var head = document.querySelector(".lift-head");
     if(head) head.scrollIntoView({ block:"nearest", behavior:"smooth" });
@@ -9059,6 +9616,11 @@ $("view").addEventListener("click", function(ev){
     store.state.prefs.variety = hit.dataset["var"];
     store.save();
     ui.renderLog(openSession);
+    return;
+  }
+
+  if(t.closest("#partnerSetup")){
+    ui.partnerSheet();
     return;
   }
 
@@ -9247,8 +9809,24 @@ function syncRepChips(e, k){
   }
 }
 
+/* The side of the exercise the open set belongs to — yours, or your
+   partner's — so everything below is the same code for both. */
+function editingSide(){
+  var ex = store.currentDay().ex[editingSet.row];
+  return editingSet.who ? store.partnerSide(ex) : ex;
+}
+
+/* A partner's plan doesn't move by itself, so the set they just did is the
+   best guess at their next one: changing the weight of a set's first part
+   (not a drop) makes it where their next set starts. Yours start from the
+   working weight in the exercise editor, which only you move. */
+function followWeight(index, value){
+  if(editingSet.who !== "partner" || index !== 0) return;
+  store.setPartnerWeight(store.currentDay().ex[editingSet.row], value);
+}
+
 function setSheetClick(t){
-  var e = store.currentDay().ex[editingSet.row];
+  var e = editingSide();
   var k = editingSet.k;
   var hit;
 
@@ -9265,8 +9843,12 @@ function setSheetClick(t){
     var seg = e.log[k][index];
     var value;
 
-    if(parts[0] === "w") value = store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
-    else value = store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
+    if(parts[0] === "w"){
+      value = store.setSegmentWeight(e, k, index, (seg.w || 0) + delta);
+      followWeight(index, value);
+    }else{
+      value = store.setSegmentReps(e, k, index, (seg.r || 0) + delta);
+    }
 
     var field = $("sheetBody").querySelector('[data-segval="' + parts[0] + ',' + index + '"]');
     if(field) field.value = value || "";
@@ -9274,7 +9856,7 @@ function setSheetClick(t){
     syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.refreshSetTotal(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -9287,7 +9869,7 @@ function setSheetClick(t){
     syncRepChips(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.refreshSetTotal(editingSet.row, k);
+    ui.refreshSetTotal(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -9296,7 +9878,7 @@ function setSheetClick(t){
     store.removeSegment(e, k, parseInt(hit.dataset.segdel, 10));
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.setSheet(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -9304,7 +9886,7 @@ function setSheetClick(t){
     store.addSegment(e, k);
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.setSheet(editingSet.row, k);
+    ui.setSheet(editingSet.row, k, editingSet.who);
     return true;
   }
 
@@ -9392,6 +9974,63 @@ $("sheetBody").addEventListener("click", function(ev){
         if(view === "train") ui.renderTrain();
         ui.toast(gone + " removed.");
       }
+    }
+    return;
+  }
+
+  /* --- your training partner -------------------------------------------- */
+
+  if(ui.sheetMode() === "partner"){
+    hit = t.closest("[data-phere]");
+    if(hit){
+      var together = store.setPartnerHere(hit.dataset.phere === "1");
+      ui.closeSheet();
+      if(view === "train") ui.renderTrain();
+      ui.toast(together
+        ? "Logging for you and " + store.partner().name + "."
+        : "Just you today — " + store.partner().name + "'s rows are hidden.");
+      return;
+    }
+
+    if(t.closest("#ptSave")){
+      var adding = !store.partner();
+      var mate = store.setPartner($("ptName").value);
+      if(!mate){
+        ui.toast("Give them a name first.");
+        return;
+      }
+      ui.closeSheet();
+      render();
+      ui.toast(adding
+        ? mate.name + " added — each exercise has a row for them now."
+        : "Renamed to " + mate.name + ".");
+      return;
+    }
+
+    if(t.closest("#ptDel")){
+      var leaving = store.partner().name;
+      if(confirm("Stop logging for " + leaving + "? Every session already logged " +
+                 "for them stays in the log, and adding a partner again brings " +
+                 "their history back.")){
+        store.removePartner();
+        ui.closeSheet();
+        render();
+        ui.toast(leaving + " removed. Their sessions are still in the log.");
+      }
+    }
+    return;
+  }
+
+  /* --- where a partner's sets start ------------------------------------- */
+
+  if(ui.sheetMode() === "pweight"){
+    hit = t.closest("[data-pw]");
+    if(hit && editing >= 0){
+      var pe = day.ex[editing];
+      /* Shown even at 0: here a blank field means "last time's", not zero. */
+      $("pW").value = store.setPartnerWeight(pe, store.partnerWeight(pe) + parseFloat(hit.dataset.pw));
+      store.save();
+      ui.patchExercise(editing);
     }
     return;
   }
@@ -9713,14 +10352,25 @@ $("sheetBody").addEventListener("input", function(ev){
   if(mode === "set" && editingSet && t.dataset.segval){
     var parts = t.dataset.segval.split(",");
     var index = parseInt(parts[1], 10);
-    var e = store.currentDay().ex[editingSet.row];
+    var e = editingSide();
 
-    if(parts[0] === "w") store.setSegmentWeight(e, editingSet.k, index, parseFloat(t.value) || 0);
-    else store.setSegmentReps(e, editingSet.k, index, t.value);
+    if(parts[0] === "w"){
+      followWeight(index, store.setSegmentWeight(e, editingSet.k, index, parseFloat(t.value) || 0));
+    }else{
+      store.setSegmentReps(e, editingSet.k, index, t.value);
+    }
 
     store.save();
     ui.patchExercise(editingSet.row);
-    ui.refreshSetTotal(editingSet.row, editingSet.k);
+    ui.refreshSetTotal(editingSet.row, editingSet.k, editingSet.who);
+    return;
+  }
+
+  /* A blank goes back to "last time", which the placeholder is showing. */
+  if(mode === "pweight" && editing >= 0 && t.id === "pW"){
+    store.setPartnerWeight(store.currentDay().ex[editing], t.value);
+    store.save();
+    ui.patchExercise(editing);
     return;
   }
 
@@ -9814,8 +10464,10 @@ $("timer").addEventListener("click", function(){
 $("finish").addEventListener("click", function(){
   var day = store.currentDay();
 
-  /* Finishing an empty session is almost always a mispress — ask once. */
-  if(store.dayProgress(day).done === 0 && this.dataset.armed !== "1"){
+  /* Finishing an empty session is almost always a mispress — ask once. A
+     session where only your partner lifted isn't empty. */
+  var nothing = store.dayProgress(day).done === 0 && store.dayProgress(day, "partner").done === 0;
+  if(nothing && this.dataset.armed !== "1"){
     ui.setFinishLabel(true);
     setTimeout(function(){
       if($("finish").dataset.armed === "1") ui.setFinishLabel(false);
@@ -9842,6 +10494,7 @@ $("finish").addEventListener("click", function(){
   });
 
   ui.toast(out.day.name + " logged" +
+    (out.record.partner ? " with " + out.record.partner.name : "") +
     (ups ? " · " + ups + " load" + (ups === 1 ? "" : "s") + " up" : "") +
     (swaps ? " · " + swaps + " new next time" : "") +
     " · " + store.currentDay().name + " is up next.");

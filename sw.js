@@ -1,7 +1,7 @@
 /* Offline cache for the app shell.
    Bump CACHE whenever you change any file below, or phones will keep
    serving the old copy. */
-var CACHE = "iron-ledger-v10";
+var CACHE = "iron-ledger-v11";
 
 var SHELL = [
   "./",

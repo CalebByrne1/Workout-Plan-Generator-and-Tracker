@@ -66,6 +66,46 @@ Tap the **Gym** chip under the day's name to add a gym or switch to one. Then:
 **Not at any of these today** covers a hotel or a friend's garage: no gym is
 set, and the numbers fall back to wherever you last trained.
 
+## Training partner
+
+Train with someone and log them on the same phone, so neither of you is
+guessing what they lifted last time. Tap the **Partner** chip next to Gym
+(or **Log → Training partner**) and give them a name.
+
+- **Every exercise gets a second row of sets for them**, under yours, behind
+  a dashed rule, with their name and their own colour (blue against your
+  amber) — two people's sets, never one person doing twice as many.
+- The row has **their own weight chip and their own "last …" line**, read
+  from their history at the gym you're at, the same way yours are.
+- **Tap an empty set** to log it at their weight and the top of the rep
+  target; tap a logged one to correct it. The exercise, set count and rep
+  target are shared with yours; the weights are theirs.
+- **Their next set starts at their last set's weight.** Change the weight on
+  set 1 and set 2 follows. Their plan doesn't move on its own the way yours
+  does, so the set they just did is the best guess at the next. Tap their
+  weight chip to set it before they start; leave it blank to go back to last
+  time's.
+- The first time they do an exercise there's no weight to quick-log at, so
+  the set opens straight in the logger for you to type it.
+- Their sets don't restart a rest timer that's already running. Sharing a
+  station, their set usually happens inside your rest.
+- **With → Just me** hides their rows on days they're not there. It stays
+  that way until you switch back.
+
+Their sets are stored **inside your session**, not in a log of their own.
+It was one workout, so moving its date or gym in the Log moves theirs too,
+and deleting it deletes both. The card says who you trained with and lists
+their sets under yours.
+
+**Progress** gets a **You / their name** switch at the top. Their page has
+sessions, **Getting stronger?**, volume and a consistency grid of the days
+they trained with you, in their colour. It leaves out bodyweight, food and
+maintenance, which are only ever yours. Their pull-ups and dips chart on
+reps, because your bodyweight isn't theirs.
+
+Removing the partner keeps every session they logged, and adding a partner
+again picks that history back up. It's one partner, not a list.
+
 ## Dates and days off
 
 Every finished session is stamped with the day you finished it, and the Log
@@ -608,7 +648,7 @@ gets you a copy of your own, as files built on the device and handed to you.
 
 | | |
 |---|---|
-| **Spreadsheet (CSV)** | One row per weight you lifted, so a drop set stays two rows. Opens in Excel, Numbers or Sheets. Weigh-ins, days off and food are in the same file — each food row carries the calorie target that was in force that day. |
+| **Spreadsheet (CSV)** | One row per weight you lifted, so a drop set stays two rows. Opens in Excel, Numbers or Sheets. Weigh-ins, days off and food are in the same file — each food row carries the calorie target that was in force that day. A training partner's sets are in it too, with their name in the last column, **person**; yours leave it blank. |
 | **Full backup** | The entire save as JSON. This is the one that restores. |
 | **Send it to myself…** | Opens the phone's share sheet with both files attached — mail them to yourself, drop them in Files, whatever. Only appears where the browser supports it, which in practice means your phone. |
 | **Copy CSV** | Straight to the clipboard, for pasting into a spreadsheet on a desktop. |

@@ -857,6 +857,131 @@ step(function(){
      getComputedStyle(host).webkitUserSelect);
 });
 
+/* ------------------------------------------------------ training partner */
+step(function(){
+  head("partner: adding one");
+  click("#tabTrain");
+  eq("nobody's rows before there's a partner", qa(".ex-partner").length, 0);
+  click("#partnerPick");
+});
+
+step(function(){
+  eq("the partner sheet opens", $("sheet").dataset.mode, "partner");
+  $("ptName").value = "Sam";
+  click("#ptSave");
+  eq("every exercise gets a row for them", qa(".ex-partner").length, qa(".ex").length);
+  ok("with their name on it", qa(".ex-partner .pname").every(function(n){ return n.textContent === "Sam"; }));
+  ok("the chip says who's here", /Sam/.test($("partnerPick").textContent), $("partnerPick").textContent);
+
+  /* A row with room for two sets, on something with a weight to type. */
+  var day = IL.store.currentDay();
+  stash.pRow = -1;
+  day.ex.forEach(function(e, i){
+    if(stash.pRow < 0 && e.sets >= 2 && !IL.store.isBodyweight(e.name)) stash.pRow = i;
+  });
+  ok("found a row to log on", stash.pRow >= 0);
+  stash.mineBefore = IL.store.doneCount(day.ex[stash.pRow]);
+});
+
+step(function(){
+  head("partner: their first set");
+  var row = '.ex[data-row="' + stash.pRow + '"]';
+  if($("timer").dataset.run === "1") click("#timer");
+
+  /* Your set starts the rest... */
+  var mine = qa(row + ' .ex-body > .sets > .set[aria-pressed="false"]')[0];
+  click(mine);
+  eq("your set starts the rest", $("timer").dataset.run, "1");
+  travel(10);
+  document.dispatchEvent(new Event("visibilitychange"));
+  stash.restShown = $("timerT").textContent;
+
+  /* ...and theirs, inside it, leaves it alone. Nothing to go on for them yet,
+     so the set opens straight in the logger. */
+  click(qa(row + " .ex-partner .set")[0]);
+  document.dispatchEvent(new Event("visibilitychange"));
+  eq("their set doesn't restart your rest", $("timerT").textContent, stash.restShown);
+  backToNow();
+  click("#timer");
+
+  eq("with nothing to start them at, the logger opens", $("sheet").dataset.mode, "set");
+  eq("wearing their colour", $("sheet").dataset.who, "partner");
+  ok("and their name", /^Sam/.test($("sheetTitle").textContent), $("sheetTitle").textContent);
+  type('[data-segval="w,0"]', "45");
+  eq("the weight went on their set", IL.store.currentDay().ex[stash.pRow].partner.log[0][0].w, 45);
+  eq("and where their next one starts", IL.store.partnerWeight(IL.store.currentDay().ex[stash.pRow]), 45);
+  click("#sheetClose");
+});
+
+step(function(){
+  var row = '.ex[data-row="' + stash.pRow + '"]';
+  var e = IL.store.currentDay().ex[stash.pRow];
+  eq("their chip shows it", q(row + " [data-pweight]").textContent, "45 " + IL.store.state.prefs.unit);
+  click(qa(row + " .ex-partner .set")[1]);
+  eq("their next set is one tap", $("sheet").hidden || $("sheet").dataset.mode !== "set", true);
+  eq("at their weight", e.partner.log[1][0].w, 45);
+  eq("and lit in their row", qa(row + " .ex-partner .set")[1].getAttribute("aria-pressed"), "true");
+  eq("yours untouched by theirs", IL.store.doneCount(e), stash.mineBefore + 1);
+  click(row + " [data-pweight]");
+});
+
+step(function(){
+  head("partner: their weight chip");
+  eq("opens their weight sheet", $("sheet").dataset.mode, "pweight");
+  click('[data-pw="' + IL.store.state.prefs.step + '"]');
+  eq("a step up", $("pW").value, String(45 + IL.store.state.prefs.step));
+  eq("sets already logged keep theirs",
+     IL.store.currentDay().ex[stash.pRow].partner.log[0][0].w, 45);
+  click("#sheetClose");
+});
+
+step(function(){
+  head("partner: finishing together");
+  stash.dayName = IL.store.currentDay().name;
+  click("#finish");
+  var h = IL.store.state.history[IL.store.state.history.length - 1];
+  stash.pSession = h.id;
+  ok("the session carries them", !!h.partner && h.partner.name === "Sam", JSON.stringify(h.partner));
+  eq("with what they did", h.partner.entries.length, 1);
+  eq("both of their sets", h.partner.entries[0].completed, 2);
+  ok("and the toast says so", /with Sam/.test($("toast").textContent), $("toast").textContent);
+  click("#tabLog");
+});
+
+step(function(){
+  click('[data-open="' + stash.pSession + '"]');
+  ok("the card says who you trained with",
+     /with Sam/.test(q('[data-open="' + stash.pSession + '"]').textContent));
+  ok("and lists their sets under yours", !!q(".sess-partner") && /Sam/.test(q(".sess-partner").textContent));
+  ok("the partner can be managed from here too", !!$("partnerSetup"));
+});
+
+step(function(){
+  head("partner: their progress");
+  click("#tabProgress");
+  eq("a switch between the two of you", qa("button[data-who]").length, 2);
+  click('[data-who="partner"]');
+  ok("their page", !!q('.prog-wrap[data-who="partner"]'));
+  ok("without your food or bodyweight", !$("logFood") && !$("chBody") && !$("logWeight"));
+  ok("listing their lift", qa("[data-lift]").length === 1, qa("[data-lift]").length);
+  ok("and charting their volume", !!q("#chVolume .chart"));
+  click('[data-who="me"]');
+  ok("and back to yours, food and all", !!$("logFood"));
+});
+
+step(function(){
+  head("partner: just me today");
+  click("#tabTrain");
+  click("#partnerPick");
+});
+
+step(function(){
+  click('[data-phere="0"]');
+  eq("their rows are hidden", qa(".ex-partner").length, 0);
+  ok("and the chip says so", /Just me/.test($("partnerPick").textContent));
+  ok("still a partner, for next time", IL.store.partner() && IL.store.partner().name === "Sam");
+});
+
 /* --------------------------------------------------------------- mobile */
 step(function(){
   head("mobile");
